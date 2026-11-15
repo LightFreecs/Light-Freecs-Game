@@ -52,6 +52,7 @@ namespace LightMMORPG.EditorTools
             BuildConfig();
             BuildPrefabs();
             BuildArenaScene();
+            BuildMainMenuScene();
             ConfigureBuildSettings();
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
