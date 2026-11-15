@@ -326,8 +326,13 @@ namespace LightMMORPG.EditorTools
             spSo.ApplyModifiedPropertiesWithoutUndo();
             nmGo.AddComponent<NetworkBootstrap>();
 
-            var menuGo = new GameObject("ConnectMenu");
-            menuGo.AddComponent<ConnectMenu>();
+            // menu launches (MainMenu → NetLaunch) and leaving returns to the menu: the manager must die with the scene
+            var nmSo = new SerializedObject(nm);
+            SetProp(nmSo, "_dontDestroyOnLoad", p => p.boolValue = false);
+            nmSo.ApplyModifiedPropertiesWithoutUndo();
+
+            var sessionGo = new GameObject("MatchSession");
+            sessionGo.AddComponent<MatchSession>();
 
             var hudGo = new GameObject("HUD");
             hudGo.AddComponent<LightMMORPG.UI.GameHud>();
@@ -358,8 +363,9 @@ namespace LightMMORPG.EditorTools
         [MenuItem("LightMMORPG/Configure Build Settings")]
         public static void ConfigureBuildSettings()
         {
-            var scenes = EditorBuildSettings.scenes.Where(s => s.path != ArenaScenePath && File.Exists(s.path)).ToList();
+            var scenes = EditorBuildSettings.scenes.Where(s => s.path != ArenaScenePath && s.path != MainMenuScenePath && File.Exists(s.path)).ToList();
             scenes.Insert(0, new EditorBuildSettingsScene(ArenaScenePath, true));
+            if (File.Exists(MainMenuScenePath)) scenes.Insert(0, new EditorBuildSettingsScene(MainMenuScenePath, true));
             EditorBuildSettings.scenes = scenes.ToArray();
             PlayerSettings.runInBackground = true;
             PlayerSettings.fullScreenMode = FullScreenMode.Windowed;

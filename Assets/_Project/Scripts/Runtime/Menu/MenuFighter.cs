@@ -1,0 +1,149 @@
+using System.Collections.Generic;
+using LightMMORPG.Characters;
+using UnityEngine;
+using UnityEngine.Rendering;
+
+namespace LightMMORPG.Menu
+{
+    /// <summary>Placeholder player profile until accounts exist: chosen fighter palette (PlayerPrefs) + the theme's copy.</summary>
+    public static class PlayerProfile
+    {
+        public const string PaletteKey = "profile.palette";
+
+        public static int Palette
+        {
+            get => Mathf.Clamp(PlayerPrefs.GetInt(PaletteKey, 0), 0, CharacterPresets.Count - 1);
+            set { PlayerPrefs.SetInt(PaletteKey, value); PlayerPrefs.Save(); }
+        }
+    }
+
+    /// <summary>
+    /// The player's procedural fighter on the menu island: heroic idle (planted wide stance, chest up, fists low and
+    /// slightly out, slow breathing and head sway) plus a subtle aura shell and rising sparkles in the hero's aura colour.
+    /// </summary>
+    [DefaultExecutionOrder(200)]
+    public sealed class MenuFighter : MonoBehaviour
+    {
+        private CharacterRig _rig;
+        private Transform _aura;
+        private Material _auraMat;
+        private readonly List<(Transform t, float phase, float radius, float angle, float speed)> _sparkles = new();
+        private float _height = 2.3f;
+
+        public static MenuFighter Create(Transform parent, MenuMaterials m, int palette, Vector3 localPos, float yaw)
+        {
+            var go = new GameObject("MenuFighter");
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPos;
+            go.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
+            var f = go.AddComponent<MenuFighter>();
+            f.Build(m, palette);
+            return f;
+        }
+
+        private void Build(MenuMaterials m, int palette)
+        {
+            var recipe = CharacterPresets.ForPalette(palette);
+            var hero = ProceduralCharacterBuilder.Build(recipe);
+            hero.transform.SetParent(transform, false);
+            _rig = hero.GetComponent<CharacterRig>();
+            if (_rig != null) _height = _rig.Height;
+            Color aura = _rig != null ? _rig.AuraColor : recipe.auraColor;
+
+            if (m.aura != null)
+            {
+                _auraMat = m.aura;
+                _auraMat.SetColor("_Color", aura * 0.5f);
+                _auraMat.SetFloat("_Intensity", 0.28f);
+                _auraMat.SetFloat("_FresnelPower", 3.6f);
+                _auraMat.SetFloat("_FresnelStrength", 1.2f);
+                _auraMat.SetFloat("_CoreStrength", 0.02f);
+                var shell = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                shell.name = "Aura";
+                Destroy(shell.GetComponent<Collider>());
+                var r = shell.GetComponent<Renderer>();
+                r.sharedMaterial = _auraMat;
+                r.shadowCastingMode = ShadowCastingMode.Off;
+                r.receiveShadows = false;
+                shell.transform.SetParent(transform, false);
+                shell.transform.localPosition = new Vector3(0f, _height * 0.5f, 0f);
+                _aura = shell.transform;
+            }
+            if (m.sparkle != null)
+            {
+                m.sparkle.SetColor("_Color", aura * 1.2f);
+                m.sparkle.SetFloat("_Intensity", 1.6f);
+                m.sparkle.SetFloat("_CoreStrength", 1.2f);
+                m.sparkle.SetFloat("_NoiseStrength", 0f);
+                var rng = new System.Random(5);
+                for (int i = 0; i < 16; i++)
+                {
+                    var s = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                    s.name = "Sparkle";
+                    Destroy(s.GetComponent<Collider>());
+                    var r = s.GetComponent<Renderer>();
+                    r.sharedMaterial = m.sparkle;
+                    r.shadowCastingMode = ShadowCastingMode.Off;
+                    r.receiveShadows = false;
+                    s.transform.SetParent(transform, false);
+                    _sparkles.Add((s.transform, (float)rng.NextDouble(), 0.35f + (float)rng.NextDouble() * 0.45f,
+                        (float)rng.NextDouble() * 6.28f, 0.25f + (float)rng.NextDouble() * 0.2f));
+                }
+            }
+        }
+
+        private void LateUpdate()
+        {
+            float t = Time.time;
+            if (_rig != null) Pose(t);
+            if (_aura != null)
+            {
+                float pulse = 1f + Mathf.Sin(t * 2.2f) * 0.035f + Mathf.Sin(t * 5.3f) * 0.012f;
+                _aura.localScale = new Vector3(0.6f * _height * 0.5f, 0.56f * _height, 0.52f * _height * 0.5f) * pulse;
+            }
+            foreach (var s in _sparkles)
+            {
+                float k = Mathf.Repeat(t * s.speed + s.phase, 1f);
+                float a = s.angle + k * 1.5f;
+                s.t.localPosition = new Vector3(Mathf.Cos(a) * s.radius, k * _height * 1.15f, Mathf.Sin(a) * s.radius * 0.7f);
+                s.t.localScale = Vector3.one * (0.055f * Mathf.Sin(k * Mathf.PI));
+            }
+        }
+
+        private void Pose(float t)
+        {
+            var rig = _rig;
+            float hs = rig.Height / 2.3f;
+            float breathe = Mathf.Sin(t * 1.6f);
+            rig.ApplyRestPose(20f, 24f, 1f);
+
+            // torso: chest up, slow breathing; head slightly raised with a small sway
+            rig.SetModelRotation(CharacterBone.Spine, Quaternion.Euler(-2f, 0f, 0f));
+            rig.SetModelRotation(CharacterBone.Chest, Quaternion.Euler(-4f - breathe * 0.8f, 0f, 0f));
+            rig.SetModelRotation(CharacterBone.UpperChest, Quaternion.Euler(-5f - breathe * 1.1f, 0f, 0f));
+            rig.Inherit(CharacterBone.Neck);
+            rig.SetModelRotation(CharacterBone.Head, Quaternion.Euler(-4f + Mathf.Sin(t * 0.5f) * 1.5f, Mathf.Sin(t * 0.37f) * 4f, 0f));
+            rig.Inherit(CharacterBone.LeftShoulder);
+            rig.Inherit(CharacterBone.RightShoulder);
+
+            // arms: fists low beside the hips, a little forward and out (power stance)
+            for (int side = -1; side <= 1; side += 2)
+            {
+                var ua = (CharacterBone)CharacterBones.Side(CharacterBone.LeftUpperArm, side);
+                Vector3 pole = new Vector3(side * 0.7f, 1.3f, -0.6f) * hs;
+                Vector3 target = new Vector3(side * (0.6f + breathe * 0.006f), 1.02f + breathe * 0.012f, 0.2f) * hs;
+                rig.SolveTwoBone(ua, target, pole, 1f);
+                rig.SetModelRotation(ua + 2, rig.GetModelRotation(ua + 1));
+                rig.SetFingerCurl(side, 1f);
+
+                // legs: wide planted stance, knees a touch bent, feet flat
+                var ul = (CharacterBone)CharacterBones.Side(CharacterBone.LeftUpperLeg, side);
+                Quaternion thigh = Quaternion.AngleAxis(side * 8f, Vector3.forward) * Quaternion.AngleAxis(-4f, Vector3.right);
+                rig.SetModelRotation(ul, thigh);
+                rig.SetModelRotation(ul + 1, Quaternion.AngleAxis(7f, Vector3.right) * thigh);
+                rig.SetModelRotation(ul + 2, Quaternion.AngleAxis(side * 6f, Vector3.up));
+                rig.Inherit(ul + 3);
+            }
+        }
+    }
+}

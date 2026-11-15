@@ -1,0 +1,278 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d2cc10242cd0f364a90e8b032d3be2c2, type: 3}
+  m_Name: MenuTheme
+  m_EditorClassIdentifier: LightMMORPG::LightMMORPG.Menu.MenuTheme
+  titleFont: {fileID: 12800000, guid: a44213df8e2419d4e8d95c8af85b3524, type: 3}
+  lightFont: {fileID: 12800000, guid: 597134d7a72915f4e93b1851234af7e8, type: 3}
+  bodyFont: {fileID: 12800000, guid: 363c2421eb6c0c041b5e83d192eb248f, type: 3}
+  boldFont: {fileID: 12800000, guid: ea4b63b56d90a04428a440b5a284b872, type: 3}
+  titleSmall: PROJECT
+  titleBig: LIGHT
+  titleTag: LIGHTMMORPG
+  titleSmallSize: 28
+  titleBigSize: 132
+  titleTagSize: 22
+  titleSmallSpacing: 1
+  titleBigSpacing: 0.32
+  titleTagSpacing: 0.4
+  titleTop: 0.05
+  titleTagLineWidth: 100
+  pressAnyKey: PRESS ANY KEY
+  tapToStart: TAP TO START
+  pressSize: 32
+  pressSpacing: 0.6
+  pressBottom: 0.1
+  itemSize: 26
+  itemSpacing: 0.28
+  primarySize: 42
+  primarySpacing: 0.22
+  primarySubSize: 18
+  itemGap: 60
+  ribbonBottom: 0.06
+  ribbonInset: 0.08
+  lineThickness: 2
+  sunDotSize: 24
+  sunDotRise: 60
+  underlineThickness: 4
+  idleItemAlpha: 0.9
+  lineAlpha: 0.55
+  scrimHeight: 0.3
+  scrimAlpha: 0.6
+  edgeMargin: 0.03
+  cornerTop: 0.05
+  newsTop: 0.37
+  newsWidth: 380
+  panelRadius: 32
+  subPanelWidth: 760
+  iconButtonSize: 80
+  playerName: Rookie_07
+  playerLevel: 24
+  playerRank: Gold III
+  shards: 12,450
+  crystals: 320
+  newsTitle: PATCH 0.3
+  newsBody: "Charged Beam rebalanced \xB7 New arena: Dusk Ruins"
+  playOnlineBlurb: Arena brawls for up to 4 fighters.
+  comingSoon: coming soon
+  ribbonItems:
+  - id: story
+    label: Story
+    sub: Adventure
+  - id: training
+    label: Training
+    sub: 
+  - id: play
+    label: Play Online
+    sub: "Quick Match \xB7 Host \xB7 Join by IP"
+  - id: fighters
+    label: Fighters
+    sub: "Select \xB7 Customize"
+  - id: skills
+    label: Abilities
+    sub: Skill tree
+  - id: shop
+    label: Shop
+    sub: 
+  fadeTime: 0.35
+  glowSpeed: 10
+  toastSeconds: 1.8
+  pressBlinkPeriod: 1.4
+  cameraDistance: 14.8
+  cameraHeight: 2
+  cameraFov: 30
+  lookAt: {x: 0, y: 1.25, z: 0}
+  driftYaw: 9
+  driftPeriod: 46
+  islandBob: 0.18
+  islandBobPeriod: 6
+  cloudDriftSpeed: 0.6
+  defaultSky: 0
+  day:
+    displayName: Blue Sky
+    skyTop: {r: 0.16470589, g: 0.44705883, b: 0.84705883, a: 1}
+    skyUpper: {r: 0.30980393, g: 0.60784316, b: 0.9137255, a: 1}
+    skyHorizon: {r: 0.5254902, g: 0.7607843, b: 0.9607843, a: 1}
+    skyBelow: {r: 0.7176471, g: 0.8627451, b: 0.98039216, a: 1}
+    upperStop: 0.38
+    horizonStop: 0.72
+    elevTop: 14
+    elevBottom: -12
+    discYaw: 17
+    discPitch: 9
+    discColor: {r: 2.2, g: 2.1913726, b: 2.0878432, a: 1}
+    haloColor: {r: 1, g: 0.9529412, b: 0.6901961, a: 0.75}
+    discSize: 2.6
+    haloSize: 18
+    moonShade: 0
+    stars: 0
+    lightColor: {r: 1, g: 0.95686275, b: 0.8784314, a: 1}
+    lightIntensity: 1.35
+    lightPitchYaw: {x: 38, y: -145}
+    ambientSky: {r: 0.6117647, g: 0.76862746, b: 0.93333334, a: 1}
+    ambientEquator: {r: 0.7254902, g: 0.79607844, b: 0.8784314, a: 1}
+    ambientGround: {r: 0.42745098, g: 0.49803922, b: 0.6, a: 1}
+    fogColor: {r: 0.6509804, g: 0.8156863, b: 0.96862745, a: 1}
+    fogStart: 50
+    fogEnd: 190
+    cloudShadow: {r: 0.56078434, g: 0.6901961, b: 0.8627451, a: 1}
+    cloudMid: {r: 0.7882353, g: 0.87058824, b: 0.9607843, a: 1}
+    cloudLit: {r: 1, g: 1, b: 1, a: 1}
+    cloudHighlight: {r: 1, g: 1, b: 1, a: 1}
+    cloudRim: {r: 1.05, g: 0.9964706, b: 0.8070588, a: 1}
+    bankShadow: {r: 0.6627451, g: 0.78039217, b: 0.91764706, a: 1}
+    bankMid: {r: 0.8235294, g: 0.8980392, b: 0.972549, a: 1}
+    bankLit: {r: 0.95686275, g: 0.9764706, b: 1, a: 1}
+    bankRim: {r: 1.05, g: 1.05, b: 1.05, a: 1}
+    cloudLightPitchYaw: {x: 60, y: -160}
+    rock: {r: 0.49019608, g: 0.5294118, b: 0.5882353, a: 1}
+    rockShade: {r: 0.47843137, g: 0.5254902, b: 0.65882355, a: 1}
+    grass: {r: 0.42352942, g: 0.6901961, b: 0.30980393, a: 1}
+    grassShade: {r: 0.49803922, g: 0.62352943, b: 0.6901961, a: 1}
+    stone: {r: 0.827451, g: 0.7882353, b: 0.7019608, a: 1}
+    stoneShade: {r: 0.654902, g: 0.65882355, b: 0.76862746, a: 1}
+    ringGlow: {r: 2.0878432, g: 1.5874511, b: 0.64705884, a: 1}
+    outline: {r: 0.11372549, g: 0.14117648, b: 0.2, a: 1}
+    accent: {r: 1, g: 0.76862746, b: 0.5411765, a: 1}
+    textShadow: {r: 0.043137256, g: 0.1764706, b: 0.3529412, a: 0.9}
+    titleGlow: {r: 1, g: 1, b: 1, a: 0.55}
+    titleShadow: {r: 0.16470589, g: 0.44705883, b: 0.84705883, a: 1}
+    panel: {r: 0.043137256, g: 0.1764706, b: 0.3529412, a: 0.42}
+    panelBorder: {r: 1, g: 1, b: 1, a: 0.45}
+    newsHeader: {r: 1, g: 0.9529412, b: 0.6901961, a: 1}
+    cardSub: {r: 1, g: 0.9647059, b: 0.8784314, a: 1}
+    sunDot: {r: 1, g: 0.9647059, b: 0.8156863, a: 1}
+    sunDotGlow: {r: 1, g: 0.7019608, b: 0.41960785, a: 1}
+    titleText: {r: 1, g: 1, b: 1, a: 1}
+    dialog: {r: 0.09019608, g: 0.24705882, b: 0.45882353, a: 0.94}
+  dusk:
+    displayName: Dusk
+    skyTop: {r: 0.29411766, g: 0.32156864, b: 0.7137255, a: 1}
+    skyUpper: {r: 0.45490196, g: 0.40784314, b: 0.8, a: 1}
+    skyHorizon: {r: 0.6627451, g: 0.54509807, b: 0.85882354, a: 1}
+    skyBelow: {r: 0.92156863, g: 0.654902, b: 0.7764706, a: 1}
+    upperStop: 0.34
+    horizonStop: 0.64
+    elevTop: 14
+    elevBottom: -12
+    discYaw: -3
+    discPitch: -9
+    discColor: {r: 2, g: 1.882353, b: 1.9137255, a: 1}
+    haloColor: {r: 1, g: 0.6901961, b: 0.78431374, a: 0.85}
+    discSize: 4.2
+    haloSize: 30
+    moonShade: 0
+    stars: 0
+    lightColor: {r: 1, g: 0.70980394, b: 0.6039216, a: 1}
+    lightIntensity: 1.25
+    lightPitchYaw: {x: 18, y: -150}
+    ambientSky: {r: 0.47843137, g: 0.42352942, b: 0.76862746, a: 1}
+    ambientEquator: {r: 0.77254903, g: 0.54901963, b: 0.7058824, a: 1}
+    ambientGround: {r: 0.23529412, g: 0.16862746, b: 0.36078432, a: 1}
+    fogColor: {r: 0.78039217, g: 0.60784316, b: 0.8392157, a: 1}
+    fogStart: 45
+    fogEnd: 170
+    cloudShadow: {r: 0.3529412, g: 0.23529412, b: 0.6117647, a: 1}
+    cloudMid: {r: 0.4627451, g: 0.3137255, b: 0.7411765, a: 1}
+    cloudLit: {r: 0.5882353, g: 0.4392157, b: 0.83137256, a: 1}
+    cloudHighlight: {r: 0.7058824, g: 0.5764706, b: 0.9019608, a: 1}
+    cloudRim: {r: 1.15, g: 0.8929412, b: 0.9335294, a: 1}
+    bankShadow: {r: 0.9137255, g: 0.56078434, b: 0.7058824, a: 1}
+    bankMid: {r: 0.9647059, g: 0.6784314, b: 0.78431374, a: 1}
+    bankLit: {r: 1, g: 0.7764706, b: 0.83137256, a: 1}
+    bankRim: {r: 1.1, g: 0.97921574, b: 1.0094118, a: 1}
+    cloudLightPitchYaw: {x: 50, y: -175}
+    rock: {r: 0.41960785, g: 0.2901961, b: 0.5019608, a: 1}
+    rockShade: {r: 0.49019608, g: 0.37254903, b: 0.6117647, a: 1}
+    grass: {r: 0.47843137, g: 0.56078434, b: 0.38431373, a: 1}
+    grassShade: {r: 0.6039216, g: 0.49803922, b: 0.68235296, a: 1}
+    stone: {r: 0.7764706, g: 0.6509804, b: 0.7607843, a: 1}
+    stoneShade: {r: 0.6039216, g: 0.5254902, b: 0.72156864, a: 1}
+    ringGlow: {r: 2.4, g: 1.9576472, b: 1.2988236, a: 1}
+    outline: {r: 0.10980392, g: 0.05882353, b: 0.16470589, a: 1}
+    accent: {r: 1, g: 0.76862746, b: 0.5411765, a: 1}
+    textShadow: {r: 0.23921569, g: 0.13333334, b: 0.4509804, a: 0.8}
+    titleGlow: {r: 1, g: 0.78431374, b: 0.627451, a: 0.6}
+    titleShadow: {r: 1, g: 0.6039216, b: 0.3529412, a: 1}
+    panel: {r: 0.16470589, g: 0.11372549, b: 0.2901961, a: 0.45}
+    panelBorder: {r: 1, g: 1, b: 1, a: 0.35}
+    newsHeader: {r: 1, g: 0.8156863, b: 0.5411765, a: 1}
+    cardSub: {r: 1, g: 0.8784314, b: 0.78431374, a: 1}
+    sunDot: {r: 1, g: 0.9647059, b: 0.8156863, a: 1}
+    sunDotGlow: {r: 1, g: 0.7019608, b: 0.41960785, a: 1}
+    titleText: {r: 1, g: 0.9019608, b: 0.9411765, a: 1}
+    dialog: {r: 0.16470589, g: 0.11372549, b: 0.2901961, a: 0.92}
+  night:
+    displayName: Night
+    skyTop: {r: 0.015686275, g: 0.03137255, b: 0.09019608, a: 1}
+    skyUpper: {r: 0.039215688, g: 0.078431375, b: 0.21960784, a: 1}
+    skyHorizon: {r: 0.09019608, g: 0.14117648, b: 0.3529412, a: 1}
+    skyBelow: {r: 0.14509805, g: 0.21176471, b: 0.43529412, a: 1}
+    upperStop: 0.42
+    horizonStop: 0.76
+    elevTop: 14
+    elevBottom: -12
+    discYaw: 16
+    discPitch: 8
+    discColor: {r: 1.5435294, g: 1.5560784, b: 1.6, a: 1}
+    haloColor: {r: 0.6627451, g: 0.7254902, b: 1, a: 0.45}
+    discSize: 2.8
+    haloSize: 16
+    moonShade: 1
+    stars: 1
+    lightColor: {r: 0.62352943, g: 0.7058824, b: 1, a: 1}
+    lightIntensity: 0.95
+    lightPitchYaw: {x: 40, y: -150}
+    ambientSky: {r: 0.14901961, g: 0.20392157, b: 0.43137255, a: 1}
+    ambientEquator: {r: 0.12156863, g: 0.16470589, b: 0.34509805, a: 1}
+    ambientGround: {r: 0.047058824, g: 0.07058824, b: 0.1882353, a: 1}
+    fogColor: {r: 0.105882354, g: 0.16470589, b: 0.38431373, a: 1}
+    fogStart: 45
+    fogEnd: 170
+    cloudShadow: {r: 0.105882354, g: 0.13725491, b: 0.32156864, a: 1}
+    cloudMid: {r: 0.16862746, g: 0.21176471, b: 0.44705883, a: 1}
+    cloudLit: {r: 0.2627451, g: 0.32156864, b: 0.6039216, a: 1}
+    cloudHighlight: {r: 0.3529412, g: 0.41960785, b: 0.72156864, a: 1}
+    cloudRim: {r: 0.68313724, g: 1.0909804, b: 1.3, a: 1}
+    bankShadow: {r: 0.09411765, g: 0.12941177, b: 0.30980393, a: 1}
+    bankMid: {r: 0.13333334, g: 0.18039216, b: 0.4, a: 1}
+    bankLit: {r: 0.17254902, g: 0.22745098, b: 0.47058824, a: 1}
+    bankRim: {r: 0.36235297, g: 0.4658824, b: 0.8282353, a: 1}
+    cloudLightPitchYaw: {x: 55, y: -160}
+    rock: {r: 0.22745098, g: 0.26666668, b: 0.4392157, a: 1}
+    rockShade: {r: 0.2901961, g: 0.33333334, b: 0.5647059, a: 1}
+    grass: {r: 0.18431373, g: 0.3529412, b: 0.3529412, a: 1}
+    grassShade: {r: 0.2901961, g: 0.3529412, b: 0.6, a: 1}
+    stone: {r: 0.3529412, g: 0.39215687, b: 0.53333336, a: 1}
+    stoneShade: {r: 0.41568628, g: 0.45490196, b: 0.65882355, a: 1}
+    ringGlow: {r: 1.3945098, g: 2.5254903, b: 2.8, a: 1}
+    outline: {r: 0.019607844, g: 0.03137255, b: 0.08627451, a: 1}
+    accent: {r: 0.49803922, g: 0.9019608, b: 1, a: 1}
+    textShadow: {r: 0.039215688, g: 0.078431375, b: 0.21960784, a: 0.85}
+    titleGlow: {r: 0.49803922, g: 0.9019608, b: 1, a: 0.6}
+    titleShadow: {r: 0.22745098, g: 0.36078432, b: 1, a: 1}
+    panel: {r: 0.039215688, g: 0.078431375, b: 0.21960784, a: 0.45}
+    panelBorder: {r: 0.49803922, g: 0.9019608, b: 1, a: 0.4}
+    newsHeader: {r: 0.62352943, g: 0.9137255, b: 1, a: 1}
+    cardSub: {r: 0.62352943, g: 0.9137255, b: 1, a: 1}
+    sunDot: {r: 0.9647059, g: 0.972549, b: 1, a: 1}
+    sunDotGlow: {r: 0.49803922, g: 0.9019608, b: 1, a: 1}
+    titleText: {r: 0.8117647, g: 0.8784314, b: 1, a: 1}
+    dialog: {r: 0.039215688, g: 0.078431375, b: 0.21960784, a: 0.94}
+  skyMaterial: {fileID: 2100000, guid: 45d60abc79111914c9c5ce828c7fc2e7, type: 2}
+  cloudMaterial: {fileID: 2100000, guid: 74a16ad3e35cbb243b3172ce806c36e2, type: 2}
+  rockMaterial: {fileID: 2100000, guid: 91b2743be5d2d15499febf291f94da33, type: 2}
+  grassMaterial: {fileID: 2100000, guid: aed05db2ad2dd104f82dea93fa74f5ab, type: 2}
+  stoneMaterial: {fileID: 2100000, guid: 0c6f481c0e2868d41ae98826962a0953, type: 2}
+  ringMaterial: {fileID: 2100000, guid: 2678b68e7532a124c9a31426eb64b6ce, type: 2}
+  auraMaterial: {fileID: 2100000, guid: d2736397a4357ea4e8d0fea4b96fbf42, type: 2}
+  outlineMaterial: {fileID: 2100000, guid: 1a260a6188b2b774bb6e696953afe02f, type: 2}

@@ -1,5 +1,6 @@
-using LightMMORPG.Networking;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
 namespace LightMMORPG.UI
@@ -7,6 +8,19 @@ namespace LightMMORPG.UI
     /// <summary>Tiny runtime-uGUI helpers for the HUD and touch overlay (legacy Text, no sprites needed).</summary>
     public static class UiKit
     {
+        /// <summary>Unity's built-in legacy runtime font (HUD, touch overlay). The main menu uses the fonts in MenuTheme.</summary>
+        public static Font UIFont => _font != null ? _font : (_font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"));
+        private static Font _font;
+
+        /// <summary>Creates an EventSystem with the Input System UI module if the scene has none.</summary>
+        public static EventSystem EnsureEventSystem()
+        {
+            var es = EventSystem.current != null ? EventSystem.current : Object.FindAnyObjectByType<EventSystem>();
+            if (es != null) return es;
+            var go = new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
+            return go.GetComponent<EventSystem>();
+        }
+
         public static Canvas CreateCanvas(string name, int sortingOrder)
         {
             var go = new GameObject(name, typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
@@ -52,7 +66,7 @@ namespace LightMMORPG.UI
             var rt = Rect("Text", parent, Vector2.zero, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
             Stretch(rt);
             var t = rt.gameObject.AddComponent<Text>();
-            t.font = ConnectMenu.UIFont;
+            t.font = UIFont;
             t.text = text;
             t.fontSize = size;
             t.fontStyle = style;

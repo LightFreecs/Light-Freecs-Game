@@ -9,8 +9,8 @@ using UnityEngine;
 namespace LightMMORPG.Networking
 {
     /// <summary>
-    /// Starts host / client / server. Sits on the NetworkManager object.
-    /// Command line: <c>-host</c>, <c>-client [ip]</c>, <c>-server</c>, <c>-port N</c>, <c>-netlog</c> (log player positions
+    /// Starts host / client / server. Sits on the NetworkManager object in Arena_01. What to start comes from the main
+    /// menu (<see cref="NetLaunch.Launch"/>) or the command line: <c>-host</c>, <c>-client [ip]</c>, <c>-server</c>, <c>-port N</c>, <c>-netlog</c> (log player positions
     /// every 2 s), <c>-quitafter S</c> (exit after S seconds). Batch mode / UNITY_SERVER without a flag = dedicated server.
     /// </summary>
     public sealed class NetworkBootstrap : MonoBehaviour
@@ -24,6 +24,11 @@ namespace LightMMORPG.Networking
         /// <summary>Last connection status message (shown by the menu).</summary>
         public string Status { get; private set; } = string.Empty;
         public event Action OnStatusChanged;
+
+        /// <summary>What this instance was asked to start (None until then).</summary>
+        public NetMode StartedMode { get; private set; }
+        /// <summary>Address a client connects to (host/server: 127.0.0.1).</summary>
+        public string Address { get; private set; } = DefaultAddress;
 
         public bool IsRunning => Manager != null && (Manager.IsServerStarted || Manager.IsClientStarted);
 
@@ -53,23 +58,26 @@ namespace LightMMORPG.Networking
             string quit = Arg(args, "-quitafter");
             if (quit != null && float.TryParse(quit, NumberStyles.Float, CultureInfo.InvariantCulture, out float q)) _quitAt = Time.realtimeSinceStartup + q;
 
-            if (Has(args, "-host")) StartHost();
-            else if (Has(args, "-client"))
+            // A request from the main menu wins; otherwise the command line (-host / -client ip / -server / batch = server).
+            if (!NetLaunch.TryConsume(out NetMode mode, out string address))
+                mode = NetLaunch.FromCommandLine(out address);
+            switch (mode)
             {
-                string ip = Arg(args, "-client");
-                StartClient(string.IsNullOrEmpty(ip) || ip.StartsWith("-") ? DefaultAddress : ip);
+                case NetMode.Host: StartHost(); break;
+                case NetMode.Client: StartClient(address); break;
+                case NetMode.Server: StartServerOnly(); break;
+                default:
+                    // Arena opened directly (editor play mode) with nothing to do: go to the menu.
+                    Debug.Log("[Net] No launch request: returning to the main menu");
+                    NetLaunch.ReturnToMenu();
+                    break;
             }
-            else if (Has(args, "-server")) StartServerOnly();
-#if UNITY_SERVER
-            else StartServerOnly();
-#else
-            else if (Application.isBatchMode) StartServerOnly();
-#endif
         }
 
         public void StartHost()
         {
             Debug.Log("[Net] Starting host on port " + Port);
+            StartedMode = NetMode.Host;
             SetPort();
             Manager.ServerManager.StartConnection(Port);
             Manager.ClientManager.StartConnection(DefaultAddress, Port);
@@ -78,6 +86,8 @@ namespace LightMMORPG.Networking
         public void StartClient(string address)
         {
             Debug.Log("[Net] Connecting to " + address + ":" + Port);
+            StartedMode = NetMode.Client;
+            Address = address;
             SetPort();
             Manager.ClientManager.StartConnection(address, Port);
         }
@@ -85,6 +95,7 @@ namespace LightMMORPG.Networking
         public void StartServerOnly()
         {
             Debug.Log("[Net] Starting dedicated server on port " + Port);
+            StartedMode = NetMode.Server;
             SetPort();
             Manager.ServerManager.StartConnection(Port);
         }
