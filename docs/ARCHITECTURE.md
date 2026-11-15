@@ -133,3 +133,37 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
   -nographics) renders `LookTest_PC.png` + `LookTest_Mobile.png` and logs how much the Volume changes the image.
   Left: glows wash toward white against the bright daytime backdrop (a darker/dusk arena would show bloom better);
   `Assets/Resources/BillingMode.json` (Unity IAP store setting, not FishNet) left untracked.
+- Session 3 (networked player, camera, arena) — done. **Namespace note:** the camera code is in `LightMMORPG.Cameras`
+  (folder `Camera/`), because a `LightMMORPG.Camera` namespace would shadow `UnityEngine.Camera` in all `LightMMORPG.*` code.
+  Runtime asmdef now also references `UnityEngine.UI`.
+  - Input (`Input/`): `GameAction` enum (Jump, Sprint, FlyDown, ToggleFlight, Dash, FlashStep, Light, Heavy, Block, Charge,
+    Blast, Beam, Surge, LockOn), `GameInputBindings` (code-built map, gamepad layout in its doc comment), `TouchInputState`
+    (static: `Move`, `LookDelta`, `Press/Release/Tap(GameAction)`) for the session-4 touch overlay, `PlayerInputReader`
+    (exec order -100; `PlayerInputReader.Local`; `Move`, `Look`, `Held/Pressed/Released(GameAction)`; Beam = Pressed→Held→Released;
+    static `MenuOpen` blocks input; `TouchMode`; `LockCursor()`; Esc unlocks, click re-locks; `-autowalk` arg walks in circles).
+  - `Player/PlayerMotor` (TickNetworkBehaviour, demo prediction pattern): state `IsFlying/IsBlocking/IsCharging/IsSprinting/
+    IsDashing/IsStunned/IsGrounded/StunRemaining/Velocity/FacingYaw/Forward/LastFlashStepTime`, `PlayerMotor.Local`,
+    `OnLocalPlayerStarted`. Owner: `FaceAimFor(seconds)` — call when attacking so the character turns to camera yaw.
+    Server: `ServerApplyKnockback(velocity, stunSeconds)`, `ServerTeleport(pos)`, `ServerSetSpeedMultiplier(x)` (Power Surge);
+    all in the reconcile. Stunned = no input (block/charge too). IsBlocking/IsCharging come from replicated input, so they are
+    valid on the server for damage resolution.
+  - `Player/PlayerIdentity`: SyncVars `PaletteIndex` (lowest free 0–3, applied to the body material) and `DisplayName`;
+    static `All` + `OnPlayerAdded/Removed` — use for HUD/scoreboard/targeting; `Motor`, `ClientId`.
+  - `Player/PlayerProceduralAnimator` animates `Graphics/Model` (never `Graphics`, FishNet smooths it). Hooks:
+    `PlayLunge(strength)`, `PlayRecoil(worldDir, strength)` — call from session-4 observers RPCs.
+  - `Cameras/ThirdPersonCamera` (on Main Camera, `Instance`): `CurrentTarget` (PlayerIdentity or null), `AimDirection`
+    (chest → target, else camera forward), `IsLockedOn`, `Yaw/Pitch`, `CycleTarget()/ClearTarget()`. Feeds the motor via
+    `PlayerMotor.CameraYawProvider/LockedOnProvider`.
+  - `Networking/NetworkBootstrap` (on NetworkManager): `StartHost/StartClient(ip)/StartServerOnly/StopAll`, `Status`.
+    Args: `-host`, `-client [ip]`, `-server`, `-port N`, `-netlog` (logs all player positions every 2 s), `-quitafter S`.
+    Batch mode / UNITY_SERVER without a flag = dedicated server. `Networking/ConnectMenu`: runtime uGUI (legacy `Text` with
+    `LegacyRuntime.ttf`, no TMP), static helpers `CreatePanel/CreateText/CreateButton/CreateInputField`; creates an
+    EventSystem with `InputSystemUIInputModule`.
+  - Builder (`ProjectBuilder.Arena.cs`): `BuildPrefabs()` → `Prefabs/Player.prefab` (NetworkObject prediction Other,
+    graphical object Graphics, teleport threshold 5 m; CharacterController h2.5 r0.45; reader, motor, identity, animator)
+    and registers it in `Assets/DefaultPrefabObjects.asset` via FishNet's internal `Generator.GenerateFull` (reflection)
+    with a manual fallback. `BuildArenaScene()` → `Scenes/Arena_01.unity` (r30 m round arena, walls + invisible
+    barrier/ceiling at 30 m, 6 pillars with glowing crystals + point lights, 10 rocks, procedural dusk sky `Sky_Dusk.mat`,
+    low orange sun, global Volume, 4 spawns at r18, Main Camera, NetworkManager + Tugboat 7770 + PlayerSpawner + bootstrap,
+    ConnectMenu). `ConfigureBuildSettings()` puts Arena_01 first, windowed 1280x720, run in background.
+    `BuildWindowsPlayer()` (`-buildTarget Win64`) → `Builds/Windows/LightMMORPG.exe`.

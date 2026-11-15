@@ -106,15 +106,6 @@ namespace LightMMORPG.EditorTools
             Debug.Log("[ProjectBuilder] BuildConfig: wrote " + GameConfigPath + " and 3 abilities");
         }
 
-        /// <summary>Session 3/4: player + projectile prefabs, FishNet prefab collection.</summary>
-        public static void BuildPrefabs() { }
-
-        /// <summary>Session 3: Arena scene with NetworkManager, spawns, lighting.</summary>
-        public static void BuildArenaScene() { }
-
-        /// <summary>Session 3/5: scenes in build settings, player settings.</summary>
-        public static void ConfigureBuildSettings() { }
-
         // ---------------- helpers ----------------
 
         private static void CopyStats(GameConfig from, GameConfig to)
