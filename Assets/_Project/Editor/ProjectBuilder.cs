@@ -10,7 +10,7 @@ namespace LightMMORPG.EditorTools
     /// Generates project assets from code (sessions cannot click in the editor). Idempotent: re-running overwrites.
     /// Menu: LightMMORPG/Build All. Batch: -executeMethod LightMMORPG.EditorTools.ProjectBuilder.BuildAll
     /// </summary>
-    public static class ProjectBuilder
+    public static partial class ProjectBuilder
     {
         public const string ProjectRoot = "Assets/_Project";
         public const string ResourcesDir = ProjectRoot + "/Resources";
@@ -31,8 +31,6 @@ namespace LightMMORPG.EditorTools
             Debug.Log("[ProjectBuilder] BuildAll done");
         }
 
-        /// <summary>Session 2: toon shaders, materials, Bloom volume profile.</summary>
-        public static void BuildArt() { }
 
         [MenuItem("LightMMORPG/Build Config")]
         public static void BuildConfig()

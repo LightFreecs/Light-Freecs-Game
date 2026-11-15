@@ -120,3 +120,16 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
   `Resources/GameConfig.asset` + `Data/Abilities/{EnergyBlast,ChargedBeam,PowerSurge}.asset`; other builder steps are stubs.
   24 EditMode tests green. Interpretations: guard drain = (absorbed 80%)/2; Power Surge pauses both regen and charge;
   guard recovers 20/s when not blocking and refills after break stun (not in spec, tune later).
+- Session 2 (toon look) — done. `Art/Shaders/ToonLit.shader` (`LightMMORPG/ToonLit`: 3-band main light + shadows, banded
+  additional lights incl. Forward+ cluster loop, SH ambient, rim, emission, clip-space inverted-hull outline, ShadowCaster/
+  DepthOnly/DepthNormals, SRP-batcher CBUFFER) and `AuraAdditive.shader` (additive fresnel + procedural noise, HDR).
+  `ProjectBuilder.BuildArt()` (in `ProjectBuilder.Art.cs`, class is now `partial`) writes `Art/Materials/` (Fighter_Orange/
+  Blue/Green/Purple, Fighter_Skin, Fighter_Accent, Arena_Ground/Wall/Pillar, FX_Aura/Beam/Blast/Impact) and
+  `Art/ArenaVolumeProfile.asset` (Bloom thr 1 / int 1.2, Neutral tonemapping, slight saturation/contrast) into `GameConfig`
+  (new: `fighterPaletteMaterials[]` + `GetFighterMaterial(i)`, `fighterSkinMaterial`, `arenaWallMaterial`, `impactMaterial`,
+  `arenaVolumeProfile`). Reusable helpers for session 3: `SetupToonEnvironment`, `CreateGlobalVolume`,
+  `CreatePlaceholderFighter` (root → "Graphics" child), `AddAuraShell`. `BuildLookTestScene()` → `Scenes/LookTest.unity`
+  (menu only, not in BuildAll). Screenshot: `-executeMethod ...ProjectBuilder.CaptureLookTest -lookTestOut <dir>` (no
+  -nographics) renders `LookTest_PC.png` + `LookTest_Mobile.png` and logs how much the Volume changes the image.
+  Left: glows wash toward white against the bright daytime backdrop (a darker/dusk arena would show bloom better);
+  `Assets/Resources/BillingMode.json` (Unity IAP store setting, not FishNet) left untracked.

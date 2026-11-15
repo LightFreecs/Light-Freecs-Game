@@ -51,13 +51,33 @@ namespace LightMMORPG.Config
         public AbilityDefinition powerSurge;
 
         [Header("Materials (filled by ProjectBuilder.BuildArt)")]
+        [Tooltip("Body materials, one per player slot (orange, blue, green, purple). Index = player index % length.")]
+        public Material[] fighterPaletteMaterials;
+        [Tooltip("Default body (= palette 0).")]
         public Material fighterBodyMaterial;
+        public Material fighterSkinMaterial;
         public Material fighterAccentMaterial;
         public Material arenaGroundMaterial;
+        public Material arenaWallMaterial;
+        [Tooltip("Pillars / props.")]
         public Material arenaPropMaterial;
         public Material auraMaterial;
+        [Tooltip("Energy Blast projectile.")]
         public Material projectileMaterial;
         public Material beamMaterial;
+        public Material impactMaterial;
+
+        [Header("Post-processing (filled by ProjectBuilder.BuildArt)")]
+        [Tooltip("Bloom + tonemapping profile for the arena's global Volume.")]
+        public UnityEngine.Rendering.VolumeProfile arenaVolumeProfile;
+
+        /// <summary>Body material for a player slot (wraps around the palette list).</summary>
+        public Material GetFighterMaterial(int playerIndex)
+        {
+            if (fighterPaletteMaterials == null || fighterPaletteMaterials.Length == 0) return fighterBodyMaterial;
+            int i = ((playerIndex % fighterPaletteMaterials.Length) + fighterPaletteMaterials.Length) % fighterPaletteMaterials.Length;
+            return fighterPaletteMaterials[i] != null ? fighterPaletteMaterials[i] : fighterBodyMaterial;
+        }
 
         [Header("VFX / prefabs (filled by later builders)")]
         public GameObject hitVfxPrefab;
