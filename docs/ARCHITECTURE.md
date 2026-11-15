@@ -232,3 +232,39 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     secrets, iOS .ipa + Sideloadly, known limitations.
   - Still for the user: add `UNITY_LICENSE`/`UNITY_EMAIL`/`UNITY_PASSWORD` secrets, run Tests / Build Windows / Build iOS,
     sideload and hand-test on a phone. Next steps: lag compensation, real art/audio, accounts + persistence, Android.
+- Procedural characters (branch `design/procedural-characters`) — done, looks are placeholder-quality by design (the user
+  will provide sketches to refine one hero).
+  - `Scripts/Runtime/Characters/`: `CharacterRecipe` (serializable: height, muscle, bulk, proportions, head size, skin,
+    hair style/colour/tip colour/spikes, eye shape/colour, brows, expression, outfit type (Gi / ArmoredSuit / JacketPants /
+    CroppedJacket), legwear, colours, belt/wristbands/boots/laces, accessory, aura colour, seed), `CharacterPresets`
+    (`ForPalette(i)` = the one in-game hero "Kaien" recoloured per palette; `Distinct(i)` = 4 different designs kept for
+    later), `ProceduralCharacterBuilder` (`Build(recipe)` → GameObject; `GenerateData` thread-safe + `Upload` main thread;
+    per-recipe cache; `Prewarm(recipes)` on worker threads — `PlayerIdentity` prewarms all 4 at game start),
+    `SdfMesher` (SDF primitives: round-cone limbs / ellipsoids / boxes / cylinders / planes / custom; smooth-union groups;
+    block-culled, multithreaded naive surface nets; distance-based skin weights), `FacePainter` (face texture: eyes, brows,
+    nose, mouth by expression; two-tone hair gradient), `CharacterRig`, `ProceduralCharacter` (component on
+    `Graphics/Model`; `[ExecuteAlways]`, generated objects are DontSave in edit mode).
+  - Mesh: body/head/hands/outfit shells are separate SDF parts in ONE skinned mesh, one submesh per material slot
+    (`LightMMORPG/ToonLit` instances, cached by colour). Outfit shells are the body primitives grown outwards, so they skin
+    with the same weights. Hair = tapered Bezier clumps rigid on `Head`. Covered skin is not meshed. ~60–77k verts per hero,
+    data generation ~200–300 ms on a worker thread (16-core PC), main-thread upload ~3–5 ms. Not under 50 ms cold — the
+    prewarm + cache keeps it off the spawn frame. Later: LOD/decimation for iOS, Burst jobs if cold time matters.
+  - **Rig for the animation session** (GameObject names = `CharacterBone` enum, under `Graphics/Model/Character_<name>/`):
+    `Hips → Spine → Chest → UpperChest → Neck → Head`; `UpperChest → Left/RightShoulder → UpperArm → LowerArm → Hand →
+    {Thumb, Index, Middle, Ring, Little}{Proximal, Intermediate}`; `Hips → Left/RightUpperLeg → LowerLeg → Foot → Toes`.
+    Bind pose: all bone rotations identity (axes = model axes: +Y up, +Z forward, +X = character's right; Left* bones at
+    −X), arms in an A-pose 40° from vertical, palms toward the thighs, thumbs forward. `CharacterRig`: `this[bone]`,
+    `ResetPose()`, `ApplyRestPose()`, `SetModelRotation(bone, q)` (model-space, parents first), `GetModelRotation`,
+    `Inherit`, `SetFingerCurl(side, 0..1)`, `SolveTwoBone(upperBone, target, pole, weight)` (model-space 2-bone IK),
+    `Height`, `AuraColor`. Bone names follow Unity Humanoid naming (no Avatar is built yet).
+  - `PlayerProceduralAnimator` drives the rig when `Graphics/Model` has a `ProceduralCharacter`: rest stance with fists,
+    run swing (legs/arms), flight tuck, block guard and power-up stance via IK, attack targets via IK (old limb spheres are
+    only used without a rig). Lean/bob/dash stretch/KO topple on `Model` unchanged. CharacterController height = hero height.
+  - Builder: `BuildPrefabs` now makes `Player → Graphics → Model (+ProceduralCharacter)`; `BuildCharacterShowcase()` →
+    `Scenes/CharacterShowcase.unity` (4 heroes, dusk light, global Volume; menu only, not in BuildAll);
+    `CaptureCharacterShowcase -showcaseOut <dir>` (timings + Showcase_Full/Faces/Hero/Back.png),
+    `CaptureShowcaseView -view "px,py,pz,lx,ly,lz,fov"` (debug close-up), `-partStats` logs per-part verts/ms.
+  - Verified: compile clean, BuildAll clean + idempotent, 38/38 EditMode tests (8 new: mesh validity, NaNs, unit normals,
+    weights sum 1, vertex budget 90k, determinism, seed changes output, rig hierarchy/IK), Windows build OK, smoke test
+    (host + `-client -autoattack`, batchmode): 46 hits, KOs, 40 client syncs, 0 exceptions. Not verified: the rig
+    animation in a rendered live match (headless only), iOS performance.

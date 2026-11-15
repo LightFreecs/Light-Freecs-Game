@@ -1,3 +1,4 @@
+using LightMMORPG.Characters;
 using LightMMORPG.Combat;
 using LightMMORPG.Config;
 using UnityEngine;
@@ -40,6 +41,11 @@ namespace LightMMORPG.Player
         private static readonly Vector3 HandRRest = new(0.55f, 1.25f, 0.25f);
         private static readonly Vector3 FootRest = new(0.22f, 0.15f, 0.05f);
 
+        // procedural rig (when Graphics/Model has a ProceduralCharacter)
+        private ProceduralCharacter _proc;
+        private bool _flyingNow, _blockingNow, _chargingNow;
+        private float _speed01;
+
         private void Awake()
         {
             _motor = GetComponent<PlayerMotor>();
@@ -48,7 +54,8 @@ namespace LightMMORPG.Player
             if (_model != null) _baseScale = _model.localScale;
             if (_graphics != null) _lastPos = _graphics.position;
             _stats = GetComponent<PlayerStats>();
-            if (_model != null)
+            if (_model != null) _proc = _model.GetComponent<ProceduralCharacter>();
+            if (_model != null && _proc == null)
             {
                 var cfg = GameConfig.Load();
                 _handL = Limb("HandL", HandLRest, 0.3f, cfg.fighterSkinMaterial);
@@ -86,7 +93,7 @@ namespace LightMMORPG.Player
 
         private void AnimateLimbs(float dt)
         {
-            if (_handL == null) return;
+            if (_handL == null && _proc == null) return;
             _attackT = Mathf.Min(1f, _attackT + dt / _attackDuration);
             // 0 → 1 → 0 strike curve, fast out, slower return
             float k = _attackT < 0.35f ? _attackT / 0.35f : 1f - (_attackT - 0.35f) / 0.65f;
@@ -133,10 +140,67 @@ namespace LightMMORPG.Player
                 l = new Vector3(-0.12f, 1.35f, 0.75f);
                 r = new Vector3(0.12f, 1.35f, 0.75f);
             }
+            if (_proc != null)
+            {
+                bool lActive = _attackT < 1f && l != HandLRest, rActive = _attackT < 1f && r != HandRRest, fActive = _attackT < 1f && f != FootRest;
+                bool beam = combat != null && combat.IsChargingBeam;
+                PoseRig(l, r, f, lActive || beam ? Mathf.Max(k, beam ? 1f : 0f) : 0f, rActive || beam ? Mathf.Max(k, beam ? 1f : 0f) : 0f, fActive ? k : 0f);
+                return;
+            }
+            if (_handL == null) return;
             float idle = Mathf.Sin(_phase) * 0.04f;
             _handL.localPosition = l + Vector3.up * idle;
             _handR.localPosition = r - Vector3.up * idle;
             _foot.localPosition = f;
+        }
+
+        /// <summary>
+        /// Rough rig pose until the real animation pass: relaxed stance, run cycle swing, flight tuck, block guard,
+        /// power-up stance, and two-bone IK towards the attack targets (old capsule-space targets, scaled to the hero).
+        /// </summary>
+        private void PoseRig(Vector3 l, Vector3 r, Vector3 f, float wl, float wr, float wf)
+        {
+            var rig = _proc.Rig;
+            if (rig == null) return;
+            float hs = rig.Height / 2.3f;
+            rig.ApplyRestPose();
+            float swing = Mathf.Sin(_phase) * _speed01 * (_flyingNow ? 0f : 1f);
+            float fly = _flightBlend;
+            // legs: run swing about X, knee bends when the leg is behind; flight = trailing, bent knees
+            for (int side = -1; side <= 1; side += 2)
+            {
+                var ul = (CharacterBone)CharacterBones.Side(CharacterBone.LeftUpperLeg, side);
+                float s = swing * -side;
+                Quaternion qThigh = Quaternion.AngleAxis(-s * 38f + fly * (side < 0 ? 12f : 28f), Vector3.right);
+                rig.SetModelRotation(ul, qThigh);
+                float knee = Mathf.Max(0f, s) * 55f * _speed01 + fly * (side < 0 ? 25f : 50f) + (_blockingNow ? 15f : 0f);
+                Quaternion qKnee = Quaternion.AngleAxis(knee, Vector3.right) * qThigh;
+                rig.SetModelRotation(ul + 1, qKnee);
+                rig.SetModelRotation(ul + 2, Quaternion.AngleAxis(fly * 30f, Vector3.right) * qKnee);
+                rig.Inherit(ul + 3);
+                // arms swing opposite to legs
+                var ua = (CharacterBone)CharacterBones.Side(CharacterBone.LeftUpperArm, side);
+                Quaternion qa = Quaternion.AngleAxis(s * 35f - fly * 25f, Vector3.right) * rig.GetModelRotation(ua);
+                rig.SetModelRotation(ua, qa);
+                rig.SetModelRotation(ua + 1, Quaternion.AngleAxis(s * 35f - fly * 25f, Vector3.right) * rig.GetModelRotation(ua + 1));
+                rig.SetModelRotation(ua + 2, rig.GetModelRotation(ua + 1));
+                rig.SetFingerCurl(side, 1f);
+            }
+            // guard / power-up stances (IK), then attacks on top
+            Vector3 pole(int side) => new Vector3(side * 0.6f, 0.4f, -0.7f) * hs + Vector3.up * 1.2f * hs;
+            if (_blockingNow)
+            {
+                rig.SolveTwoBone(CharacterBone.LeftUpperArm, new Vector3(0.06f, 1.62f, 0.32f) * hs, pole(-1), 1f);
+                rig.SolveTwoBone(CharacterBone.RightUpperArm, new Vector3(-0.06f, 1.7f, 0.3f) * hs, pole(1), 1f);
+            }
+            else if (_chargingNow)
+            {
+                rig.SolveTwoBone(CharacterBone.LeftUpperArm, new Vector3(-0.42f, 1.0f, 0.12f) * hs, pole(-1), 1f);
+                rig.SolveTwoBone(CharacterBone.RightUpperArm, new Vector3(0.42f, 1.0f, 0.12f) * hs, pole(1), 1f);
+            }
+            rig.SolveTwoBone(CharacterBone.LeftUpperArm, l * hs, pole(-1), wl);
+            rig.SolveTwoBone(CharacterBone.RightUpperArm, r * hs, pole(1), wr);
+            rig.SolveTwoBone(CharacterBone.RightUpperLeg, f * hs, new Vector3(0.1f, 1.2f, 1.5f) * hs, wf);
         }
 
         /// <summary>Forward lunge/punch pose (0..1 strength), decays quickly.</summary>
@@ -176,6 +240,8 @@ namespace LightMMORPG.Player
             bool stunned = _motor != null && _motor.IsStunned;
 
             _flightBlend = Mathf.MoveTowards(_flightBlend, flying ? 1f : 0f, dt * 3f);
+            _flyingNow = flying; _blockingNow = blocking; _chargingNow = charging;
+            _speed01 = Mathf.Clamp01(planar / 9f);
             _stretch = Mathf.Lerp(_stretch, dashing ? 1f : 0f, 1f - Mathf.Exp(-(dashing ? 30f : 8f) * dt));
             _lunge = Mathf.MoveTowards(_lunge, 0f, dt * 5f);
             _recoil = Vector3.MoveTowards(_recoil, Vector3.zero, dt * 3f);

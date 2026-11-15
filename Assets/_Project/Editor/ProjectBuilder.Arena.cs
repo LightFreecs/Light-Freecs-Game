@@ -41,27 +41,20 @@ namespace LightMMORPG.EditorTools
             EnsureFolder(PrefabsDir);
             var config = GameConfig.Load();
 
-            GameObject root = CreatePlaceholderFighter("Player", config, 0);
-            Transform gfx = root.transform.Find("Graphics");
-            // Model pivot (animated) under the FishNet graphical object (smoothed) — never animate Graphics itself.
+            // Player → Graphics (FishNet-smoothed) → Model (animated pivot) → procedural hero generated per palette at runtime
+            var root = new GameObject("Player");
+            var gfx = new GameObject("Graphics").transform;
+            gfx.SetParent(root.transform, false);
             var model = new GameObject("Model").transform;
             model.SetParent(gfx, false);
-            foreach (Transform part in gfx.Cast<Transform>().Where(t => t != model).ToArray())
-                part.SetParent(model, false);
-            foreach (var col in root.GetComponentsInChildren<Collider>()) Object.DestroyImmediate(col);
-            // little "eyes" so facing reads
-            var visor = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            visor.name = "Visor";
-            Object.DestroyImmediate(visor.GetComponent<Collider>());
-            visor.transform.SetParent(model, false);
-            visor.transform.localPosition = new Vector3(0f, 2.32f, 0.27f);
-            visor.transform.localScale = new Vector3(0.42f, 0.09f, 0.1f);
-            visor.GetComponent<Renderer>().sharedMaterial = config.fighterAccentMaterial;
+            var character = model.gameObject.AddComponent<LightMMORPG.Characters.ProceduralCharacter>();
+            character.Configure(0, false);
+            float heroHeight = LightMMORPG.Characters.CharacterPresets.ForPalette(0).height;
 
             var cc = root.AddComponent<CharacterController>();
-            cc.height = 2.5f;
+            cc.height = heroHeight;
             cc.radius = 0.45f;
-            cc.center = new Vector3(0f, 1.25f, 0f);
+            cc.center = new Vector3(0f, heroHeight * 0.5f, 0f);
             cc.stepOffset = 0.4f;
             cc.skinWidth = 0.05f;
             cc.slopeLimit = 50f;
@@ -86,7 +79,7 @@ namespace LightMMORPG.EditorTools
             so.ApplyModifiedPropertiesWithoutUndo();
 
             var idSo = new SerializedObject(identity);
-            SetProp(idSo, "_bodyRenderer", p => p.objectReferenceValue = model.Find("Body").GetComponent<Renderer>());
+            SetProp(idSo, "_character", p => p.objectReferenceValue = character);
             idSo.ApplyModifiedPropertiesWithoutUndo();
             var animSo = new SerializedObject(anim);
             SetProp(animSo, "_graphics", p => p.objectReferenceValue = gfx);
