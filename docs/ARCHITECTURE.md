@@ -167,3 +167,8 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     low orange sun, global Volume, 4 spawns at r18, Main Camera, NetworkManager + Tugboat 7770 + PlayerSpawner + bootstrap,
     ConnectMenu). `ConfigureBuildSettings()` puts Arena_01 first, windowed 1280x720, run in background.
     `BuildWindowsPlayer()` (`-buildTarget Win64`) → `Builds/Windows/LightMMORPG.exe`.
+  - Verified: compile clean, BuildAll clean, 24 EditMode tests green, Windows build OK (102 MB). Smoke test (two
+    `-batchmode -nographics` instances: `-host -netlog` and `-client 127.0.0.1 -autowalk -netlog`): both connected, 2 players
+    spawned on both sides with distinct palettes, client's circle walk (8.5 m/s) seen on the server within ~0.6 m of the
+    client's own position. Not verified: rendering/look of Arena_01, camera/lock-on feel, cursor lock, flight/dash/flash step
+    by hand (needs a person at the keyboard). `Assets/Scenes/SampleScene.unity` (template) is still 2nd in the build list.
