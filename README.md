@@ -87,15 +87,20 @@ tools/Play.ps1         rebuild-if-changed launcher
 
 All three need the Unity secrets below; until they're added the workflows will fail at the Unity step.
 
-### Adding the 3 repository secrets (one-time)
-1. Make sure Unity Hub is signed in and has an active Personal license. This creates the license file
-   **`C:\ProgramData\Unity\Unity_lic.ulf`** (`C:\ProgramData` is hidden: paste the path into Explorer's address bar).
-2. On GitHub open the repo → **Settings → Secrets and variables → Actions → New repository secret**, and add:
-   - `UNITY_LICENSE` — open `Unity_lic.ulf` in Notepad, select all, and paste the **entire contents** (XML).
-   - `UNITY_EMAIL` — the email of your Unity account.
-   - `UNITY_PASSWORD` — your Unity account password.
-3. Never commit the `.ulf` file (it's in `.gitignore`). If Unity later says the license was returned/expired, re-activate
-   in Unity Hub and update `UNITY_LICENSE` with the new file contents.
+### Adding the repository secrets (one-time)
+GameCI activates a free **Personal** Unity license from your Unity account, so only two secrets are needed.
+On GitHub open the repo → **Settings → Secrets and variables → Actions → New repository secret**, and add:
+- `UNITY_EMAIL` — the email of your Unity account.
+- `UNITY_PASSWORD` — your Unity account password.
+
+Or from PowerShell (each command asks for the value; nothing is saved to disk):
+```powershell
+gh secret set UNITY_EMAIL --repo LightFreecs/Light-Freecs-Game
+gh secret set UNITY_PASSWORD --repo LightFreecs/Light-Freecs-Game
+```
+`UNITY_LICENSE` is optional (only for a `.ulf` license file, e.g. Pro/Enterprise). Newer Unity Hub versions don't
+create `Unity_lic.ulf` for Personal licenses, so leave it unset. If your Unity account uses two-factor
+authentication, GameCI can't sign in with it: use an account without 2FA for CI.
 
 ## Testing on iPhone (sideloading with Sideloadly)
 1. GitHub → **Actions → Build iOS → Run workflow** (branch `main`). It takes ~30–60 min (Linux export, then macOS compile).
