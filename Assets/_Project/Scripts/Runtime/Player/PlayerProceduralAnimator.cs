@@ -1,3 +1,5 @@
+using LightMMORPG.Combat;
+using LightMMORPG.Config;
 using UnityEngine;
 
 namespace LightMMORPG.Player
@@ -25,6 +27,19 @@ namespace LightMMORPG.Player
         private float _phase;
         private Vector3 _baseScale = Vector3.one;
 
+        // session 4: limbs (fists + foot spheres), attacks, hit-stop, KO fall
+        private PlayerStats _stats;
+        private Transform _handL, _handR, _foot;
+        private AttackKind _attackKind;
+        private int _attackIndex;
+        private float _attackT = 1f;
+        private float _attackDuration = 0.25f;
+        private float _hitStopUntil;
+        private float _down;
+        private static readonly Vector3 HandLRest = new(-0.55f, 1.25f, 0.25f);
+        private static readonly Vector3 HandRRest = new(0.55f, 1.25f, 0.25f);
+        private static readonly Vector3 FootRest = new(0.22f, 0.15f, 0.05f);
+
         private void Awake()
         {
             _motor = GetComponent<PlayerMotor>();
@@ -32,6 +47,96 @@ namespace LightMMORPG.Player
             if (_model == null && _graphics != null) _model = _graphics.Find("Model");
             if (_model != null) _baseScale = _model.localScale;
             if (_graphics != null) _lastPos = _graphics.position;
+            _stats = GetComponent<PlayerStats>();
+            if (_model != null)
+            {
+                var cfg = GameConfig.Load();
+                _handL = Limb("HandL", HandLRest, 0.3f, cfg.fighterSkinMaterial);
+                _handR = Limb("HandR", HandRRest, 0.3f, cfg.fighterSkinMaterial);
+                _foot = Limb("Foot", FootRest, 0.3f, cfg.fighterAccentMaterial);
+            }
+        }
+
+        private Transform Limb(string limbName, Vector3 pos, float size, Material mat)
+        {
+            var existing = _model.Find(limbName);
+            if (existing != null) return existing;
+            var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            go.name = limbName;
+            Destroy(go.GetComponent<Collider>());
+            if (mat != null) go.GetComponent<Renderer>().sharedMaterial = mat;
+            go.transform.SetParent(_model, false);
+            go.transform.localPosition = pos;
+            go.transform.localScale = Vector3.one * size;
+            return go.transform;
+        }
+
+        /// <summary>Procedural punch/kick/cast: light combo = jab L, jab R, kick, double-fist finisher; heavy = big swing.</summary>
+        public void PlayAttack(AttackKind kind, int index)
+        {
+            _attackKind = kind;
+            _attackIndex = index;
+            _attackT = 0f;
+            _attackDuration = kind == AttackKind.Heavy ? 0.45f : (kind == AttackKind.Light && index == 3 ? 0.35f : 0.25f);
+            PlayLunge(kind == AttackKind.Heavy ? 1f : (kind == AttackKind.Light ? 0.55f + 0.15f * index : 0.35f));
+        }
+
+        /// <summary>Freeze the pose for a moment (local visual hit-stop).</summary>
+        public void HitStop(float seconds) => _hitStopUntil = Mathf.Max(_hitStopUntil, Time.time + seconds);
+
+        private void AnimateLimbs(float dt)
+        {
+            if (_handL == null) return;
+            _attackT = Mathf.Min(1f, _attackT + dt / _attackDuration);
+            // 0 → 1 → 0 strike curve, fast out, slower return
+            float k = _attackT < 0.35f ? _attackT / 0.35f : 1f - (_attackT - 0.35f) / 0.65f;
+            k = Mathf.Clamp01(k);
+            Vector3 l = HandLRest, r = HandRRest, f = FootRest;
+            if (_attackT < 1f)
+            {
+                switch (_attackKind)
+                {
+                    case AttackKind.Light:
+                        if (_attackIndex == 0) l = Vector3.Lerp(HandLRest, new Vector3(-0.15f, 1.45f, 1.25f), k);
+                        else if (_attackIndex == 1) r = Vector3.Lerp(HandRRest, new Vector3(0.15f, 1.45f, 1.25f), k);
+                        else if (_attackIndex == 2) f = Vector3.Lerp(FootRest, new Vector3(0.1f, 1.2f, 1.25f), k);
+                        else
+                        {
+                            l = Vector3.Lerp(HandLRest, new Vector3(-0.12f, 1.35f, 1.4f), k);
+                            r = Vector3.Lerp(HandRRest, new Vector3(0.12f, 1.35f, 1.4f), k);
+                        }
+                        break;
+                    case AttackKind.Heavy:
+                        // wind up overhead then hammer down-forward
+                        Vector3 up = new Vector3(0.3f, 2.9f, -0.1f), hit = new Vector3(0.1f, 1.1f, 1.5f);
+                        r = _attackT < 0.4f ? Vector3.Lerp(HandRRest, up, _attackT / 0.4f) : Vector3.Lerp(hit, HandRRest, (_attackT - 0.55f) / 0.45f);
+                        if (_attackT >= 0.4f && _attackT < 0.55f) r = Vector3.Lerp(up, hit, (_attackT - 0.4f) / 0.15f);
+                        l = Vector3.Lerp(HandLRest, r + new Vector3(-0.3f, 0f, 0f), k * 0.8f);
+                        break;
+                    case AttackKind.Blast:
+                        r = Vector3.Lerp(HandRRest, new Vector3(0.2f, 1.4f, 1.2f), k);
+                        break;
+                    case AttackKind.Beam:
+                        l = Vector3.Lerp(HandLRest, new Vector3(-0.12f, 1.35f, 1.2f), k);
+                        r = Vector3.Lerp(HandRRest, new Vector3(0.12f, 1.35f, 1.2f), k);
+                        break;
+                    case AttackKind.Surge:
+                        l = Vector3.Lerp(HandLRest, new Vector3(-0.9f, 1.0f, 0.1f), k);
+                        r = Vector3.Lerp(HandRRest, new Vector3(0.9f, 1.0f, 0.1f), k);
+                        break;
+                }
+            }
+            // charging beam: both palms forward
+            var combat = _stats != null ? _stats.GetComponent<PlayerCombat>() : null;
+            if (combat != null && combat.IsChargingBeam)
+            {
+                l = new Vector3(-0.12f, 1.35f, 0.75f);
+                r = new Vector3(0.12f, 1.35f, 0.75f);
+            }
+            float idle = Mathf.Sin(_phase) * 0.04f;
+            _handL.localPosition = l + Vector3.up * idle;
+            _handR.localPosition = r - Vector3.up * idle;
+            _foot.localPosition = f;
         }
 
         /// <summary>Forward lunge/punch pose (0..1 strength), decays quickly.</summary>
@@ -48,6 +153,13 @@ namespace LightMMORPG.Player
         {
             if (_graphics == null || _model == null) return;
             float dt = Mathf.Max(Time.deltaTime, 1e-4f);
+            if (Time.time < _hitStopUntil)
+            {
+                _lastPos = _graphics.position;
+                return; // hold the pose
+            }
+            bool down = _stats != null && _stats.IsDown.Value;
+            _down = Mathf.MoveTowards(_down, down ? 1f : 0f, dt * (down ? 2.5f : 4f));
 
             Vector3 vel = (_graphics.position - _lastPos) / dt;
             _lastPos = _graphics.position;
@@ -93,6 +205,18 @@ namespace LightMMORPG.Player
             float s = _stretch;
             Vector3 scale = new Vector3(1f - 0.25f * s, 1f - 0.12f * s, 1f + 0.6f * s);
             if (blocking) scale = Vector3.Scale(scale, new Vector3(1.05f, 0.92f, 1.05f));
+
+            AnimateLimbs(dt);
+
+            // KO: topple backwards, sink a little, then shrink/fade out during the last second before respawn
+            if (_down > 0f)
+            {
+                float fade = _stats != null && _stats.IsDown.Value ? Mathf.Clamp01(_stats.DownRemaining.Value) : 1f;
+                pitch = Mathf.Lerp(pitch, -85f, _down);
+                offset = Vector3.Lerp(offset, new Vector3(0f, 0.35f, -0.8f), _down);
+                scale = Vector3.Lerp(scale, scale * Mathf.Lerp(0.05f, 1f, fade), _down);
+                roll = Mathf.Lerp(roll, 0f, _down);
+            }
 
             _model.localPosition = offset;
             _model.localRotation = Quaternion.Euler(pitch, 0f, roll);

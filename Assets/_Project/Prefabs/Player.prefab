@@ -442,6 +442,9 @@ GameObject:
   - component: {fileID: 597129111144623876}
   - component: {fileID: 3902497643044863784}
   - component: {fileID: 6131843657515713337}
+  - component: {fileID: 3519914891713327870}
+  - component: {fileID: 4107479117456355183}
+  - component: {fileID: 5696394798317816382}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -614,3 +617,45 @@ MonoBehaviour:
   _graphics: {fileID: 290547127452650913}
   _model: {fileID: 2833726895676527767}
   _maxLean: 14
+--- !u!114 &3519914891713327870
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9149562285501467288}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d0a678e78e4d5c64998d518313560a26, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: LightMMORPG::LightMMORPG.Combat.PlayerStats
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 6829120351202894231}
+  _networkObjectCache: {fileID: 0}
+--- !u!114 &4107479117456355183
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9149562285501467288}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e9ac41b026ececb4b94c6e219caa4a54, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: LightMMORPG::LightMMORPG.Combat.PlayerCombat
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 6829120351202894231}
+  _networkObjectCache: {fileID: 0}
+--- !u!114 &5696394798317816382
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9149562285501467288}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a72cb291c97898c44b526eee3f6e8e6f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: LightMMORPG::LightMMORPG.VFX.PlayerAura

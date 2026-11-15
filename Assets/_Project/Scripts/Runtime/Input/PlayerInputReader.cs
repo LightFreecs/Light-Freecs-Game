@@ -26,7 +26,11 @@ namespace LightMMORPG.Input
         public static bool CursorLocked => Cursor.lockState == CursorLockMode.Locked;
 
         /// <summary>True when the touch overlay should be shown / used.</summary>
-        public static bool TouchMode => Application.isMobilePlatform || Touchscreen.current != null;
+        public static bool TouchMode => Application.isMobilePlatform || Touchscreen.current != null || ForceTouchUI;
+
+        /// <summary>Command line <c>-touchui</c>: show/use the touch overlay on PC (mouse drives it) for testing.</summary>
+        public static bool ForceTouchUI => _forceTouch ??= Array.IndexOf(Environment.GetCommandLineArgs(), "-touchui") >= 0;
+        private static bool? _forceTouch;
 
         [Tooltip("Degrees per mouse pixel.")] public float mouseSensitivity = 0.12f;
         [Tooltip("Degrees per second at full right-stick.")] public float stickSensitivity = 200f;

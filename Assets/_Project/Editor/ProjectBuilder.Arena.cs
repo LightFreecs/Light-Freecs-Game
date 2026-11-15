@@ -72,6 +72,10 @@ namespace LightMMORPG.EditorTools
             root.AddComponent<PlayerMotor>();
             var identity = root.AddComponent<PlayerIdentity>();
             var anim = root.AddComponent<PlayerProceduralAnimator>();
+            // session 4: combat
+            root.AddComponent<LightMMORPG.Combat.PlayerStats>();
+            root.AddComponent<LightMMORPG.Combat.PlayerCombat>();
+            root.AddComponent<LightMMORPG.VFX.PlayerAura>();
 
             var so = new SerializedObject(nob);
             SetProp(so, "_enablePrediction", p => p.boolValue = true);
@@ -331,6 +335,10 @@ namespace LightMMORPG.EditorTools
 
             var menuGo = new GameObject("ConnectMenu");
             menuGo.AddComponent<ConnectMenu>();
+
+            var hudGo = new GameObject("HUD");
+            hudGo.AddComponent<LightMMORPG.UI.GameHud>();
+            hudGo.AddComponent<LightMMORPG.UI.TouchControls>();
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, ArenaScenePath);

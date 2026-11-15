@@ -172,3 +172,42 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     spawned on both sides with distinct palettes, client's circle walk (8.5 m/s) seen on the server within ~0.6 m of the
     client's own position. Not verified: rendering/look of Arena_01, camera/lock-on feel, cursor lock, flight/dash/flash step
     by hand (needs a person at the keyboard). `Assets/Scenes/SampleScene.unity` (template) is still 2nd in the build list.
+- Session 4 (combat, powers, match loop, HUD, touch) — done.
+  - Core: `BuffTimer` (Power Surge timer), `CombatMath` (melee hit centre, server charge validation `ValidateCharge`
+    with 0.25 s slack, knockback vectors + tuning constants, `PickSpawn`, `LightAttackInterval` 0.25 s anti-spam).
+    6 new EditMode tests (`CombatExtrasTests.cs`) → **30 green**.
+  - `Combat/PlayerStats` (NetworkBehaviour): SyncVars `Health` (sent every tick), `Energy`/`Guard` (0.1 s), `GuardBroken`,
+    `SurgeRemaining`, `IsDown`, `DownRemaining`, `Kos`, `Deaths`; name/palette stay on `PlayerIdentity`. Server tick runs the
+    Core pools: regen 4/s, hold-Charge +30/s (motor's replicated `IsCharging`), guard recovery, surge expiry (pauses regen).
+    `ServerApplyHit(attacker, dmg, hitstun, knockback, point, kind)` = surge + block (80%) + guard drain/break (1 s stun) +
+    `PlayerMotor.ServerApplyKnockback`, KO credit to last attacker, down 5 s (motor kept stunned) → `ServerTeleport` to a
+    random `PlayerSpawner.Spawns` point (avoids the previous one) with full stats. Client events `OnHitFeedback`, `OnKnockout`.
+  - `Combat/PlayerCombat`: owner reads input, plays own swing/VFX at once, `[ServerRpc]` with aim (`ThirdPersonCamera.AimDirection`
+    = lock-on target or camera forward; `AimOverride` hook for bots). Server validates alive/not stunned/cooldowns
+    (`Cooldown` absolute time)/energy/combo (`ComboChain`); melee = `OverlapSphere` r1.2 at 1.3 m along aim; Energy Blast =
+    server-simulated spherecast projectile list (no NetworkObject) + `RpcBlast` visual copies; Charged Beam = CmdBeamCharge
+    (server records start) → CmdBeamFire(claimed charge, validated) → `SphereCastAll` r1 up to first world collider, pierces
+    players, dmg 150→400; Power Surge via `ServerActivateSurge` (+35% dmg, +20% speed via `ServerSetSpeedMultiplier`).
+    Observers RPCs are `ExcludeOwner`. Owner-side cooldown estimates feed the HUD (`Cooldown01`, `CanAfford`).
+  - Feel: `VFX/CombatFx` (impact flash, blast visual, beam cylinder 0.4 s, hit-stop on both models, recoil, camera shake via
+    new `ThirdPersonCamera.Shake/ShakeNear`), `BeamChargeVisual` (growing glow ball), `VFX/PlayerAura` (aura shell: surge
+    big/steady, energy charge flickering). Animator: runtime fist/foot spheres, `PlayAttack(kind, index)` (jab L, jab R,
+    kick, double-fist finisher, overhead heavy, cast poses), `HitStop`, KO topple + shrink-out before respawn.
+  - UI (runtime uGUI, created by a "HUD" object the arena builder now adds): `UI/GameHud` (HP/energy/guard/surge bars top-left,
+    ability icons with cooldown sweep + energy dimming bottom-centre on PC, target bar when locked on, name plates + HP above
+    others, KO countdown, KO feed, corner scoreboard KOs/deaths — Tab stays lock-on), `UI/TouchControls` (floating joystick
+    left, drag-look right, buttons for all actions incl. hold beam/block/charge, cooldown sweep on power buttons, writes
+    `TouchInputState`), `SafeAreaFitter`, `UiKit`. `-touchui` forces touch mode on PC (`PlayerInputReader.ForceTouchUI`).
+  - Smoke harness: new `-autoattack` (`Combat/CombatAutoPilot`, drives the local player through `TouchInputState`: approach,
+    4-hit combo, heavy, back off, 3 blasts, full beam, charge when low, repeat). `-netlog` now also logs `[Combat]` on the
+    server and `[Sync] <name> hp a -> b` on a remote client.
+  - Verified: compile clean, BuildAll clean, 30 tests green, Windows build OK. Two `-batchmode -nographics` instances
+    (`-host -netlog`, `-client 127.0.0.1 -autoattack -netlog`, ~75 s): server logged 47+ hits (light 30/30/40/60, heavy 110,
+    blast 45, beam 400 at 1.5 s charge), 3 KOs credited to the attacker (KOs/deaths counted), respawns at different spawns
+    with hp 1000; client log shows 50 `[Sync]` HP updates of the host's player incl. `-> 0` and `0 -> 1000`. No exceptions.
+  - Not verified (needs a person / GPU): how any VFX, HUD, name plates or touch overlay look; touch on a real phone/notch;
+    block/guard break and Power Surge in a live match (code paths compile, not exercised by the bot); hit-stop/shake feel.
+  - Known gaps / later: no lag compensation (as planned); after a finisher the knocked-back target can leave the heavy's
+    reach (bot's first heavy missed); beam is stopped by rocks/pillars (by design); scoreboard columns use a proportional
+    font so they don't line up perfectly; `FishNet.Config.XML` / `ArenaVolumeProfile.asset` get regeneration churn from
+    BuildAll (left uncommitted).

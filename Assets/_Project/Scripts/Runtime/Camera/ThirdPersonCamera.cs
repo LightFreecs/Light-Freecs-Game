@@ -40,6 +40,27 @@ namespace LightMMORPG.Cameras
         public bool IsLockedOn => CurrentTarget != null;
 
         private PlayerMotor _player;
+        private static float _shakeAmp, _shakeUntil, _shakeDuration = 0.1f;
+
+        /// <summary>Camera shake (metres of jitter, seconds). Stronger calls override weaker ones.</summary>
+        public static void Shake(float amplitude, float duration)
+        {
+            float remaining = Mathf.Max(0f, _shakeUntil - Time.time);
+            float current = remaining > 0f ? _shakeAmp * remaining / _shakeDuration : 0f;
+            if (amplitude < current) return;
+            _shakeAmp = amplitude;
+            _shakeDuration = Mathf.Max(0.01f, duration);
+            _shakeUntil = Time.time + duration;
+        }
+
+        /// <summary>Shake scaled down by distance from the local player (beams, explosions).</summary>
+        public static void ShakeNear(Vector3 worldPos, float amplitude, float duration)
+        {
+            if (Instance == null || Instance._player == null) return;
+            float d = Vector3.Distance(Instance._player.transform.position, worldPos);
+            float k = Mathf.Clamp01(1f - d / 25f);
+            if (k > 0f) Shake(amplitude * k, duration);
+        }
         private Transform _follow;
         private float _yaw, _pitch = 12f;
         private Vector3 _pivot;
@@ -138,7 +159,15 @@ namespace LightMMORPG.Cameras
             // pull in instantly, ease back out
             _currentDistance = allowed < _currentDistance ? allowed : Mathf.Lerp(_currentDistance, allowed, 1f - Mathf.Exp(-5f * dt));
 
-            transform.SetPositionAndRotation(origin + back * _currentDistance, rot);
+            Vector3 shake = Vector3.zero;
+            float shakeLeft = _shakeUntil - Time.time;
+            if (shakeLeft > 0f)
+            {
+                float a = _shakeAmp * (shakeLeft / _shakeDuration);
+                float t = Time.time * 38f;
+                shake = rot * new Vector3((Mathf.PerlinNoise(t, 0.1f) - 0.5f) * 2f, (Mathf.PerlinNoise(0.7f, t) - 0.5f) * 2f, 0f) * a;
+            }
+            transform.SetPositionAndRotation(origin + back * _currentDistance + shake, rot);
             SetMarker(CurrentTarget);
         }
 
