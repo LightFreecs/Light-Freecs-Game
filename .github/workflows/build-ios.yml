@@ -1,0 +1,93 @@
+name: Build iOS
+
+# Step 1 exports an Xcode project from Unity on Linux (cheap runner).
+# Step 2 compiles it on a macOS runner and packages an UNSIGNED .ipa.
+# Install it with a sideloading tool (e.g. Sideloadly / AltStore), which
+# re-signs it with your own Apple ID. No paid Apple Developer account needed.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  export-xcode:
+    name: Export Xcode project
+    runs-on: ubuntu-latest
+    steps:
+      # Unity editor images are large; make room on the hosted runner.
+      - uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-iOS-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: Library-iOS-
+
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: iOS
+          buildName: LightMMORPG
+
+      # Tar first: upload-artifact drops file permissions and symlinks, and the
+      # Unity Xcode project relies on executable build-phase scripts.
+      - name: Pack Xcode project
+        run: sudo tar -czf ios-xcode-project.tar.gz -C build/iOS .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-xcode-project
+          path: ios-xcode-project.tar.gz
+          retention-days: 1
+
+  compile:
+    name: Compile on macOS (unsigned)
+    needs: export-xcode
+    runs-on: macos-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ios-xcode-project
+
+      - name: Unpack Xcode project
+        run: |
+          mkdir -p build/iOS
+          tar -xzf ios-xcode-project.tar.gz -C build/iOS
+          ls build/iOS
+
+      - name: xcodebuild (no code signing)
+        run: |
+          cd build/iOS/LightMMORPG
+          xcodebuild -project Unity-iPhone.xcodeproj \
+            -scheme Unity-iPhone \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath "$PWD/LightMMORPG.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            archive
+
+      - name: Package unsigned .ipa
+        run: |
+          cd build/iOS/LightMMORPG
+          APP=$(find LightMMORPG.xcarchive/Products/Applications -maxdepth 1 -name "*.app" | head -n 1)
+          if [ -z "$APP" ]; then echo "No .app found in archive"; exit 1; fi
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry LightMMORPG-unsigned.ipa Payload
+          ls -lh LightMMORPG-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LightMMORPG-iOS-ipa
+          path: build/iOS/LightMMORPG/LightMMORPG-unsigned.ipa

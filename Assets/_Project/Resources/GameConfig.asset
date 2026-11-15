@@ -1,0 +1,64 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 504c226cb3b6e2f4db6a7ad66954dc06, type: 3}
+  m_Name: GameConfig
+  m_EditorClassIdentifier: LightMMORPG::LightMMORPG.Config.GameConfig
+  maxHealth: 1000
+  maxEnergy: 100
+  energyRegenPerSecond: 4
+  energyChargePerSecond: 30
+  maxGuard: 100
+  knockedOutDuration: 5
+  runSpeed: 8
+  sprintSpeed: 13
+  flySpeed: 11
+  dashSpeed: 25
+  dashDuration: 0.18
+  dashCooldown: 0.6
+  flashStepDistance: 7
+  flashStepCooldown: 2.5
+  lightComboDamage:
+  - 30
+  - 30
+  - 40
+  - 60
+  comboWindow: 0.6
+  heavyDamage: 110
+  heavyCooldown: 1.2
+  meleeHitRadius: 1.2
+  meleeHitForwardOffset: 1.3
+  lightHitstun: 0.35
+  heavyHitstun: 0.6
+  blockMoveMultiplier: 0.35
+  blockDamageReduction: 0.8
+  guardBreakStun: 1
+  energyBlast: {fileID: 11400000, guid: cbed60925890c1b41ad68a2579df0591, type: 2}
+  chargedBeam: {fileID: 11400000, guid: e03170d157d300f47bcb408f7d4e50af, type: 2}
+  powerSurge: {fileID: 11400000, guid: a40a21e0f6add514598817f7d52fa6e2, type: 2}
+  fighterPaletteMaterials:
+  - {fileID: 2100000, guid: 76fedd80e42023c4d9c2a77df75d691b, type: 2}
+  - {fileID: 2100000, guid: 27d8d393fe28ace438c8eb31cb5d787e, type: 2}
+  - {fileID: 2100000, guid: 9b92fcaa3c4da2146b30dc9adfe42288, type: 2}
+  - {fileID: 2100000, guid: 66aef69585ea3a74b882980f1b4f65f9, type: 2}
+  fighterBodyMaterial: {fileID: 2100000, guid: 76fedd80e42023c4d9c2a77df75d691b, type: 2}
+  fighterSkinMaterial: {fileID: 2100000, guid: e292b871bfbcf2c489c39b2f193631af, type: 2}
+  fighterAccentMaterial: {fileID: 2100000, guid: 14a442683e492db4ca0929fb451665d6, type: 2}
+  arenaGroundMaterial: {fileID: 2100000, guid: 0e905caee10c0a940bba3a854d23cb25, type: 2}
+  arenaWallMaterial: {fileID: 2100000, guid: bff3287b47682554e8aed7e166fd229c, type: 2}
+  arenaPropMaterial: {fileID: 2100000, guid: d1bbd6064a557b847996926f70f05144, type: 2}
+  auraMaterial: {fileID: 2100000, guid: d2736397a4357ea4e8d0fea4b96fbf42, type: 2}
+  projectileMaterial: {fileID: 2100000, guid: cdecce2478800d243a6a5befa9cd1a01, type: 2}
+  beamMaterial: {fileID: 2100000, guid: e707d10e4b4c5e84dac0de506ea85e46, type: 2}
+  impactMaterial: {fileID: 2100000, guid: dd6967b27b3f36449971019eff9174e8, type: 2}
+  arenaVolumeProfile: {fileID: 11400000, guid: 5cce2dcac51c33741aaae4b7e516698d, type: 2}
+  hitVfxPrefab: {fileID: 0}
+  projectileVisualPrefab: {fileID: 0}
