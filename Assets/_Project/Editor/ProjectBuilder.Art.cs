@@ -160,32 +160,43 @@ namespace LightMMORPG.EditorTools
                 profile.name = Path.GetFileNameWithoutExtension(ArenaVolumeProfilePath);
                 AssetDatabase.CreateAsset(profile, ArenaVolumeProfilePath);
             }
-            // Idempotent: drop old overrides (sub-assets) and re-add.
+            // Idempotent: reuse existing override sub-assets (stable fileIDs -> no git churn), drop anything else.
+            var keep = new[] { typeof(Bloom), typeof(Tonemapping), typeof(ColorAdjustments) };
             foreach (var c in profile.components.ToArray())
+            {
+                if (c != null && System.Array.IndexOf(keep, c.GetType()) >= 0) continue;
+                profile.components.Remove(c);
                 if (c != null) Object.DestroyImmediate(c, true);
-            profile.components.Clear();
+            }
 
-            var bloom = profile.Add<Bloom>(true);
+            var bloom = GetOrAdd<Bloom>(profile);
             bloom.threshold.Override(1.0f);
             bloom.intensity.Override(1.2f);
             bloom.scatter.Override(0.65f);
             bloom.highQualityFiltering.Override(false); // mobile-friendly
 
-            var tonemap = profile.Add<Tonemapping>(true);
+            var tonemap = GetOrAdd<Tonemapping>(profile);
             tonemap.mode.Override(TonemappingMode.Neutral); // Neutral keeps saturated anime colors (ACES shifts hues)
 
-            var color = profile.Add<ColorAdjustments>(true);
+            var color = GetOrAdd<ColorAdjustments>(profile);
             color.saturation.Override(12f);
             color.contrast.Override(6f);
 
             foreach (var c in profile.components)
             {
                 c.hideFlags = HideFlags.HideInInspector | HideFlags.HideInHierarchy;
-                AssetDatabase.AddObjectToAsset(c, profile);
+                if (!AssetDatabase.Contains(c)) AssetDatabase.AddObjectToAsset(c, profile);
+                EditorUtility.SetDirty(c);
             }
             EditorUtility.SetDirty(profile);
             AssetDatabase.SaveAssets();
             return profile;
+        }
+
+        private static T GetOrAdd<T>(VolumeProfile profile) where T : VolumeComponent
+        {
+            if (profile.TryGet<T>(out var existing)) { existing.active = true; return existing; }
+            return profile.Add<T>(true);
         }
 
         // ---------------------------------------------------------------- look test
@@ -277,7 +288,7 @@ namespace LightMMORPG.EditorTools
             camData.antialiasing = AntialiasingMode.FastApproximateAntialiasing;
             camGo.AddComponent<AudioListener>();
 
-            EditorSceneManager.SaveScene(scene, LookTestScenePath);
+            SaveSceneStable(scene, LookTestScenePath);
             Debug.Log("[ProjectBuilder] BuildLookTestScene: wrote " + LookTestScenePath);
         }
 

@@ -19,6 +19,14 @@ jobs:
             name: LightMMORPG-Server-Linux
             subtarget: Server
     steps:
+      # Unity editor images are large; make room on the hosted runner.
+      - uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+
       - uses: actions/checkout@v4
         with:
           lfs: true
@@ -26,7 +34,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: Library
-          key: Library-${{ matrix.targetPlatform }}-${{ hashFiles('Packages/packages-lock.json') }}
+          key: Library-${{ matrix.targetPlatform }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
           restore-keys: Library-${{ matrix.targetPlatform }}-
 
       - uses: game-ci/unity-builder@v4

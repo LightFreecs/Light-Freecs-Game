@@ -17,6 +17,33 @@ namespace LightMMORPG.EditorTools
         public const string AbilitiesDir = ProjectRoot + "/Data/Abilities";
         public const string GameConfigPath = ResourcesDir + "/GameConfig.asset";
 
+        /// <summary>
+        /// Saves a regenerated scene, but keeps the previous file when only Unity's random object fileIDs differ,
+        /// so re-running BuildAll leaves git clean.
+        /// </summary>
+        public static void SaveSceneStable(UnityEngine.SceneManagement.Scene scene, string path)
+        {
+            byte[] before = File.Exists(path) ? File.ReadAllBytes(path) : null;
+            UnityEditor.SceneManagement.EditorSceneManager.SaveScene(scene, path);
+            if (before == null) return;
+            if (NormalizeYaml(System.Text.Encoding.UTF8.GetString(before)) != NormalizeYaml(File.ReadAllText(path))) return;
+            File.WriteAllBytes(path, before);
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+        }
+
+        // Order-independent fingerprint of a Unity YAML file with all local fileIDs blanked out.
+        private static string NormalizeYaml(string text)
+        {
+            var docs = text.Replace("\r\n", "\n").Split(new[] { "\n--- " }, System.StringSplitOptions.None);
+            for (int i = 0; i < docs.Length; i++)
+            {
+                docs[i] = System.Text.RegularExpressions.Regex.Replace(docs[i], @"&-?\d+", "&#");
+                docs[i] = System.Text.RegularExpressions.Regex.Replace(docs[i], @"fileID: -?\d+", "fileID: #");
+            }
+            System.Array.Sort(docs, System.StringComparer.Ordinal);
+            return string.Join("\n---\n", docs);
+        }
+
         [MenuItem("LightMMORPG/Build All")]
         public static void BuildAll()
         {

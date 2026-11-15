@@ -341,7 +341,7 @@ namespace LightMMORPG.EditorTools
             hudGo.AddComponent<LightMMORPG.UI.TouchControls>();
 
             EditorSceneManager.MarkSceneDirty(scene);
-            EditorSceneManager.SaveScene(scene, ArenaScenePath);
+            SaveSceneStable(scene, ArenaScenePath);
             Debug.Log("[ProjectBuilder] BuildArenaScene: wrote " + ArenaScenePath + " (spawnable prefabs: " + (nm.SpawnablePrefabs != null ? nm.SpawnablePrefabs.GetObjectCount() : -1) + ")");
         }
 

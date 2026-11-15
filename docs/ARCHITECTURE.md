@@ -211,3 +211,24 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     reach (bot's first heavy missed); beam is stopped by rocks/pillars (by design); scoreboard columns use a proportional
     font so they don't line up perfectly; `FishNet.Config.XML` / `ArenaVolumeProfile.asset` get regeneration churn from
     BuildAll (left uncommitted).
+- Session 5 (verify, tidy, ship) — done.
+  - Builder idempotency: `ArenaVolumeProfile` now reuses its Bloom/Tonemapping/ColorAdjustments sub-assets (stable fileIDs)
+    instead of destroy + re-add; new `ProjectBuilder.SaveSceneStable` keeps the previous `.unity` file when the regenerated
+    scene differs only in Unity's random object fileIDs (order-independent YAML compare). Used for Arena_01 and LookTest.
+    `FishNet.Config.XML` just flips `Loaded` to true once (FishNet's own editor code) — committed as true, then stable.
+  - Removed unused template packages: purchasing, analytics, collab-proxy, 2d.sprite, 2d.tilemap, multiplayer.center
+    (visualscripting was not present). Deleted the IAP-generated `Assets/Resources/BillingMode.json`. Unity Connect
+    settings flipped `m_Enabled` to 0 as a result.
+  - CI review: GameCI images exist for 6000.5.1f1 (`ubuntu-…-windows-mono-3`, `linux-il2cpp-3`, `ios-3`; version
+    auto-detected). Windows standalone backend is Mono, so building on Ubuntu is fine. Fixes: free-disk-space step on
+    builder jobs, Library cache keyed on Assets/Packages/ProjectSettings, tests job gets `checks: write`, iOS Xcode
+    project is tarred before upload-artifact (which drops exec bits/symlinks the Unity build phases need). Triggers
+    unchanged (Windows/server: main + manual). Workflows not run (secrets not added yet).
+  - Verified: compile clean without the removed packages, BuildAll clean and idempotent (2 consecutive runs leave git
+    clean), 30/30 EditMode tests green, Windows build OK, `tools/Play.ps1` with `LIGHTMMORPG_NOLAUNCH=1` rebuilt in 39 s
+    and exited 0, combat smoke (host + `-client -autoattack`, 75 s): 54 `[Combat]` hits, 3 KOs, 47 client `[Sync]`
+    lines, 0 exceptions.
+  - README rewritten: how to play, controls (PC/gamepad/touch), two-PC multiplayer (UDP 7770, firewall), adding the 3
+    secrets, iOS .ipa + Sideloadly, known limitations.
+  - Still for the user: add `UNITY_LICENSE`/`UNITY_EMAIL`/`UNITY_PASSWORD` secrets, run Tests / Build Windows / Build iOS,
+    sideload and hand-test on a phone. Next steps: lag compensation, real art/audio, accounts + persistence, Android.

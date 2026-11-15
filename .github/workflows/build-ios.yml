@@ -13,6 +13,14 @@ jobs:
     name: Export Xcode project
     runs-on: ubuntu-latest
     steps:
+      # Unity editor images are large; make room on the hosted runner.
+      - uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+
       - uses: actions/checkout@v4
         with:
           lfs: true
@@ -20,7 +28,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: Library
-          key: Library-iOS-${{ hashFiles('Packages/packages-lock.json') }}
+          key: Library-iOS-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
           restore-keys: Library-iOS-
 
       - uses: game-ci/unity-builder@v4
@@ -32,10 +40,16 @@ jobs:
           targetPlatform: iOS
           buildName: LightMMORPG
 
+      # Tar first: upload-artifact drops file permissions and symlinks, and the
+      # Unity Xcode project relies on executable build-phase scripts.
+      - name: Pack Xcode project
+        run: sudo tar -czf ios-xcode-project.tar.gz -C build/iOS .
+
       - uses: actions/upload-artifact@v4
         with:
           name: ios-xcode-project
-          path: build/iOS
+          path: ios-xcode-project.tar.gz
+          retention-days: 1
 
   compile:
     name: Compile on macOS (unsigned)
@@ -45,7 +59,12 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: ios-xcode-project
-          path: build/iOS
+
+      - name: Unpack Xcode project
+        run: |
+          mkdir -p build/iOS
+          tar -xzf ios-xcode-project.tar.gz -C build/iOS
+          ls build/iOS
 
       - name: xcodebuild (no code signing)
         run: |
