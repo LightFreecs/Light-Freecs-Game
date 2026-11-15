@@ -32,11 +32,17 @@ Assets/Tests/EditMode   Unit tests for combat and ability logic
 |---|---|---|
 | `tests.yml` | push / PR | EditMode test results |
 | `build-windows.yml` | push to `main` / manual | Windows client + Linux dedicated server |
-| `build-ios.yml` | manual | Xcode project + unsigned `.xcarchive` |
+| `build-ios.yml` | manual | Unsigned `LightMMORPG-unsigned.ipa` for sideloading |
 
 ### Required repository secrets
 Set these under **Settings → Secrets and variables → Actions**:
 - `UNITY_EMAIL`, `UNITY_PASSWORD`: your Unity account
 - `UNITY_LICENSE`: the contents of your `Unity_lic.ulf` file (Windows: `C:\ProgramData\Unity\Unity_lic.ulf`), created after activating a Personal license
 
-For signed iOS builds (installing on an iPhone or uploading to TestFlight) you also need an Apple Developer account, plus signing secrets that we'll add later.
+### Testing on iPhone (sideloading)
+1. Go to **Actions → Build iOS → Run workflow**.
+2. When it finishes, download the `LightMMORPG-iOS-ipa` artifact and unzip it to get `LightMMORPG-unsigned.ipa`.
+3. Install it with a sideloading tool such as Sideloadly or AltStore, which signs it with your Apple ID.
+
+With a free Apple ID, the sideloaded app expires after 7 days and has to be reinstalled. Bundle ID: `com.lightfreecs.lightmmorpg`.
+macOS runners use GitHub Actions minutes 10× faster on private repos, so this workflow only runs when you start it.
