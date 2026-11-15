@@ -84,6 +84,14 @@ jobs:
           if [ -z "$APP" ]; then echo "No .app found in archive"; exit 1; fi
           mkdir -p Payload
           cp -R "$APP" Payload/
+          # Unity ships UnityRuntime.framework pre-signed; its leftover _CodeSignature files make
+          # sideload re-signing produce an invalid signature (ApplicationVerificationFailed 0xe8008019).
+          # Strip every existing signature so Sideloadly/AltStore sign the whole bundle cleanly.
+          find Payload -type d -name _CodeSignature -prune -exec rm -rf {} +
+          find Payload -name embedded.mobileprovision -delete
+          for f in Payload/*.app/Frameworks/*.framework Payload/*.app/Frameworks/*.dylib; do
+            [ -e "$f" ] && codesign --remove-signature "$f" || true
+          done
           zip -qry LightMMORPG-unsigned.ipa Payload
           ls -lh LightMMORPG-unsigned.ipa
 
