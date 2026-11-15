@@ -45,4 +45,4 @@ Set these under **Settings → Secrets and variables → Actions**:
 3. Install it with a sideloading tool such as Sideloadly or AltStore, which signs it with your Apple ID.
 
 With a free Apple ID, the sideloaded app expires after 7 days and has to be reinstalled. Bundle ID: `com.lightfreecs.lightmmorpg`.
-macOS runners use GitHub Actions minutes 10× faster on private repos, so this workflow only runs when you start it.
+This repo is public, so GitHub Actions minutes (macOS included) are free.
