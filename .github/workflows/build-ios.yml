@@ -1,0 +1,64 @@
+name: Build iOS
+
+# Step 1 exports an Xcode project from Unity on Linux (cheap runner).
+# Step 2 compiles it on a macOS runner. Without Apple signing secrets it
+# produces an unsigned build; add signing (fastlane match) once you have an
+# Apple Developer account to install on a device / ship to TestFlight.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  export-xcode:
+    name: Export Xcode project
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-iOS-${{ hashFiles('Packages/packages-lock.json') }}
+          restore-keys: Library-iOS-
+
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: iOS
+          buildName: LightMMORPG
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-xcode-project
+          path: build/iOS
+
+  compile:
+    name: Compile on macOS (unsigned)
+    needs: export-xcode
+    runs-on: macos-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ios-xcode-project
+          path: build/iOS
+
+      - name: xcodebuild (no code signing)
+        run: |
+          cd build/iOS/LightMMORPG
+          xcodebuild -project Unity-iPhone.xcodeproj \
+            -scheme Unity-iPhone \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath "$PWD/LightMMORPG.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            archive
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-xcarchive-unsigned
+          path: build/iOS/LightMMORPG/LightMMORPG.xcarchive
