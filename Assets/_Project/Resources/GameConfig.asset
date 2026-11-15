@@ -1,0 +1,55 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 504c226cb3b6e2f4db6a7ad66954dc06, type: 3}
+  m_Name: GameConfig
+  m_EditorClassIdentifier: LightMMORPG::LightMMORPG.Config.GameConfig
+  maxHealth: 1000
+  maxEnergy: 100
+  energyRegenPerSecond: 4
+  energyChargePerSecond: 30
+  maxGuard: 100
+  knockedOutDuration: 5
+  runSpeed: 8
+  sprintSpeed: 13
+  flySpeed: 11
+  dashSpeed: 25
+  dashDuration: 0.18
+  dashCooldown: 0.6
+  flashStepDistance: 7
+  flashStepCooldown: 2.5
+  lightComboDamage:
+  - 30
+  - 30
+  - 40
+  - 60
+  comboWindow: 0.6
+  heavyDamage: 110
+  heavyCooldown: 1.2
+  meleeHitRadius: 1.2
+  meleeHitForwardOffset: 1.3
+  lightHitstun: 0.35
+  heavyHitstun: 0.6
+  blockMoveMultiplier: 0.35
+  blockDamageReduction: 0.8
+  guardBreakStun: 1
+  energyBlast: {fileID: 11400000, guid: cbed60925890c1b41ad68a2579df0591, type: 2}
+  chargedBeam: {fileID: 11400000, guid: e03170d157d300f47bcb408f7d4e50af, type: 2}
+  powerSurge: {fileID: 11400000, guid: a40a21e0f6add514598817f7d52fa6e2, type: 2}
+  fighterBodyMaterial: {fileID: 0}
+  fighterAccentMaterial: {fileID: 0}
+  arenaGroundMaterial: {fileID: 0}
+  arenaPropMaterial: {fileID: 0}
+  auraMaterial: {fileID: 0}
+  projectileMaterial: {fileID: 0}
+  beamMaterial: {fileID: 0}
+  hitVfxPrefab: {fileID: 0}
+  projectileVisualPrefab: {fileID: 0}

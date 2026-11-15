@@ -114,3 +114,9 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
 
 ## Status
 - Foundation: Unity project, packages, CI workflows, embedded FishNet — done.
+- Session 1 (Core + config + tests) — done. Asmdefs per layout; Core: `CombatConstants`, `DamageCalculator` (+`BeamDamage`),
+  `ComboChain`, `EnergyPool`, `Cooldown` (tick + absolute-time), `GuardMeter`, `HealthPool` (KO down timer). Runtime/Config:
+  `AbilityDefinition` (+`AbilityKind`), `GameConfig` (`Load()`, material/VFX slots empty). `ProjectBuilder.BuildConfig` writes
+  `Resources/GameConfig.asset` + `Data/Abilities/{EnergyBlast,ChargedBeam,PowerSurge}.asset`; other builder steps are stubs.
+  24 EditMode tests green. Interpretations: guard drain = (absorbed 80%)/2; Power Surge pauses both regen and charge;
+  guard recovers 20/s when not blocking and refills after break stun (not in spec, tune later).
