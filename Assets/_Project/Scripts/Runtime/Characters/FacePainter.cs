@@ -85,9 +85,10 @@ namespace LightMMORPG.Characters
                 PaintEye(cv, side, ep, r.eyeColor, ink, skinLine);
                 PaintBrow(cv, side, ep, brow, r.browAngle, r.browThickness);
             }
-            // nose: small shadow stroke on one side + tip line
-            Stroke(cv, new Vector2(0.006f, 0.052f), new Vector2(0.0015f, 0.038f), 0.0009f, 0.0006f, skinLine, 0.75f);
-            Stroke(cv, new Vector2(-0.004f, 0.0365f), new Vector2(0.004f, 0.0365f), 0.0006f, 0.0006f, skinLine, 0.45f);
+            // nose: small shadow stroke on one side + tip line, following the nose preset/sliders
+            float noseDy = FaceParts.Resolve(r).Nose.Tip.y - FaceParts.ClassicNoseTipY;
+            Stroke(cv, new Vector2(0.006f, 0.052f + noseDy), new Vector2(0.0015f, 0.038f + noseDy), 0.0009f, 0.0006f, skinLine, 0.75f);
+            Stroke(cv, new Vector2(-0.004f, 0.0365f + noseDy), new Vector2(0.004f, 0.0365f + noseDy), 0.0006f, 0.0006f, skinLine, 0.45f);
             PaintMouth(cv, r.expression, ink, skinLine);
 
             return cv.Px;

@@ -35,6 +35,31 @@ namespace LightMMORPG.Characters
         public HeadPreset headPreset = HeadPreset.Procedural;
         public Color skinTone = new(1f, 0.84f, 0.72f);
 
+        [Header("Face parts: pick a preset, then adjust it with the sliders below it")]
+        public JawPreset jawPreset = JawPreset.Classic;
+        [Tooltip("Width of the lower face and jaw (1 = preset).")]
+        [Range(0.85f, 1.2f)] public float jawWidth = 1f;
+        [Tooltip("Moves the bottom of the jaw (and the chin) down; negative = shorter jaw (head units).")]
+        [Range(-0.012f, 0.015f)] public float jawLength;
+        [Tooltip("Pushes the jaw and chin forward (head units).")]
+        [Range(-0.02f, 0.02f)] public float jawForward;
+        [Range(0.7f, 1.4f)] public float jawThickness = 1f;
+        public ChinPreset chinPreset = ChinPreset.Classic;
+        [Range(0.6f, 1.5f)] public float chinSize = 1f;
+        [Tooltip("Moves the chin down; negative = up (head units).")]
+        [Range(-0.008f, 0.012f)] public float chinLength;
+        [Range(-0.015f, 0.015f)] public float chinForward;
+        public NosePreset nosePreset = NosePreset.Classic;
+        [Range(0.6f, 1.6f)] public float noseSize = 1f;
+        [Tooltip("Bridge-to-tip length (1 = preset).")]
+        [Range(0.6f, 1.5f)] public float noseLength = 1f;
+        [Range(-0.012f, 0.012f)] public float noseHeight;
+        public EarPreset earPreset = EarPreset.Classic;
+        [Range(0.7f, 1.5f)] public float earSize = 1f;
+        [Range(-0.03f, 0.03f)] public float earHeight;
+        [Tooltip("Degrees added to how far the ears stick out.")]
+        [Range(-20f, 30f)] public float earFlare;
+
         [Header("Hair")]
         public HairStyle hairStyle = HairStyle.SpikyUp;
         public Color hairColor = new(0.12f, 0.1f, 0.12f);

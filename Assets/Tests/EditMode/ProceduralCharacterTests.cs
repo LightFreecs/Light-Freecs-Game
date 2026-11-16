@@ -64,7 +64,6 @@ namespace LightMMORPG.Tests
         public void DifferentSeed_ChangesHair()
         {
             var r = CharacterPresets.Distinct(0);
-            r.headPreset = HeadPreset.Procedural; // preset heads have no procedural hair
             var a = ProceduralCharacterBuilder.GenerateData(r);
             r.seed += 1;
             var b = ProceduralCharacterBuilder.GenerateData(r);
@@ -78,7 +77,7 @@ namespace LightMMORPG.Tests
         {
             Assert.IsNotNull(HeadPresetLibrary.Get(HeadPreset.Head1), "Resources/Heads/Head1.json loads");
             var r = CharacterPresets.Brawler();
-            Assert.AreEqual(HeadPreset.Head1, r.headPreset, "Kaien wears the Blockbench head");
+            r.headPreset = HeadPreset.Head1;
             var preset = ProceduralCharacterBuilder.GenerateData(r);
             r.headPreset = HeadPreset.Procedural;
             var procedural = ProceduralCharacterBuilder.GenerateData(r);
@@ -93,6 +92,56 @@ namespace LightMMORPG.Tests
             float top = float.MinValue;
             foreach (var p in preset.Positions) top = Mathf.Max(top, p.y);
             Assert.AreEqual(headY + 0.26f * r.headSize * scale, top, 0.02f);
+        }
+
+        [Test]
+        public void ClassicPartPresets_AreTheOriginalHead()
+        {
+            var f = FaceParts.Resolve(new CharacterRecipe());
+            Assert.AreEqual(0.088f, f.Jaw.CheekWidth, 1e-6f);
+            Assert.AreEqual(0.074f, f.Jaw.TopWidth, 1e-6f);
+            Assert.AreEqual(-0.006f, f.Jaw.BottomY, 1e-6f);
+            Assert.AreEqual(-0.008f, f.Chin.Y, 1e-6f);
+            Assert.AreEqual(FaceParts.ClassicNoseTipY, f.Nose.Tip.y, 1e-6f);
+            Assert.AreEqual(20f, f.Ear.Flare, 1e-6f);
+        }
+
+        [Test]
+        public void PartPresets_AndSliderExtremes_GiveValidHeads(
+            [Values(JawPreset.Classic, JawPreset.Head1, JawPreset.Square, JawPreset.Pointed)] JawPreset jaw,
+            [Values(false, true)] bool extremes)
+        {
+            var r = CharacterPresets.Distinct(1);
+            int i = (int)jaw;
+            r.jawPreset = jaw;
+            r.chinPreset = (ChinPreset)i;
+            r.nosePreset = (NosePreset)i;
+            r.earPreset = (EarPreset)i;
+            if (extremes)
+            {
+                bool hi = i % 2 == 0;
+                r.jawWidth = hi ? 1.2f : 0.85f; r.jawLength = hi ? 0.015f : -0.012f; r.jawForward = hi ? 0.02f : -0.02f; r.jawThickness = hi ? 1.4f : 0.7f;
+                r.chinSize = hi ? 1.5f : 0.6f; r.chinLength = hi ? 0.012f : -0.008f; r.chinForward = hi ? 0.015f : -0.015f;
+                r.noseSize = hi ? 1.6f : 0.6f; r.noseLength = hi ? 1.5f : 0.6f; r.noseHeight = hi ? 0.012f : -0.012f;
+                r.earSize = hi ? 1.5f : 0.7f; r.earHeight = hi ? 0.03f : -0.03f; r.earFlare = hi ? 30f : -20f;
+            }
+            var g = ProceduralCharacterBuilder.GenerateData(r);
+            Assert.Less(g.VertexCount, ProceduralCharacterBuilder.VertexBudget);
+            for (int v = 0; v < g.VertexCount; v++)
+            {
+                Vector3 p = g.Positions[v], n = g.Normals[v];
+                Assert.IsFalse(float.IsNaN(p.x + p.y + p.z) || float.IsNaN(n.x + n.y + n.z), "NaN at " + v);
+                Assert.AreEqual(1f, n.magnitude, 0.01f, "normal not unit at " + v);
+            }
+            // the chosen parts change the head (compared with the all-Classic head)
+            if (jaw != JawPreset.Classic || extremes)
+            {
+                var c = CharacterPresets.Distinct(1);
+                var gc = ProceduralCharacterBuilder.GenerateData(c);
+                bool differs = gc.VertexCount != g.VertexCount;
+                for (int v = 0; !differs && v < g.VertexCount; v++) differs = gc.Positions[v] != g.Positions[v];
+                Assert.IsTrue(differs);
+            }
         }
 
         [Test]

@@ -492,15 +492,22 @@ namespace LightMMORPG.Characters
                 }
                 float hs = _hs;
                 int head = (int)B.Head;
+                var f = FaceParts.Resolve(_r);
+                JawShape jaw = f.Jaw;
+                ChinShape chin = f.Chin;
+                NoseShape nose = f.Nose;
+                EarShape ear = f.Ear;
                 _headPrims.Add(SdfPrim.Ellipsoid(HL(0f, 0.13f, -0.014f), new Vector3(0.116f, 0.13f, 0.13f) * hs, head, 0.04f, 0));
-                _headPrims.Add(SdfPrim.Ellipsoid(HL(0f, 0.068f, 0.034f), new Vector3(0.088f, 0.085f, 0.088f) * hs, head, 0.045f, 0));
+                _headPrims.Add(SdfPrim.Ellipsoid(HL(0f, 0.068f, 0.034f), new Vector3(jaw.CheekWidth, 0.085f, 0.088f) * hs, head, 0.045f, 0));
                 for (int side = -1; side <= 1; side += 2)
                 {
-                    _headPrims.Add(SdfPrim.Limb(HL(side * 0.074f, 0.085f, -0.012f), HL(side * 0.014f, -0.006f, 0.077f), 0.024f * hs, 0.017f * hs, head, 0.03f, 0));
-                    _headPrims.Add(SdfPrim.Ellipsoid(HL(side * 0.11f, 0.068f, -0.014f), new Vector3(0.014f, 0.032f, 0.022f) * hs, Quaternion.Euler(0f, -side * 20f, 0f), head, 0.01f, 0));
+                    _headPrims.Add(SdfPrim.Limb(HL(side * jaw.TopWidth, 0.085f, -0.012f), HL(side * jaw.BottomWidth, jaw.BottomY, jaw.Forward),
+                        jaw.Thickness * hs, jaw.Thickness * (0.017f / 0.024f) * hs, head, 0.03f, 0));
+                    _headPrims.Add(SdfPrim.Ellipsoid(HL(side * ear.Centre.x, ear.Centre.y, ear.Centre.z), ear.Size * hs,
+                        Quaternion.Euler(0f, -side * ear.Flare, side * ear.Tilt), head, 0.01f, 0));
                 }
-                _headPrims.Add(SdfPrim.Ellipsoid(HL(0f, -0.008f, 0.077f), new Vector3(0.026f, 0.019f, 0.02f) * hs, head, 0.025f, 0));
-                _headPrims.Add(SdfPrim.Limb(HL(0f, 0.064f, 0.112f), HL(0f, 0.038f, 0.124f), 0.006f * hs, 0.007f * hs, head, 0.012f, 0));
+                _headPrims.Add(SdfPrim.Ellipsoid(HL(0f, chin.Y, chin.Z), chin.Size * hs, head, 0.025f, 0));
+                _headPrims.Add(SdfPrim.Limb(HL(nose.Top.x, nose.Top.y, nose.Top.z), HL(nose.Tip.x, nose.Tip.y, nose.Tip.z), nose.Radius * hs, nose.Radius * (7f / 6f) * hs, head, 0.012f, 0));
 
                 int skin = Slot("skin", _r.skinTone, SlotKind.Skin);
                 int face = Slot("face", Color.white, SlotKind.Face);

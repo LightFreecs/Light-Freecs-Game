@@ -268,10 +268,19 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     weights sum 1, vertex budget 90k, determinism, seed changes output, rig hierarchy/IK), Windows build OK, smoke test
     (host + `-client -autoattack`, batchmode): 46 hits, KOs, 40 client syncs, 0 exceptions. Not verified: the rig
     animation in a rendered live match (headless only), iOS performance.
-- Preset heads (branch `claude/sharp-dijkstra-ka57x9`) — the user's first Blockbench model.
+- Face part presets (branch `claude/sharp-dijkstra-ka57x9`) — the user wants presets *on top of* sliders, per part.
+  - `Characters/FaceParts.cs`: `JawPreset`/`ChinPreset`/`NosePreset`/`EarPreset` (Classic = the original head, Head1 =
+    traced from the user's Blockbench head, plus Square/Strong/Pointed/Small/Button/Long). Recipe fields under "Face
+    parts": the preset + sliders that adjust it (jawWidth/Length/Forward/Thickness, chinSize/Length/Forward,
+    noseSize/Length/Height, earSize/Height/Flare; 1 / 0 = preset as is). `FaceParts.Resolve(recipe)` → shapes used by
+    `Ctx.Head()` (face ellipsoid width, jaw limbs, chin, nose limb, ears) and by `FacePainter` (nose lines follow the
+    nose tip). Classic + neutral sliders reproduce the old head exactly. Kaien uses the Head1 part presets.
+  - Not built yet: an in-game character creator; the presets/sliders are recipe fields (inspector on
+    `ProceduralCharacter` with "Use Custom Recipe"). Note: `claude/trusting-allen-3heaok` (WIP) replaces the head with
+    the Face Shape Bench SDF — when it lands, these part presets need porting onto its sliders/curves.
+- Whole-head presets (same branch) — optional, no fighter uses one now.
   - `CharacterRecipe.headPreset` (`HeadPreset` enum in `Characters/HeadPreset.cs`): `Procedural` (SDF head + painted
-    face + hair) or a hand-made head from `Resources/Heads/<name>.json`. Kaien (`CharacterPresets.Brawler`, so every
-    in-game palette and the menu fighter) wears `Head1`.
+    face + hair) or a hand-made head mesh from `Resources/Heads/<name>.json` (`Head1` = the Blockbench head).
   - Builder: `PresetHead` appends the head vertices scaled by `headSize`, weights rigid on `Head` blending into `Neck`
     between `neckBottom` and `neckTop` (chin); skin submesh uses the recipe skin tone + shared skin material, other
     colours become `SlotKind.Detail` slots (no outline, soft shading). No procedural hair or face slot on preset heads.
@@ -284,7 +293,8 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     `LightFreecs/BlockBench-Port` `models/Head1/`.
   - Verified outside Unity only (no editor in that session): compiled the Characters code + tests against Unity
     2021.3 reference assemblies, ran `GenerateData` for all 4 heroes with managed math stand-ins (no NaNs, unit normals,
-    weights sum 1, Kaien 66.7k verts, crown exactly where the procedural crown is) and rendered it. Not yet seen in the
+    weights sum 1, crown exactly where the procedural crown is) and rendered it; part presets: every preset set at both
+    slider extremes valid, all-Classic hero unchanged (same vertex count). Not yet seen in the
     real editor/game: the toon look of the eye pieces, outline on the head, neck blending while animating.
 - Start menu (branch `design/start-menu`, from `design/procedural-characters`) — done. Design = the user's bench pick
   (https://claude.ai/artifact/8FrfjPP8Hq4ktScWhXDKwY, `bench/choice`): "Dusk Isle" layout + "Horizon Ribbon" buttons, Blue Sky
