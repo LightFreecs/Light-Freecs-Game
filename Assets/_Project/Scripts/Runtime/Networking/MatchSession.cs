@@ -1,3 +1,4 @@
+using LightMMORPG.Combat;
 using LightMMORPG.Input;
 using LightMMORPG.Menu;
 using LightMMORPG.UI;
@@ -11,7 +12,8 @@ namespace LightMMORPG.Networking
     /// <summary>
     /// In-arena session UI (replaces the old connect panel): a "Connecting to …" card while a client connects (Cancel →
     /// menu; failure or timeout → back to the menu with an error toast), a server-only status card, and the Esc /
-    /// gamepad Start / touch ❚❚ pause menu with Resume and "Leave match" (stops networking, loads MainMenu).
+    /// gamepad Start / touch ❚❚ pause menu with Resume and "Leave match" (stops networking, loads MainMenu). In Training
+    /// the pause menu also switches the dummy between standing and blocking, and a small banner names the mode.
     /// Uses the main menu's theme (fonts, rounded panels) so both screens match.
     /// </summary>
     public sealed class MatchSession : MonoBehaviour
@@ -20,7 +22,11 @@ namespace LightMMORPG.Networking
 
         private MenuTheme _t;
         private SkyPreset _p;
-        private CanvasGroup _connecting, _pause, _serverCard;
+        private CanvasGroup _connecting, _pause, _serverCard, _trainingBanner;
+        private RectTransform _pauseCard, _pauseTitle, _leaveRect, _dummyRect;
+        private Selectable _dummyButton, _leave;
+        private Text _dummyLabel, _leaveLabel;
+        private bool _laidOut;
         private Text _connectingText, _serverText;
         private GameObject _pauseButton;
         private Selectable _resume;
@@ -86,11 +92,26 @@ namespace LightMMORPG.Networking
             var dim = _pause.gameObject.AddComponent<Image>();
             dim.color = new Color(0f, 0f, 0f, 0.45f);
             var pc = Card(_pause.transform, new Vector2(620f, 400f));
-            Text(pc.transform, "Paused", _t.lightFont, 56, new Vector2(0f, 120f));
+            _pauseCard = pc.rectTransform;
+            _pauseTitle = Text(pc.transform, "Paused", _t.lightFont, 56, new Vector2(0f, 120f)).rectTransform;
             _resume = Button(pc.transform, "Resume", new Vector2(0f, 10f), () => SetPause(false));
-            var leave = Button(pc.transform, "Leave match", new Vector2(0f, -110f), () => Leave(null));
-            Link(_resume, leave);
+            _leave = Button(pc.transform, "Leave match", new Vector2(0f, -110f), () => Leave(null));
+            _leaveRect = (RectTransform)_leave.transform;
+            _leaveLabel = _leave.GetComponentInChildren<Text>();
+            _dummyButton = Button(pc.transform, "Dummy: Standing", new Vector2(0f, -110f), ToggleDummy);
+            _dummyRect = (RectTransform)_dummyButton.transform;
+            _dummyLabel = _dummyButton.GetComponentInChildren<Text>();
+            _dummyButton.gameObject.SetActive(false);
+            Link(_resume, _leave);
             _pause.alpha = 0f;
+
+            // training banner (top-left, under the HUD bars)
+            _trainingBanner = Group(safe, "TrainingBanner");
+            var tb = MenuUi.Img(_trainingBanner.transform, "Card", MenuUi.RoundedRect(24), new Color(0f, 0f, 0f, 0.4f), true);
+            tb.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -110f), new Vector2(560f, 64f));
+            var tbt = MenuUi.Label(tb.transform, "Text", "TRAINING  ·  dummy options in the pause menu", _t.boldFont, 22, Color.white);
+            tbt.rectTransform.Fill();
+            _trainingBanner.alpha = 0f;
 
             // touch pause button (top-centre-right, clear of the HUD bars)
             var pb = MenuUi.Img(safe, "PauseButton", MenuUi.RoundedRect(36), new Color(0f, 0f, 0f, 0.45f), true);
@@ -160,6 +181,29 @@ namespace LightMMORPG.Networking
             var b = down.navigation; b.mode = Navigation.Mode.Explicit; b.selectOnUp = up; down.navigation = b;
         }
 
+        /// <summary>Training: dummy row between Resume and Leave, "Leave training".</summary>
+        private void LayoutPause(bool training)
+        {
+            _laidOut = true;
+            if (!training) return;
+            _pauseCard.sizeDelta = new Vector2(620f, 520f);
+            _pauseTitle.anchoredPosition = new Vector2(0f, 180f);
+            ((RectTransform)_resume.transform).anchoredPosition = new Vector2(0f, 70f);
+            _dummyButton.gameObject.SetActive(true);
+            _dummyRect.anchoredPosition = new Vector2(0f, -40f);
+            _leaveRect.anchoredPosition = new Vector2(0f, -150f);
+            _leaveLabel.text = "Leave training";
+            Link(_resume, _dummyButton);
+            Link(_dummyButton, _leave);
+        }
+
+        private void ToggleDummy()
+        {
+            var d = TrainingDummy.Instance;
+            if (d == null) return;
+            d.Mode = d.Mode == TrainingDummy.Behaviour.Stand ? TrainingDummy.Behaviour.Block : TrainingDummy.Behaviour.Stand;
+        }
+
         private void SetPause(bool open)
         {
             PauseOpen = open;
@@ -185,7 +229,9 @@ namespace LightMMORPG.Networking
             var b = NetworkBootstrap.Instance;
             if (b == null || _leaving) return;
             var nm = b.Manager;
-            bool clientMode = b.StartedMode is NetMode.Client or NetMode.Host;
+            bool training = b.StartedMode == NetMode.Training;
+            if (!_laidOut && b.StartedMode != NetMode.None) LayoutPause(training);
+            bool clientMode = b.StartedMode is NetMode.Client or NetMode.Host or NetMode.Training;
             bool connecting = clientMode && !nm.IsClientStarted;
             if (b.StartedMode == NetMode.Client && connecting && Time.unscaledTime - _startedAt > ConnectTimeout)
             {
@@ -193,7 +239,9 @@ namespace LightMMORPG.Networking
                 return;
             }
             bool serverOnly = b.StartedMode == NetMode.Server;
-            if (connecting) _connectingText.text = b.StartedMode == NetMode.Host ? "Starting match…" : "Connecting to " + b.Address + "…";
+            if (connecting) _connectingText.text = training ? "Starting training…" : b.StartedMode == NetMode.Host ? "Starting match…" : "Connecting to " + b.Address + "…";
+            if (training && TrainingDummy.Instance != null)
+                _dummyLabel.text = TrainingDummy.Instance.Mode == TrainingDummy.Behaviour.Block ? "Dummy: Blocking" : "Dummy: Standing";
             if (serverOnly) _serverText.text = "Server running · port " + b.Port + " · " + nm.ServerManager.Clients.Count + " connected";
 
             bool escape = Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame;
@@ -204,6 +252,8 @@ namespace LightMMORPG.Networking
             Show(_connecting, connecting);
             Show(_serverCard, serverOnly);
             Show(_pause, PauseOpen);
+            Show(_trainingBanner, training && !connecting && !PauseOpen);
+            _trainingBanner.interactable = _trainingBanner.blocksRaycasts = false;
             _pauseButton.SetActive(!connecting && !serverOnly && PlayerInputReader.TouchMode);
             if (connecting || serverOnly) PlayerInputReader.MenuOpen = true;
             else if (!PauseOpen && PlayerInputReader.MenuOpen) PlayerInputReader.MenuOpen = false;

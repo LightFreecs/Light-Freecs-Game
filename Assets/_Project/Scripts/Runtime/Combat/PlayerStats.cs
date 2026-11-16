@@ -139,6 +139,17 @@ namespace LightMMORPG.Combat
             DownRemaining.Value = _health.DownRemaining;
         }
 
+        /// <summary>Server: full health, energy and guard (training dummy recovering between combos). Ignored while down.</summary>
+        [Server]
+        public void ServerRestore()
+        {
+            if (_health.IsKnockedOut) return;
+            _health.Reset();
+            _energy.Refill();
+            _guard.Reset();
+            PushAll();
+        }
+
         [Server] public bool ServerCanAct() => !_health.IsKnockedOut && (Motor == null || !Motor.IsStunned);
         [Server] public bool ServerHasEnergy(float amount) => _energy.CanSpend(amount);
 

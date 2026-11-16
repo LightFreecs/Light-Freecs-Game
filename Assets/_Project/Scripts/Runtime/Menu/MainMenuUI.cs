@@ -688,6 +688,7 @@ namespace LightMMORPG.Menu
             {
                 case "play": SetState(State.PlayOnline); break;
                 case "settings": SetState(State.Settings); break;
+                case "training": NetLaunch.Launch(NetMode.Training); break;
                 case "quit":
                     Debug.Log("[Menu] Quit");
                     Application.Quit();
