@@ -18,7 +18,7 @@ namespace LightMMORPG.Characters
         public const float RefHeight = 2.3f;
         public const int VertexBudget = 90000;
 
-        public enum SlotKind { Skin, Face, Hair, Cloth, Armor, Dark }
+        public enum SlotKind { Skin, Face, Hair, Cloth, Armor, Dark, Detail }
 
         public struct SlotDef
         {
@@ -107,6 +107,7 @@ namespace LightMMORPG.Characters
         {
             string key = recipe.CacheKey();
             if (Cache.TryGetValue(key, out var g) && g.Mesh != null && g.Face != null) return g;
+            HeadPresetLibrary.Preload(recipe.headPreset);
             System.Threading.Tasks.Task<GeneratedCharacter> pending;
             lock (Pending) Pending.TryGetValue(key, out pending);
             g = pending != null ? pending.Result : GenerateData(recipe);
@@ -125,6 +126,7 @@ namespace LightMMORPG.Characters
             {
                 string key = r.CacheKey();
                 if (Cache.ContainsKey(key)) continue;
+                HeadPresetLibrary.Preload(r.headPreset); // Resources: main thread only
                 var copy = r.Clone();
                 lock (Pending)
                 {
@@ -219,6 +221,10 @@ namespace LightMMORPG.Characters
                     outlineC = new Color(slot.Color.r * 0.1f + 0.02f, slot.Color.g * 0.1f + 0.02f, slot.Color.b * 0.1f + 0.03f);
                     break;
                 case SlotKind.Armor: rim = 0.6f; shade = new Color(0.62f, 0.62f, 0.82f); break;
+                case SlotKind.Detail:
+                    // small coloured pieces of a preset head (eyes): an outline would swallow them; soft shading
+                    shade = new Color(0.9f, 0.88f, 0.95f); band2 = Color.white; rim = 0f; outline = 0f; ramp = -0.3f;
+                    break;
                 case SlotKind.Dark: rim = 0.25f; break;
             }
             m.SetColor("_BaseColor", baseC);
@@ -273,6 +279,7 @@ namespace LightMMORPG.Characters
             private readonly Dictionary<string, int> _slotIndex = new();
             private readonly System.Random _rnd;
             private SkinWeightSource _bodyWeights;
+            private HeadPresetData _presetHead;
             private Vector3 _armDirL, _armDirR, _palmL, _palmR;
 
             public Ctx(CharacterRecipe r)
@@ -477,6 +484,12 @@ namespace LightMMORPG.Characters
 
             public void Head()
             {
+                _presetHead = HeadPresetLibrary.Get(_r.headPreset);
+                if (_presetHead != null)
+                {
+                    PresetHead(_presetHead);
+                    return;
+                }
                 float hs = _hs;
                 int head = (int)B.Head;
                 _headPrims.Add(SdfPrim.Ellipsoid(HL(0f, 0.13f, -0.014f), new Vector3(0.116f, 0.13f, 0.13f) * hs, head, 0.04f, 0));
@@ -501,6 +514,33 @@ namespace LightMMORPG.Characters
                     return l.z > 0.015f && nrm.z > 0.1f && Mathf.Abs(l.x) < 0.112f && l.y > -0.058f && l.y < 0.178f ? face : -1;
                 };
                 SdfMesher.Polygonize(part, _buf);
+            }
+
+            /// <summary>Hand-made head (see <see cref="HeadPreset"/>): rigid on Head, the neck blends into the Neck bone.</summary>
+            private void PresetHead(HeadPresetData d)
+            {
+                Vector3 hp = P(B.Head);
+                int head = (int)B.Head, neck = (int)B.Neck;
+                int skin = Slot("skin", _r.skinTone, SlotKind.Skin);
+                int start = _buf.Positions.Count;
+                for (int i = 0; i < d.VertexCount; i++)
+                {
+                    Vector3 l = d.Position(i);
+                    Vector3 n = d.Normal(i);
+                    _buf.Positions.Add(hp + l * _hs);
+                    _buf.Normals.Add(n.sqrMagnitude > 1e-8f ? n.normalized : Vector3.up);
+                    _buf.Uvs.Add(new Vector2(0.5f, 0.5f));
+                    float w = Smooth01(d.neckBottom, d.neckTop, l.y);
+                    _buf.Weights.Add(w >= 0.5f
+                        ? new BoneWeight { boneIndex0 = head, weight0 = w, boneIndex1 = neck, weight1 = 1f - w }
+                        : new BoneWeight { boneIndex0 = neck, weight0 = 1f - w, boneIndex1 = head, weight1 = w });
+                }
+                foreach (var sm in d.submeshes)
+                {
+                    int slot = sm.skin ? skin : Slot("head_" + sm.color, sm.Color, SlotKind.Detail);
+                    var tris = _buf.Slot(slot);
+                    foreach (int t in sm.triangles) tris.Add(start + t);
+                }
             }
 
             // ---------------------------------------------------------- hands
@@ -947,6 +987,7 @@ namespace LightMMORPG.Characters
 
             public void Hair()
             {
+                if (_presetHead != null) return; // procedural hair is fitted to the procedural skull
                 var r = _r;
                 int hair = Slot("hair", r.hairColor, SlotKind.Hair, r.hairTipColor);
                 // scalp cap fills the gaps between clumps

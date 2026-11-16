@@ -35,12 +35,13 @@ namespace LightMMORPG.Characters
             _ => Rival(),
         };
 
-        /// <summary>Orange cropped high-collar jacket with navy piping, black undershirt, charcoal shorts, laced slate boots, black-to-crimson spikes, big amber eyes, grin.</summary>
+        /// <summary>Orange cropped high-collar jacket with navy piping, black undershirt, charcoal shorts, laced slate boots. Wears the Blockbench head <see cref="HeadPreset.Head1"/> (bald, red eyes); the hair/face fields apply if the head is set back to Procedural.</summary>
         public static CharacterRecipe Brawler() => new()
         {
             displayName = "Kaien",
             seed = 101,
             height = 2.28f, muscle = 0.75f, bulk = 0.95f, shoulderWidth = 1f, waist = 0.95f, headSize = 1.3f,
+            headPreset = HeadPreset.Head1,
             skinTone = new Color(1f, 0.85f, 0.72f),
             hairStyle = HairStyle.SpikyUp, hairColor = new Color(0.07f, 0.06f, 0.09f), hairTipColor = new Color(0.72f, 0.1f, 0.1f),
             spikeCount = 20, spikeLength = 1.1f, spikeCurl = 0.2f,

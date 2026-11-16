@@ -31,6 +31,8 @@ namespace LightMMORPG.Characters
         [Range(0.8f, 1.2f)] public float waist = 1f;
         [Tooltip("Head scale; ~1.3 gives youthful ~6-heads-tall shonen proportions.")]
         [Range(0.85f, 1.45f)] public float headSize = 1f;
+        [Tooltip("Hand-made head model (Resources/Heads) instead of the procedural one. Preset heads get no procedural hair, and their skin uses Skin Tone.")]
+        public HeadPreset headPreset = HeadPreset.Procedural;
         public Color skinTone = new(1f, 0.84f, 0.72f);
 
         [Header("Hair")]

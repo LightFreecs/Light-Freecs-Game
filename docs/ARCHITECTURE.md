@@ -268,6 +268,24 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     weights sum 1, vertex budget 90k, determinism, seed changes output, rig hierarchy/IK), Windows build OK, smoke test
     (host + `-client -autoattack`, batchmode): 46 hits, KOs, 40 client syncs, 0 exceptions. Not verified: the rig
     animation in a rendered live match (headless only), iOS performance.
+- Preset heads (branch `claude/sharp-dijkstra-ka57x9`) — the user's first Blockbench model.
+  - `CharacterRecipe.headPreset` (`HeadPreset` enum in `Characters/HeadPreset.cs`): `Procedural` (SDF head + painted
+    face + hair) or a hand-made head from `Resources/Heads/<name>.json`. Kaien (`CharacterPresets.Brawler`, so every
+    in-game palette and the menu fighter) wears `Head1`.
+  - Builder: `PresetHead` appends the head vertices scaled by `headSize`, weights rigid on `Head` blending into `Neck`
+    between `neckBottom` and `neckTop` (chin); skin submesh uses the recipe skin tone + shared skin material, other
+    colours become `SlotKind.Detail` slots (no outline, soft shading). No procedural hair or face slot on preset heads.
+    `HeadPresetLibrary.Preload` runs on the main thread in `GetOrGenerate`/`Prewarm` (Resources is main-thread only).
+  - Adding a head: export ASCII FBX from Blockbench (head centred on X, facing +Z), then
+    `python3 tools/blockbench_head.py Head.fbx Assets/_Project/Resources/Heads/<Name>.json --chin <model Y of chin> --cut <Y below which skin is dropped> [--drop parts]`,
+    add `<Name>` to `HeadPreset`, write a `TextScriptImporter` meta (or let Unity make one). The tool fits chin→crown to
+    the procedural head, mirrors X for Unity, makes winding consistent, closes tiny holes, smooths normals.
+    Head1: `--chin 7.3 --cut 5` (drops the bust base). Sources (`.bbmodel`, cleaned FBX) live in
+    `LightFreecs/BlockBench-Port` `models/Head1/`.
+  - Verified outside Unity only (no editor in that session): compiled the Characters code + tests against Unity
+    2021.3 reference assemblies, ran `GenerateData` for all 4 heroes with managed math stand-ins (no NaNs, unit normals,
+    weights sum 1, Kaien 66.7k verts, crown exactly where the procedural crown is) and rendered it. Not yet seen in the
+    real editor/game: the toon look of the eye pieces, outline on the head, neck blending while animating.
 - Start menu (branch `design/start-menu`, from `design/procedural-characters`) — done. Design = the user's bench pick
   (https://claude.ai/artifact/8FrfjPP8Hq4ktScWhXDKwY, `bench/choice`): "Dusk Isle" layout + "Horizon Ribbon" buttons, Blue Sky
   default with Dusk and Night, cel-shaded clouds. The user says it is NOT final: every value lives in one asset for tweaking.

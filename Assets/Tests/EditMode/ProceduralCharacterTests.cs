@@ -64,12 +64,35 @@ namespace LightMMORPG.Tests
         public void DifferentSeed_ChangesHair()
         {
             var r = CharacterPresets.Distinct(0);
+            r.headPreset = HeadPreset.Procedural; // preset heads have no procedural hair
             var a = ProceduralCharacterBuilder.GenerateData(r);
             r.seed += 1;
             var b = ProceduralCharacterBuilder.GenerateData(r);
             bool differs = a.VertexCount != b.VertexCount;
             for (int i = 0; !differs && i < a.VertexCount; i++) differs = a.Positions[i] != b.Positions[i];
             Assert.IsTrue(differs);
+        }
+
+        [Test]
+        public void PresetHead_ReplacesProceduralHeadAndHair()
+        {
+            Assert.IsNotNull(HeadPresetLibrary.Get(HeadPreset.Head1), "Resources/Heads/Head1.json loads");
+            var r = CharacterPresets.Brawler();
+            Assert.AreEqual(HeadPreset.Head1, r.headPreset, "Kaien wears the Blockbench head");
+            var preset = ProceduralCharacterBuilder.GenerateData(r);
+            r.headPreset = HeadPreset.Procedural;
+            var procedural = ProceduralCharacterBuilder.GenerateData(r);
+
+            Assert.IsFalse(preset.Slots.Exists(s => s.Kind == ProceduralCharacterBuilder.SlotKind.Hair || s.Kind == ProceduralCharacterBuilder.SlotKind.Face));
+            Assert.IsTrue(preset.Slots.Exists(s => s.Kind == ProceduralCharacterBuilder.SlotKind.Detail), "eye pieces get their own slots");
+            Assert.IsTrue(procedural.Slots.Exists(s => s.Kind == ProceduralCharacterBuilder.SlotKind.Hair));
+
+            // the crown sits where the procedural skull's crown is (0.26 head units above the Head bone)
+            float scale = r.height / ProceduralCharacterBuilder.RefHeight;
+            float headY = preset.BonePositions[(int)CharacterBone.Head].y;
+            float top = float.MinValue;
+            foreach (var p in preset.Positions) top = Mathf.Max(top, p.y);
+            Assert.AreEqual(headY + 0.26f * r.headSize * scale, top, 0.02f);
         }
 
         [Test]
