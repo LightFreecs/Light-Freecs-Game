@@ -11,7 +11,7 @@ namespace LightMMORPG.Networking
     /// <summary>
     /// Starts host / client / server. Sits on the NetworkManager object in Arena_01. What to start comes from the main
     /// menu (<see cref="NetLaunch.Launch"/>) or the command line: <c>-host</c>, <c>-client [ip]</c>, <c>-server</c>, <c>-port N</c>, <c>-netlog</c> (log player positions
-    /// every 2 s), <c>-quitafter S</c> (exit after S seconds). Batch mode / UNITY_SERVER without a flag = dedicated server.
+    /// every 2 s), <c>-quitafter S</c> (exit after S seconds), <c>-screenshot file.png [-screenshotat S]</c> (one screenshot, default after 8 s). Batch mode / UNITY_SERVER without a flag = dedicated server.
     /// </summary>
     public sealed class NetworkBootstrap : MonoBehaviour
     {
@@ -34,6 +34,8 @@ namespace LightMMORPG.Networking
 
         private bool _netLog;
         private float _quitAt = -1f;
+        private float _shotAt = -1f;
+        private string _shotPath;
         private float _nextLog;
 
         private void Awake()
@@ -55,6 +57,9 @@ namespace LightMMORPG.Networking
             string portArg = Arg(args, "-port");
             if (portArg != null && ushort.TryParse(portArg, out ushort p)) Port = p;
             _netLog = Has(args, "-netlog");
+            _shotPath = Arg(args, "-screenshot");
+            string shotAt = Arg(args, "-screenshotat");
+            if (_shotPath != null) _shotAt = Time.realtimeSinceStartup + (shotAt != null && float.TryParse(shotAt, NumberStyles.Float, CultureInfo.InvariantCulture, out float sa) ? sa : 8f);
             string quit = Arg(args, "-quitafter");
             if (quit != null && float.TryParse(quit, NumberStyles.Float, CultureInfo.InvariantCulture, out float q)) _quitAt = Time.realtimeSinceStartup + q;
 
@@ -66,6 +71,7 @@ namespace LightMMORPG.Networking
                 case NetMode.Host: StartHost(); break;
                 case NetMode.Client: StartClient(address); break;
                 case NetMode.Server: StartServerOnly(); break;
+                case NetMode.Training: StartTraining(); break;
                 default:
                     // Arena opened directly (editor play mode) with nothing to do: go to the menu.
                     Debug.Log("[Net] No launch request: returning to the main menu");
@@ -79,6 +85,24 @@ namespace LightMMORPG.Networking
             Debug.Log("[Net] Starting host on port " + Port);
             StartedMode = NetMode.Host;
             SetPort();
+            Manager.ServerManager.StartConnection(Port);
+            Manager.ClientManager.StartConnection(DefaultAddress, Port);
+        }
+
+        /// <summary>Training mode: a host only this computer can reach (loopback), with a practice dummy.</summary>
+        public void StartTraining()
+        {
+            Port = TrainingSession.Port;
+            Debug.Log("[Net] Starting training (local only) on port " + Port);
+            StartedMode = NetMode.Training;
+            SetPort();
+            var t = Manager.TransportManager.Transport;
+            if (t != null)
+            {
+                t.SetServerBindAddress("127.0.0.1", IPAddressType.IPv4);
+                t.SetServerBindAddress("::1", IPAddressType.IPv6);
+            }
+            TrainingSession.Begin(Manager);
             Manager.ServerManager.StartConnection(Port);
             Manager.ClientManager.StartConnection(DefaultAddress, Port);
         }
@@ -121,6 +145,12 @@ namespace LightMMORPG.Networking
 
         private void Update()
         {
+            if (_shotAt > 0f && Time.realtimeSinceStartup >= _shotAt)
+            {
+                _shotAt = -1f;
+                ScreenCapture.CaptureScreenshot(_shotPath);
+                Debug.Log("[Net] Screenshot: " + _shotPath);
+            }
             if (_quitAt > 0f && Time.realtimeSinceStartup >= _quitAt)
             {
                 Debug.Log("[Net] -quitafter reached, quitting");

@@ -4,12 +4,13 @@ using UnityEngine.SceneManagement;
 
 namespace LightMMORPG.Networking
 {
-    public enum NetMode { None, Host, Client, Server }
+    /// <summary>Training = private local host with a practice dummy (<see cref="TrainingSession"/>).</summary>
+    public enum NetMode { None, Host, Client, Server, Training }
 
     /// <summary>
     /// Hand-over between the main menu and the arena: the menu calls <see cref="Launch"/> (mode + address), the arena's
     /// <see cref="NetworkBootstrap"/> takes it with <see cref="TryConsume"/>. Command-line flags (<c>-host</c>,
-    /// <c>-client [ip]</c>, <c>-server</c>, batch mode = server) skip the menu and go straight to the arena.
+    /// <c>-client [ip]</c>, <c>-server</c>, <c>-training</c>, batch mode = server) skip the menu and go straight to the arena.
     /// </summary>
     public static class NetLaunch
     {
@@ -48,6 +49,7 @@ namespace LightMMORPG.Networking
             string[] args = Environment.GetCommandLineArgs();
             address = NetworkBootstrap.DefaultAddress;
             if (Array.IndexOf(args, "-host") >= 0) return NetMode.Host;
+            if (Array.IndexOf(args, "-training") >= 0) return NetMode.Training;
             int c = Array.IndexOf(args, "-client");
             if (c >= 0)
             {

@@ -153,9 +153,12 @@ namespace LightMMORPG.Player
 
         protected override void TimeManager_OnPostTick() => CreateReconcile();
 
+        /// <summary>Server: input for an ownerless fighter (the training dummy), read every tick; null = stand still.</summary>
+        public System.Func<ReplicateData> ServerBotInput;
+
         private ReplicateData BuildReplicateData()
         {
-            if (!IsOwner) return default;
+            if (!IsOwner) return IsServerStarted && !Owner.IsValid && ServerBotInput != null ? ServerBotInput() : default;
             var rd = new ReplicateData
             {
                 CameraYaw = CameraYawProvider != null ? CameraYawProvider() : _yaw,
