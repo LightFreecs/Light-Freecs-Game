@@ -5,7 +5,7 @@ namespace LightMMORPG.Core
     /// <summary>Hit points with knock-out at 0 and a down timer until respawn.</summary>
     public sealed class HealthPool
     {
-        public float Max { get; }
+        public float Max { get; private set; }
         public float KnockedOutDuration { get; }
         public float Current { get; private set; }
         public bool IsKnockedOut { get; private set; }
@@ -43,6 +43,15 @@ namespace LightMMORPG.Core
             if (!IsKnockedOut || DownRemaining <= 0f) return false;
             DownRemaining = Mathf.Max(0f, DownRemaining - dt);
             return DownRemaining <= 0f;
+        }
+
+        /// <summary>Change the maximum (stat build applied). Current health keeps its fraction of the maximum.</summary>
+        public void SetMax(float max)
+        {
+            max = Mathf.Max(1f, max);
+            float frac = Max > 0f ? Current / Max : 1f;
+            Max = max;
+            Current = IsKnockedOut ? 0f : max * frac;
         }
 
         /// <summary>Full HP, clears KO (respawn).</summary>

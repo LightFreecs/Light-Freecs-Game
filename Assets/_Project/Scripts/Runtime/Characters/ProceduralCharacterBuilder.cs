@@ -70,9 +70,23 @@ namespace LightMMORPG.Characters
         // ------------------------------------------------------------------ public API
 
         /// <summary>Builds the GameObject (bones + SkinnedMeshRenderer + <see cref="CharacterRig"/>), feet at the origin, facing +Z.</summary>
-        public static GameObject Build(CharacterRecipe recipe)
+        public static GameObject Build(CharacterRecipe recipe) => Build(recipe, GetOrGenerate(recipe));
+
+        /// <summary>
+        /// Starts generating a recipe on a worker thread without caching it (live previews such as the Customize screen).
+        /// Pass the result to <see cref="Build(CharacterRecipe, GeneratedCharacter)"/>; the caller owns its Mesh.
+        /// </summary>
+        public static System.Threading.Tasks.Task<GeneratedCharacter> GenerateAsync(CharacterRecipe recipe)
         {
-            var gen = GetOrGenerate(recipe);
+            EyeLayers.EnsureLoaded();
+            var copy = recipe.Clone();
+            return System.Threading.Tasks.Task.Run(() => GenerateData(copy));
+        }
+
+        /// <summary>Builds the GameObject from already generated data (uploads it first if needed).</summary>
+        public static GameObject Build(CharacterRecipe recipe, GeneratedCharacter gen)
+        {
+            Upload(gen);
             var root = new GameObject("Character_" + recipe.displayName);
             var bones = new Transform[CharacterBones.Count];
             for (int i = 0; i < bones.Length; i++)
@@ -108,6 +122,7 @@ namespace LightMMORPG.Characters
             string key = recipe.CacheKey();
             if (Cache.TryGetValue(key, out var g) && g.Mesh != null && g.Face != null) return g;
             HeadPresetLibrary.Preload(recipe.headPreset);
+            EyeLayers.EnsureLoaded();
             System.Threading.Tasks.Task<GeneratedCharacter> pending;
             lock (Pending) Pending.TryGetValue(key, out pending);
             g = pending != null ? pending.Result : GenerateData(recipe);
@@ -122,6 +137,7 @@ namespace LightMMORPG.Characters
         /// <summary>Starts generating the mesh data of these recipes on worker threads (call early, e.g. at game start).</summary>
         public static void Prewarm(IEnumerable<CharacterRecipe> recipes)
         {
+            EyeLayers.EnsureLoaded();
             foreach (var r in recipes)
             {
                 string key = r.CacheKey();
@@ -150,6 +166,7 @@ namespace LightMMORPG.Characters
         /// <summary>Pure mesh generation (no GameObjects, no materials) — used by tests and the cache.</summary>
         public static GeneratedCharacter Generate(CharacterRecipe recipe)
         {
+            EyeLayers.EnsureLoaded();
             var g = GenerateData(recipe);
             Upload(g);
             return g;
@@ -173,11 +190,12 @@ namespace LightMMORPG.Characters
             return gen;
         }
 
-        /// <summary>Main thread: creates the Mesh + face texture from the generated data.</summary>
+        /// <summary>Main thread: creates the Mesh + face texture from the generated data (a Face set beforehand is kept and shared).</summary>
         public static void Upload(GeneratedCharacter g)
         {
             if (g.Mesh != null && g.Face != null) return;
             var sw = Stopwatch.StartNew();
+            if (g.Mesh != null) { g.Face = FacePainter.ToTexture(g.FacePixels, g.FaceSize, "Face_" + g.Name); return; }
             var mesh = new Mesh { name = "Fighter_" + g.Name, indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
             mesh.SetVertices(g.Positions);
             mesh.SetNormals(g.Normals);
@@ -190,7 +208,7 @@ namespace LightMMORPG.Characters
             mesh.bindposes = bind;
             mesh.RecalculateBounds();
             g.Mesh = mesh;
-            g.Face = FacePainter.ToTexture(g.FacePixels, g.FaceSize, "Face_" + g.Name);
+            if (g.Face == null) g.Face = FacePainter.ToTexture(g.FacePixels, g.FaceSize, "Face_" + g.Name);
             g.UploadMilliseconds = sw.Elapsed.TotalMilliseconds;
         }
 

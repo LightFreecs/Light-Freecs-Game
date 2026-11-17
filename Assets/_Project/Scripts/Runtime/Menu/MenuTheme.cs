@@ -146,6 +146,7 @@ namespace LightMMORPG.Menu
             new("training", "Training"),
             new("play", "Play Online", "Quick Match · Host · Join by IP"),
             new("fighters", "Fighters", "Select · Customize"),
+            new("stats", "Stats", "Level · Stat points"),
             new("skills", "Abilities", "Skill tree"),
             new("shop", "Shop"),
         };

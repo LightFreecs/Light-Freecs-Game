@@ -11,6 +11,8 @@ namespace LightMMORPG.Player
     /// <summary>
     /// Per-player name + fighter palette (0 orange, 1 blue, 2 green, 3 purple). The server assigns the lowest free
     /// palette slot on spawn and a "Player N (Colour)" name; a signed-in owner replaces it with its account name. <see cref="All"/> lists every spawned player on this machine (lock-on, HUD, scoreboard).
+    /// The owner sends its saved face choices (<see cref="PlayerAppearance"/>, from the menu's Customize screen) to the
+    /// server, which clamps them and syncs them to everyone in <see cref="Face"/>.
     /// </summary>
     public sealed class PlayerIdentity : NetworkBehaviour
     {
@@ -20,6 +22,8 @@ namespace LightMMORPG.Player
 
         public readonly SyncVar<int> PaletteIndex = new(-1);
         public readonly SyncVar<string> DisplayName = new(string.Empty);
+        /// <summary>The player's <see cref="FaceCustomization"/> as JSON (empty = preset face).</summary>
+        public readonly SyncVar<string> Face = new(string.Empty);
 
         [Tooltip("Procedural character generator on Graphics/Model (built per palette on clients).")]
         [SerializeField] private ProceduralCharacter _character;
@@ -33,6 +37,7 @@ namespace LightMMORPG.Player
         {
             Motor = GetComponent<PlayerMotor>();
             PaletteIndex.OnChange += (_, next, _) => ApplyPalette(next);
+            Face.OnChange += (_, _, _) => ApplyPalette(PaletteIndex.Value);
         }
 
         public override void OnStartNetwork()
@@ -64,8 +69,10 @@ namespace LightMMORPG.Player
         public override void OnStartClient()
         {
             ApplyPalette(PaletteIndex.Value);
+            if (!IsOwner) return;
+            CmdSetFace(PlayerAppearance.ToJson(PlayerAppearance.Load()));
             // signed-in players show their account name instead of "Player N (Colour)"
-            var account = IsOwner ? Accounts.AccountStore.Instance.Current : null;
+            var account = Accounts.AccountStore.Instance.Current;
             if (account != null) ServerSetName(account.username);
         }
 
@@ -75,15 +82,24 @@ namespace LightMMORPG.Player
             if (Accounts.AccountStore.IsValidName(username)) DisplayName.Value = username;
         }
 
-        private int _builtPalette = -1;
+        [ServerRpc]
+        private void CmdSetFace(string json)
+        {
+            // re-serialise the clamped values so nothing unchecked from a client reaches the others
+            Face.Value = PlayerAppearance.ToJson(PlayerAppearance.FromJson(json));
+        }
+
+        private string _builtKey;
 
         /// <summary>Starts building the hero meshes on worker threads as soon as the game starts (clients with graphics only).</summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void PrewarmCharacters()
         {
             if (Application.isBatchMode) return;
+            // the local player's own face on every palette (the server picks the palette)
+            var face = PlayerAppearance.Load();
             var list = new List<CharacterRecipe>();
-            for (int i = 0; i < CharacterPresets.Count; i++) list.Add(CharacterPresets.ForPalette(i));
+            for (int i = 0; i < CharacterPresets.Count; i++) list.Add(PlayerAppearance.ForPalette(i, face));
             ProceduralCharacterBuilder.Prewarm(list);
         }
 
@@ -99,9 +115,11 @@ namespace LightMMORPG.Player
                 cc.center = new Vector3(0f, recipe.height * 0.5f, 0f);
             }
             // meshes only where something renders them (not on a dedicated server)
-            if (_character == null || !IsClientStarted || _builtPalette == index) return;
-            _builtPalette = index;
-            _character.GenerateForPalette(index);
+            if (_character == null || !IsClientStarted) return;
+            string key = index + "|" + Face.Value;
+            if (_builtKey == key) return;
+            _builtKey = key;
+            _character.GenerateForPalette(index, PlayerAppearance.FromJson(Face.Value));
         }
     }
 }

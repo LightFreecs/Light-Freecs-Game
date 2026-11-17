@@ -177,7 +177,7 @@ namespace LightMMORPG.UI
             _targetRoot.gameObject.SetActive(target != null);
             if (target != null)
             {
-                _targetName.text = target.DisplayName + (target.IsDown.Value ? "  (down)" : "");
+                _targetName.text = target.NameWithLevel + (target.IsDown.Value ? "  (down)" : "");
                 _targetHp.Set(target.Health.Value / target.MaxHealth);
                 _targetHp.Label.text = Mathf.CeilToInt(target.Health.Value).ToString();
             }
@@ -200,7 +200,9 @@ namespace LightMMORPG.UI
             {
                 if (p == null) continue;
                 string n = p.DisplayName;
-                if (n.Length > 24) n = n.Substring(0, 24);
+                string lv = p.Level.Value > 0 ? "  Lv " + p.Level.Value : "";
+                if (n.Length + lv.Length > 24) n = n.Substring(0, 24 - lv.Length);
+                n += lv;
                 if (p.IsOwner) _sb.Append("<color=#ffd75a>");
                 _sb.Append(n.PadRight(26)).Append(p.Kos.Value.ToString().PadLeft(4)).Append(p.Deaths.Value.ToString().PadLeft(8));
                 if (p.IsOwner) _sb.Append("</color>");
@@ -240,7 +242,7 @@ namespace LightMMORPG.UI
                 plate.Root.anchoredPosition = new Vector2(sp.x / Screen.width * canvasSize.x, sp.y / Screen.height * canvasSize.y);
                 float scale = Mathf.Clamp(12f / sp.z, 0.55f, 1.1f);
                 plate.Root.localScale = Vector3.one * scale;
-                plate.Name.text = p.DisplayName + (p.IsDown.Value ? " (K.O.)" : "");
+                plate.Name.text = p.NameWithLevel + (p.IsDown.Value ? " (K.O.)" : "");
                 plate.Hp.Set(p.Health.Value / p.MaxHealth);
             }
         }

@@ -138,6 +138,22 @@ namespace LightMMORPG.EditorTools
             faces.Apply();
             SavePng(faces, Path.Combine(outDir, "Showcase_Faces.png"));
 
+            // side profile close-ups (face looking left), characters 0..3 side by side
+            var side = new Texture2D(fs * 2, fs * 2, TextureFormat.RGB24, false);
+            for (int i = 0; i < heroes.Length && i < 4; i++)
+            {
+                var head = heroes[i].Rig[CharacterBone.Head];
+                Vector3 target = head.position + Vector3.down * 0.03f * heroes[i].Rig.Height / 2.3f;
+                cam.transform.position = target - heroes[i].transform.right * 1.5f;
+                cam.transform.LookAt(target);
+                cam.fieldOfView = 30f;
+                var t = RenderCam(cam, fs, fs);
+                side.SetPixels((i % 2) * fs, (1 - i / 2) * fs, fs, fs, t.GetPixels());
+                Object.DestroyImmediate(t);
+            }
+            side.Apply();
+            SavePng(side, Path.Combine(outDir, "Showcase_Side.png"));
+
             // 3/4 hero shots
             const int hw = 480, hh = 860;
             var hero = new Texture2D(hw * 4, hh, TextureFormat.RGB24, false);

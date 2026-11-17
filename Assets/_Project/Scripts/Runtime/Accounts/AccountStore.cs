@@ -21,8 +21,12 @@ namespace LightMMORPG.Accounts
         public long totalXp;
         public int matches, wins, kos, deaths, trainingSessions;
         public float minutesPlayed;
+        /// <summary>Stat points spent (file version 2+; older files load as all zero = everything unspent).</summary>
+        public StatAllocation stats;
 
         public int Level => Progression.LevelFor(totalXp);
+        /// <summary>Stat points earned but not spent yet.</summary>
+        public int UnspentStatPoints => FighterStats.Unspent(Level, stats);
 
         /// <summary>The best title earned so far ("" before level 2).</summary>
         public string Title
@@ -40,7 +44,7 @@ namespace LightMMORPG.Accounts
     [Serializable]
     internal sealed class AccountFile
     {
-        public int version = 1;
+        public int version = AccountStore.FileVersion;
         public string lastSignedIn = "";
         public List<AccountRecord> accounts = new();
     }
@@ -65,6 +69,8 @@ namespace LightMMORPG.Accounts
     /// </summary>
     public sealed class AccountStore
     {
+        /// <summary>1 = accounts + XP; 2 = adds the stat allocation per account.</summary>
+        public const int FileVersion = 2;
         public const int MinPassword = 6;
         private const int Iterations = 60000;
         private static readonly Regex NameRule = new("^[A-Za-z0-9_]{3,16}$");
@@ -170,6 +176,39 @@ namespace LightMMORPG.Accounts
             return rec;
         }
 
+        /// <summary>
+        /// XP from anything that is not a match (minigames, quests later): added to the signed-in account and saved.
+        /// Guests get the would-be result back but nothing is stored (same rule as matches).
+        /// </summary>
+        public LevelUpResult GrantXp(int amount)
+        {
+            var a = Current;
+            var res = Progression.AddXp(a != null ? a.totalXp : 0, amount);
+            if (a == null) return res;
+            a.totalXp = res.NewXp;
+            Save();
+            Changed?.Invoke();
+            return res;
+        }
+
+        /// <summary>The signed-in account's stat points (guests: none, base stats).</summary>
+        public StatAllocation Stats => Current != null ? Current.stats : default;
+
+        /// <summary>
+        /// Saves a new stat allocation for the signed-in account. Refused (false, nothing changes) for guests and for
+        /// an allocation that does not fit the account's level. <c>default</c> is a full respec.
+        /// </summary>
+        public bool SetStats(StatAllocation stats)
+        {
+            var a = Current;
+            if (a == null || !FighterStats.IsValid(a.Level, stats)) return false;
+            if (a.stats == stats) return true;
+            a.stats = stats;
+            Save();
+            Changed?.Invoke();
+            return true;
+        }
+
         public RecordedMatch TakeLastMatch()
         {
             var m = _lastMatch;
@@ -204,6 +243,9 @@ namespace LightMMORPG.Accounts
             catch (Exception e) { Debug.LogWarning("[Accounts] Could not read accounts: " + e.Message); }
             _file ??= new AccountFile();
             _file.accounts ??= new List<AccountRecord>();
+            // older files have no stats (all zero); a hand-edited or out-of-date allocation is refunded, never kept
+            foreach (var a in _file.accounts) a.stats = FighterStats.Validated(a.Level, a.stats);
+            _file.version = FileVersion;
             Current = Find(_file.lastSignedIn); // stay signed in
         }
 

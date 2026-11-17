@@ -46,6 +46,7 @@ namespace LightMMORPG.Player
             public Vector3 KnockbackVelocity;
             public float StunTimer;
             public float SpeedMultiplier;
+            public float StatSpeed;
 
             private uint _tick;
             public void Dispose() { }
@@ -98,6 +99,9 @@ namespace LightMMORPG.Player
         private Vector3 _knockback;
         private float _stunTimer;
         private float _speedMultiplier = 1f;
+        /// <summary>From the fighter's Speed stat (set once by the server, carried in the reconcile).</summary>
+        private float _statSpeed = 1f;
+        private float SpeedScale => _speedMultiplier * _statSpeed;
 
         // owner input accumulation
         private bool _jumpQueued, _dashQueued, _flashQueued, _toggleFlightQueued;
@@ -196,6 +200,7 @@ namespace LightMMORPG.Player
                 KnockbackVelocity = _knockback,
                 StunTimer = _stunTimer,
                 SpeedMultiplier = _speedMultiplier,
+                StatSpeed = _statSpeed,
             };
             PerformReconcile(rd);
         }
@@ -268,7 +273,7 @@ namespace LightMMORPG.Player
             Vector2 move = Vector2.ClampMagnitude(rd.Move, 1f);
             Vector3 wish = Quaternion.Euler(0f, rd.CameraYaw, 0f) * new Vector3(move.x, 0f, move.y);
             float speed = _flying ? _config.flySpeed : (IsSprinting ? _config.sprintSpeed : _config.runSpeed);
-            speed *= _speedMultiplier;
+            speed *= SpeedScale;
             if (IsBlocking) speed *= _config.blockMoveMultiplier;
             if (IsCharging) speed = 0f;
 
@@ -294,7 +299,7 @@ namespace LightMMORPG.Player
             if (_flying)
             {
                 float v = (rd.FlyUp ? 1f : 0f) - (rd.FlyDown ? 1f : 0f);
-                _verticalVelocity = IsCharging ? 0f : v * _config.flySpeed * _speedMultiplier;
+                _verticalVelocity = IsCharging ? 0f : v * _config.flySpeed * SpeedScale;
             }
             else
             {
@@ -305,7 +310,7 @@ namespace LightMMORPG.Player
             }
 
             // ---- compose ----
-            Vector3 horizontal = _dashTimer > 0f ? _dashDirection * (_config.dashSpeed * _speedMultiplier) : wish * speed;
+            Vector3 horizontal = _dashTimer > 0f ? _dashDirection * (_config.dashSpeed * SpeedScale) : wish * speed;
             Vector3 velocity = horizontal + Vector3.up * _verticalVelocity + _knockback;
             _knockback = Vector3.MoveTowards(_knockback, Vector3.zero, _knockbackDeceleration * dt);
 
@@ -335,6 +340,7 @@ namespace LightMMORPG.Player
             _knockback = rd.KnockbackVelocity;
             _stunTimer = rd.StunTimer;
             _speedMultiplier = rd.SpeedMultiplier <= 0f ? 1f : rd.SpeedMultiplier;
+            _statSpeed = rd.StatSpeed <= 0f ? 1f : rd.StatSpeed;
 
             // Disable the CharacterController before moving it, otherwise its physics position lags a tick.
             _cc.enabled = false;
@@ -375,5 +381,9 @@ namespace LightMMORPG.Player
         /// <summary>Server: movement speed multiplier (Power Surge +20% = 1.2). 1 = normal.</summary>
         [Server]
         public void ServerSetSpeedMultiplier(float multiplier) => _speedMultiplier = Mathf.Max(0.01f, multiplier);
+
+        /// <summary>Server: permanent movement speed multiplier from the fighter's Speed stat (stacks with Power Surge).</summary>
+        [Server]
+        public void ServerSetStatSpeed(float multiplier) => _statSpeed = Mathf.Clamp(multiplier, 0.5f, 2f);
     }
 }

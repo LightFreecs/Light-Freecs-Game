@@ -25,10 +25,29 @@ namespace LightMMORPG.Menu
     public sealed class MenuFighter : MonoBehaviour
     {
         private CharacterRig _rig;
+        private GameObject _hero;
         private Transform _aura;
         private Material _auraMat;
         private readonly List<(Transform t, float phase, float radius, float angle, float speed)> _sparkles = new();
         private float _height = 2.3f;
+        private float _baseYaw;
+        private int _palette;
+
+        // live preview (Customize screen): one background generation at a time, the newest request wins
+        private FaceCustomization _face, _builtFace;
+        private System.Threading.Tasks.Task<ProceduralCharacterBuilder.GeneratedCharacter> _job;
+        private FaceCustomization _jobFace;
+        private Mesh _previewMesh;
+        private Texture2D _previewFace;
+
+        /// <summary>Extra turn (degrees) on top of the menu pose; the Customize screen drags it, otherwise it eases back to 0.</summary>
+        public float Turn { get; set; }
+        /// <summary>The base facing (yaw, degrees) in the island's space.</summary>
+        public float BaseYaw => _baseYaw;
+        /// <summary>World position of the head bone (camera close-ups).</summary>
+        public Vector3 HeadPosition => _rig != null ? _rig[CharacterBone.Head].position : transform.position + Vector3.up * _height * 0.9f;
+        /// <summary>True while a face change is still being built.</summary>
+        public bool Rebuilding => _job != null;
 
         public static MenuFighter Create(Transform parent, MenuMaterials m, int palette, Vector3 localPos, float yaw)
         {
@@ -37,15 +56,66 @@ namespace LightMMORPG.Menu
             go.transform.localPosition = localPos;
             go.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
             var f = go.AddComponent<MenuFighter>();
+            f._baseYaw = yaw;
             f.Build(m, palette);
             return f;
         }
 
+        /// <summary>Shows these face choices: rebuilds the hero in the background and swaps it in when ready.</summary>
+        public void SetFace(FaceCustomization face)
+        {
+            _face = face.Sanitized();
+            if (_job == null && !Same(_face, _builtFace)) StartJob();
+        }
+
+        private static bool Same(FaceCustomization a, FaceCustomization b) => JsonUtility.ToJson(a) == JsonUtility.ToJson(b);
+
+        private void StartJob()
+        {
+            _jobFace = _face;
+            _job = ProceduralCharacterBuilder.GenerateAsync(PlayerAppearance.ForPalette(_palette, _jobFace));
+        }
+
+        private void Update()
+        {
+            if (_job == null || !_job.IsCompleted) return;
+            var job = _job;
+            _job = null;
+            if (job.IsFaulted) { Debug.LogException(job.Exception); return; }
+            var gen = job.Result;
+            // previews keep one face texture of their own, repainted each time (the painted nose follows the nose sliders)
+            if (_previewFace != null)
+            {
+                _previewFace.SetPixels(gen.FacePixels);
+                _previewFace.Apply(true, false);
+                gen.Face = _previewFace;
+            }
+            var hero = ProceduralCharacterBuilder.Build(PlayerAppearance.ForPalette(_palette, _jobFace), gen);
+            hero.transform.SetParent(transform, false);
+            if (_hero != null) Destroy(_hero);
+            if (_previewMesh != null) Destroy(_previewMesh);
+            _previewMesh = gen.Mesh;
+            _previewFace = gen.Face;
+            _hero = hero;
+            _rig = hero.GetComponent<CharacterRig>();
+            _builtFace = _jobFace;
+            if (!Same(_face, _builtFace)) StartJob();
+        }
+
+        private void OnDestroy()
+        {
+            if (_previewMesh != null) Destroy(_previewMesh);
+            if (_previewFace != null) Destroy(_previewFace);
+        }
+
         private void Build(MenuMaterials m, int palette)
         {
-            var recipe = CharacterPresets.ForPalette(palette);
+            _palette = palette;
+            _face = _builtFace = PlayerAppearance.Load();
+            var recipe = PlayerAppearance.ForPalette(palette, _face);
             var hero = ProceduralCharacterBuilder.Build(recipe);
             hero.transform.SetParent(transform, false);
+            _hero = hero;
             _rig = hero.GetComponent<CharacterRig>();
             if (_rig != null) _height = _rig.Height;
             Color aura = _rig != null ? _rig.AuraColor : recipe.auraColor;
@@ -95,6 +165,7 @@ namespace LightMMORPG.Menu
         private void LateUpdate()
         {
             float t = Time.time;
+            transform.localRotation = Quaternion.Euler(0f, _baseYaw + Turn, 0f);
             if (_rig != null) Pose(t);
             if (_aura != null)
             {

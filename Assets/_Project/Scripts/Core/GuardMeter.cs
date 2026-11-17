@@ -5,7 +5,7 @@ namespace LightMMORPG.Core
     /// <summary>Block guard: drains on blocked hits, breaks at 0 (stun), refills afterwards / while not blocking.</summary>
     public sealed class GuardMeter
     {
-        public float Max { get; }
+        public float Max { get; private set; }
         public float RecoverPerSecond { get; }
         public float BreakStunDuration { get; }
         public float Current { get; private set; }
@@ -44,6 +44,15 @@ namespace LightMMORPG.Core
                 return;
             }
             if (!blocking) Current = Mathf.Min(Max, Current + RecoverPerSecond * dt);
+        }
+
+        /// <summary>Change the maximum (stat build applied). The meter keeps its fraction of the maximum.</summary>
+        public void SetMax(float max)
+        {
+            max = Mathf.Max(1f, max);
+            float frac = Max > 0f ? Current / Max : 1f;
+            Max = max;
+            Current = max * frac;
         }
 
         public void Reset()

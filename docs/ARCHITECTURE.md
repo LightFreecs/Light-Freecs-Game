@@ -370,3 +370,39 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     over white clouds; Quit really quits on PC; Server Only added to Play Online (the bench had Quick/Host/Join); no
     shooting star at night; no glass blur on panels (translucent fill only). Palette choice is local only (the server still
     assigns palettes) — hook it up with the character creator.
+- Levels + fighter stats (branch `design/start-menu`, uncommitted at the time of writing) — a level now matters in play.
+  - Rules `Core/FighterStats.cs` (pure): `StatId` Power / Vitality / Speed / Ki / Defense; `StatAllocation` (five public
+    ints, JsonUtility-friendly, `Pack()`/`Unpack(int)` = 6 bits per stat for the network, `+` operator);
+    `FighterStats.PointsFor(level)` = 1 point per level after the first (49 at level 50), `MaxPerStat` 20, `TryAdd` /
+    `TryRemove` / `Respec()` (free), `IsValid(level, alloc)` and `Validated(level, alloc)` (invalid → base stats, never
+    "trimmed"), `Compute(spent, bonus = default)` → `FighterNumbers` (multipliers, all exactly 1 with no points, so a
+    level 1 / guest fighter is the original balance). Per point: Power +0.5% damage dealt; Vitality +0.75% max health;
+    Speed +0.25% run / sprint / fly / dash; Ki +1% max energy and +1% regen + charge rate; Defense −0.4% damage taken
+    and +1% guard meter. At the 20 cap: +10% dmg, 1150 HP, +5% speed, 120 energy, −8% taken, 120 guard. Levels give
+    points only, nothing else.
+  - **Plug points for the next sessions:** items = pass their summed points as `bonus` to `FighterStats.Compute`
+    (spent + bonus counts up to `MaxEffectivePerStat` 30 per stat; `PlayerStats.ServerApplyBuild` is where the server
+    turns an allocation into pools / speed — extend it with the bonus and sync it like `Build`). Minigames / quests =
+    `AccountStore.GrantXp(amount)` (adds XP, saves, returns the `LevelUpResult`; guests get the result, nothing saved).
+  - Persistence: `AccountRecord.stats` (+ `UnspentStatPoints`), `AccountStore.Stats` / `SetStats(alloc)` (refused for
+    guests and for allocations that don't fit the level). `accounts.json` is now `version` 2 (`AccountStore.FileVersion`);
+    version 1 files load with zero stats, and any saved allocation that isn't valid for the account's level is refunded
+    on load.
+  - Combat (server-authoritative): `PlayerStats` has SyncVars `Level` (0 = none: the training dummy; guests 1) and
+    `Build` (packed allocation); every machine derives `Numbers` from `Build`, so `MaxHealth/MaxEnergy/MaxGuard` are
+    the same everywhere. The owner sends `CmdSetBuild(level, packed)` once in `OnStartClient` when signed in; the server
+    clamps the level to 1–50, drops an allocation that doesn't fit it, ignores re-sends, then `ServerApplyBuild`:
+    pools get new maxima (`HealthPool.SetMax`, `EnergyPool.Configure`, `GuardMeter.SetMax`, fill fraction kept) and the
+    motor gets `ServerSetStatSpeed` (new `StatSpeed` in the reconcile, multiplied with the Power Surge multiplier).
+    `ServerApplyHit` multiplies by the attacker's `DamageMultiplier` and the victim's `DamageTakenMultiplier`.
+    Training uses the same path (the dummy has base stats). **Limit:** accounts are device-local, so the *level* is the
+    client's word; only the allocation-vs-level check is enforced until there are online accounts.
+  - Menu: new ribbon item `stats` (in `MenuTheme` defaults and `MenuTheme.asset`) → `State.Stats`
+    (`MainMenuUI.Stats.cs`): level + title, XP bar, points to spend, five rows (− / + , "n / 20", resulting numbers from
+    `GameConfig` × multipliers), Reset, Done; edits a working copy and saves on Done / Esc. Guests see base numbers and
+    get a toast. Results dialog adds "+N stat points" to LEVEL UP; the player card shows unspent points.
+  - HUD: `PlayerStats.NameWithLevel` ("Name  Lv 12") on name plates, the lock-on target bar and the scoreboard.
+  - `-menuCapture` also writes `Stats` (preview: level 24 with points spent, via `ShowStatsPreview`) and `Stats_Guest`.
+  - Tests: `FighterStatsTests` (11): points per level, level-1 numbers = today's constants, cap numbers, bonus points,
+    spend / cap / respec, validation rejecting over-spent builds, pack round trip, pool maxima, account save / load,
+    guest, version 1 file + refund of a bad allocation.

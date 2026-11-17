@@ -36,6 +36,10 @@ namespace LightMMORPG.Combat
         public readonly SyncVar<float> DownRemaining = new(0f, new SyncTypeSettings(0.2f));
         public readonly SyncVar<int> Kos = new(0, new SyncTypeSettings(0f));
         public readonly SyncVar<int> Deaths = new(0, new SyncTypeSettings(0f));
+        /// <summary>Account level shown next to the name (0 = none, e.g. the training dummy; guests are 1).</summary>
+        public readonly SyncVar<int> Level = new(0);
+        /// <summary>The fighter's validated stat points (<see cref="StatAllocation.Pack"/>); everyone derives <see cref="Numbers"/> from it.</summary>
+        public readonly SyncVar<int> Build = new(0);
 
         public static PlayerStats Local { get; private set; }
 
@@ -43,9 +47,13 @@ namespace LightMMORPG.Combat
         public PlayerMotor Motor { get; private set; }
         public string DisplayName => Identity != null ? Identity.DisplayName.Value : name;
         public bool SurgeActive => SurgeRemaining.Value > 0f;
-        public float MaxHealth => _config.maxHealth;
-        public float MaxEnergy => _config.maxEnergy;
-        public float MaxGuard => _config.maxGuard;
+        /// <summary>Combat numbers from the stat build (all 1 for an unallocated fighter). Same on server and clients.</summary>
+        public FighterNumbers Numbers { get; private set; } = FighterNumbers.Base;
+        public float MaxHealth => Numbers.MaxHealth(_config.maxHealth);
+        public float MaxEnergy => Numbers.MaxEnergy(_config.maxEnergy);
+        public float MaxGuard => Numbers.MaxGuard(_config.maxGuard);
+        /// <summary>"Name  Lv 12" for the HUD (just the name when the level is unknown).</summary>
+        public string NameWithLevel => Level.Value > 0 ? DisplayName + "  Lv " + Level.Value : DisplayName;
         public float SurgeDuration => _config.powerSurge != null ? _config.powerSurge.duration : CombatConstants.SurgeDuration;
 
         private GameConfig _config;
@@ -57,6 +65,7 @@ namespace LightMMORPG.Combat
         private bool _surgePausesRegen = true;
         private PlayerStats _lastAttacker;
         private int _lastSpawn = -1;
+        private bool _buildReceived;
         private static bool _verbose;
 
         private void Awake()
@@ -69,6 +78,7 @@ namespace LightMMORPG.Combat
             _guard = new GuardMeter(_config.maxGuard, CombatConstants.GuardRecoverPerSecond, _config.guardBreakStun);
             _verbose = Array.IndexOf(Environment.GetCommandLineArgs(), "-netlog") >= 0;
             Health.OnChange += OnHealthChanged;
+            Build.OnChange += (_, next, _) => Numbers = FighterStats.Compute(StatAllocation.Unpack(next));
         }
 
         public override void OnStartNetwork()
@@ -84,12 +94,51 @@ namespace LightMMORPG.Combat
 
         public override void OnStartClient()
         {
-            if (IsOwner) Local = this;
+            Numbers = FighterStats.Compute(StatAllocation.Unpack(Build.Value)); // late joiners: value already synced
+            if (!IsOwner) return;
+            Local = this;
+            // signed-in players bring their level and stat points; guests keep the base stats
+            var account = Accounts.AccountStore.Instance.Current;
+            if (account != null) CmdSetBuild(account.Level, account.stats.Pack());
+        }
+
+        /// <summary>
+        /// Owner → server, once per spawn: account level and stat points. The server never trusts the totals: the level
+        /// is clamped to 1–50 and an allocation that does not fit it (over-spent, over the per-stat cap) is dropped.
+        /// Accounts are device-local for now, so the level itself is the client's word until there are online accounts.
+        /// </summary>
+        [ServerRpc]
+        private void CmdSetBuild(int level, int packed)
+        {
+            if (_buildReceived) return; // no re-sending mid-match
+            _buildReceived = true;
+            level = FighterStats.ClampLevel(level);
+            var claimed = StatAllocation.Unpack(packed);
+            var build = FighterStats.Validated(level, claimed);
+            if (build != claimed) Debug.Log("[Stats] " + DisplayName + " sent an invalid build (" + claimed + ") for level " + level + ": using base stats");
+            Level.Value = level;
+            ServerApplyBuild(build);
+        }
+
+        /// <summary>Server: use this stat build (max health / energy / guard keep their current fill, speed goes to the motor).</summary>
+        [Server]
+        public void ServerApplyBuild(StatAllocation build)
+        {
+            Build.Value = build.Pack();
+            Numbers = FighterStats.Compute(build);
+            _health.SetMax(MaxHealth);
+            _energy.Configure(MaxEnergy, _config.energyRegenPerSecond * Numbers.EnergyRegenMultiplier,
+                _config.energyChargePerSecond * Numbers.EnergyRegenMultiplier);
+            _guard.SetMax(MaxGuard);
+            if (Motor != null) Motor.ServerSetStatSpeed(Numbers.SpeedMultiplier);
+            PushAll();
+            Debug.Log("[Stats] " + DisplayName + " level " + Level.Value + " build " + build + " hp=" + MaxHealth.ToString("F0", CultureInfo.InvariantCulture));
         }
 
         public override void OnStartServer()
         {
             TimeManager.OnTick += ServerTick;
+            if (Owner.IsValid) Level.Value = 1; // until the owner reports its account level
             PushAll();
         }
 
@@ -191,6 +240,9 @@ namespace LightMMORPG.Combat
             if (_health.IsKnockedOut) return false;
             bool surging = attacker != null && attacker._surge.IsActive;
             float dmgBase = surging ? baseDamage * attacker._surgeDamageMultiplier / CombatConstants.SurgeDamageMultiplier : baseDamage;
+            // stat builds: attacker's Power, this player's Defense (both exactly 1 without points)
+            if (attacker != null) dmgBase *= attacker.Numbers.DamageMultiplier;
+            dmgBase *= Numbers.DamageTakenMultiplier;
             bool blocking = Motor != null && Motor.IsBlocking && !_guard.IsBroken;
             DamageResult r = DamageCalculator.Calculate(dmgBase, surging, blocking);
 

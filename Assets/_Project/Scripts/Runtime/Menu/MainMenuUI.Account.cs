@@ -71,7 +71,8 @@ namespace LightMMORPG.Menu
             {
                 _cardName.text = a != null ? a.username : "Guest";
                 _cardInitial.text = a != null ? a.username.Substring(0, 1).ToUpperInvariant() : "?";
-                _cardSub.text = a != null ? "Lv " + a.Level + (a.Title.Length > 0 ? " · " + a.Title : "") : "Sign in to save progress";
+                int pts = a != null ? a.UnspentStatPoints : 0;
+                _cardSub.text = a != null ? "Lv " + a.Level + (a.Title.Length > 0 ? " · " + a.Title : "") + (pts > 0 ? " · " + pts + (pts == 1 ? " stat point" : " stat points") : "") : "Sign in to save progress";
                 SetFill(_cardXpFill, a != null ? LevelFraction(a.totalXp) : 0f);
                 var card = (RectTransform)_cardName.transform.parent;
                 float w = 104f + Mathf.Max(MenuUi.Width(_cardName), MenuUi.Width(_cardSub)) + 30f;
@@ -276,6 +277,8 @@ namespace LightMMORPG.Menu
                 _resLevel.text = $"Level {lv.NewLevel}  ·  " + (needed > 0 ? $"{into:N0} / {needed:N0} XP" : "max level");
                 SetFill(_resXpFill, LevelFraction(lv.NewXp));
                 _resLevelUp.text = lv.NewLevel - lv.OldLevel > 1 ? $"LEVEL UP!  {lv.OldLevel} → {lv.NewLevel}" : $"LEVEL UP!  Level {lv.NewLevel}";
+                int points = FighterStats.PointsFor(lv.NewLevel) - FighterStats.PointsFor(lv.OldLevel);
+                if (points > 0) _resLevelUp.text += points == 1 ? "  ·  +1 stat point" : $"  ·  +{points} stat points";
                 var names = new List<string>();
                 foreach (var u in lv.Unlocks) names.Add(u.DisplayName);
                 _resUnlocks.text = "Unlocked: " + string.Join(", ", names);
