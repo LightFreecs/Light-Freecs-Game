@@ -125,6 +125,8 @@ namespace LightMMORPG.Input
             if (!blocked) look += GameInputBindings.StickLook.ReadValue<Vector2>() * (stickSensitivity * Time.unscaledDeltaTime);
             Vector2 touchLook = TouchInputState.ConsumeLookDelta();
             if (!blocked) look += touchLook * touchSensitivity;
+            look *= Settings.GameSettings.LookSensitivity;
+            if (Settings.GameSettings.InvertLookY) look.y = -look.y;
             Look = look;
 
             // Buttons

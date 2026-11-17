@@ -13,14 +13,15 @@ namespace LightMMORPG.Menu
     /// Runtime-built uGUI for the "Dusk Isle" start menu (design-bench pick): title state ("press any key / tap to
     /// start"), the Horizon Ribbon main menu (text items on a thin glowing horizon line, Play Online glowing like a
     /// small sun), player card + currency (top-left), Friends / Settings / Quit icons (top-right), patch news (right),
-    /// toasts, the Play Online dialog (Quick Match placeholder, Host, Join by IP, Server Only) and Settings (sky picker).
+    /// toasts, the Play Online dialog (Quick Match placeholder, Host, Join by IP, Server Only), Settings (sky picker,
+    /// graphics, frame rate, look, key bindings; see MainMenuUI.Settings.cs) and the Controls (rebinding) dialog.
     /// All sizes are 1920×1080 reference pixels from <see cref="MenuTheme"/>; the canvas is Screen Space – Camera on the
     /// menu camera (so screenshots of a RenderTexture include it) and the content sits inside the safe area.
     /// Keyboard / gamepad navigate with explicit Selectable navigation; mouse hover selects; touch taps.
     /// </summary>
-    public sealed class MainMenuUI : MonoBehaviour
+    public sealed partial class MainMenuUI : MonoBehaviour
     {
-        public enum State { Title, Main, PlayOnline, Settings }
+        public enum State { Title, Main, PlayOnline, Settings, Controls }
 
         /// <summary>Screenshots: safe area in camera pixels (null = Screen.safeArea).</summary>
         public static Rect? SafeAreaOverride;
@@ -139,6 +140,7 @@ namespace LightMMORPG.Menu
             var dialogs = MenuUi.Rect("Dialogs", _safe).Fill();
             BuildPlayDialog(dialogs);
             BuildSettingsDialog(dialogs);
+            BuildControlsDialog(dialogs);
             BuildToast(_safe);
             WireRibbonNavigation();
             _built = true;
@@ -638,26 +640,18 @@ namespace LightMMORPG.Menu
                 }
                 prev = b;
             }
-            y -= 120f;
-            string[] rows = { "Graphics", "Audio", "Controls", "Account" };
-            foreach (var r in rows)
-            {
-                var l = MenuUi.Label(panel, "Row_" + r, r, T.boldFont, 28, Color.white, TextAnchor.MiddleLeft);
-                l.rectTransform.Place(new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(40f, y), new Vector2(400f, 50f));
-                var v = MenuUi.Label(panel, "Value_" + r, "Coming soon", T.bodyFont, 24, new Color(1f, 1f, 1f, 0.5f), TextAnchor.MiddleRight);
-                v.rectTransform.Place(new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-40f, y), new Vector2(300f, 50f));
-                var sep = MenuUi.Img(panel, "Sep", MenuUi.FadeLine(), new Color(1f, 1f, 1f, 0.15f));
-                sep.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, y - 56f), new Vector2(w, 2f));
-                y -= 66f;
-            }
-            y -= 16f;
+            y -= 108f;
+            y = BuildSettingRows(panel, y, w);
+            y -= 12f;
             var back = TextButton(panel, "Back", y, () => SetState(State.Main));
             panel.sizeDelta = new Vector2(T.subPanelWidth, -y + 84f);
+            var first = _settingRows[0];
             foreach (var (b, _) in _skyButtons)
             {
-                var n = b.navigation; n.selectOnDown = back; b.navigation = n;
+                var n = b.navigation; n.selectOnDown = first; b.navigation = n;
             }
-            var nbk = back.navigation; nbk.selectOnUp = _skyButtons[0].b; back.navigation = nbk;
+            var nf = first.navigation; nf.selectOnUp = _skyButtons[0].b; first.navigation = nf;
+            Chain(_settingRows[_settingRows.Count - 1], back);
         }
 
         private void BuildToast(Transform parent)
@@ -731,7 +725,8 @@ namespace LightMMORPG.Menu
             {
                 State.Main => _lastMainSelection != null && from != State.Title ? _lastMainSelection : _playItem.gameObject,
                 State.PlayOnline => _hostButton.gameObject,
-                State.Settings => _skyButtons[(int)_sky.Current].b.gameObject,
+                State.Settings => from == State.Controls ? _settingRows[0].gameObject : _skyButtons[(int)_sky.Current].b.gameObject,
+                State.Controls => _bindButtons[0].gameObject,
                 _ => null,
             };
             if (from == State.Main && s != State.Main && es != null && es.currentSelectedGameObject != null) _lastMainSelection = es.currentSelectedGameObject;
@@ -742,9 +737,11 @@ namespace LightMMORPG.Menu
                 _press.alpha = s == State.Title ? 1f : 0f;
                 _playDlg.alpha = s == State.PlayOnline ? 1f : 0f;
                 _settingsDlg.alpha = s == State.Settings ? 1f : 0f;
-                _backdrop.alpha = s is State.PlayOnline or State.Settings ? 1f : 0f;
+                _controlsDlg.alpha = s == State.Controls ? 1f : 0f;
+                _backdrop.alpha = s is State.PlayOnline or State.Settings or State.Controls ? 1f : 0f;
                 foreach (var g in _all) g.Snap();
             }
+            if (s is State.Settings or State.Controls) RefreshSettingValues();
             UpdateGroups();
         }
 
@@ -753,9 +750,11 @@ namespace LightMMORPG.Menu
             float step = T.fadeTime > 0f ? Time.unscaledDeltaTime / T.fadeTime : 1f;
             Fade(_hud, Current != State.Title, step, Current == State.Main);
             Fade(_press, Current == State.Title, step, false);
-            Fade(_backdrop, Current is State.PlayOnline or State.Settings, step, Current is State.PlayOnline or State.Settings);
+            bool dialog = Current is State.PlayOnline or State.Settings or State.Controls;
+            Fade(_backdrop, dialog, step, dialog);
             Fade(_playDlg, Current == State.PlayOnline, step, Current == State.PlayOnline);
             Fade(_settingsDlg, Current == State.Settings, step, Current == State.Settings);
+            Fade(_controlsDlg, Current == State.Controls, step, Current == State.Controls);
         }
 
         private static void Fade(CanvasGroup g, bool show, float step, bool interactive)
@@ -782,6 +781,7 @@ namespace LightMMORPG.Menu
             }
             if (Current == State.Title && AnyPress()) SetState(State.Main);
             else if (Current is State.PlayOnline or State.Settings && CancelPressed()) SetState(State.Main);
+            else if (Current == State.Controls && !RebindBusy && CancelPressed()) SetState(State.Settings);
 
             // keep something selected for keyboard/gamepad (mouse clicks on empty space clear it)
             var es = EventSystem.current;

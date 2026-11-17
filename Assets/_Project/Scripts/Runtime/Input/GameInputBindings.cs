@@ -61,6 +61,7 @@ namespace LightMMORPG.Input
             _buttons[(int)GameAction.Sprint].AddBinding("<Keyboard>/rightShift");
             _buttons[(int)GameAction.FlyDown].AddBinding("<Keyboard>/rightCtrl");
 
+            Settings.GameSettings.LoadBindings(Map); // player rebinds (Settings → Controls)
             Map.Enable();
         }
 

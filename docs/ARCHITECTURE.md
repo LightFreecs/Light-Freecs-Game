@@ -278,6 +278,18 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
   - Not built yet: an in-game character creator; the presets/sliders are recipe fields (inspector on
     `ProceduralCharacter` with "Use Custom Recipe"). Note: `claude/trusting-allen-3heaok` (WIP) replaces the head with
     the Face Shape Bench SDF — when it lands, these part presets need porting onto its sliders/curves.
+- Settings (branch `claude/sharp-dijkstra-ka57x9`) — the placeholder rows now work.
+  - `Settings/GameSettings.cs` (PlayerPrefs `settings.*`, applied at startup via RuntimeInitializeOnLoadMethod, skipped in
+    batch mode): graphics quality Low/Medium/High (render scale, MSAA, shadow distance on a runtime *copy* of the active
+    URP asset, so the project asset never changes), frame-rate cap 30/60/120/unlimited (default 60; iOS would otherwise
+    run at 30), look sensitivity ×0.25–3 and invert look Y (read live by `PlayerInputReader`), keyboard/mouse rebinds
+    (binding overrides JSON, loaded in `GameInputBindings.EnsureCreated`; binding index 0 = keyboard/mouse).
+  - Menu: `MainMenuUI` is now partial; `MainMenuUI.Settings.cs` builds the setting rows (click / Enter cycles the value)
+    and a Controls dialog (`State.Controls`, 14 actions in two columns, interactive rebinding with Esc to cancel,
+    duplicate-key toast, Reset to defaults). Audio row says "No sound yet"; Account row stays "coming soon".
+  - Verified outside Unity only: compiled against Input System 1.19.0 source + uGUI source + Unity 2021.3 reference
+    assemblies (URP asset stubbed). Not run in the editor: layout/fit of the two dialogs, rebinding feel, quality
+    switching on a device.
 - Whole-head presets (same branch) — optional, no fighter uses one now.
   - `CharacterRecipe.headPreset` (`HeadPreset` enum in `Characters/HeadPreset.cs`): `Procedural` (SDF head + painted
     face + hair) or a hand-made head mesh from `Resources/Heads/<name>.json` (`Head1` = the Blockbench head).
