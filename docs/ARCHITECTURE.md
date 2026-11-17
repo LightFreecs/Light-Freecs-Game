@@ -290,6 +290,16 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
   - Verified outside Unity only: compiled against Input System 1.19.0 source + uGUI source + Unity 2021.3 reference
     assemblies (URP asset stubbed). Not run in the editor: layout/fit of the two dialogs, rebinding feel, quality
     switching on a device.
+- Leveling rules (branch `claude/sharp-dijkstra-ka57x9`) — pure rules only, waiting for the accounts work (still
+  uncommitted on the user's PC, session "Creating 3D models from drawings") to store XP and show it.
+  - `Core/Progression.cs`: `MatchResult` (KOs, deaths, minutes, won, training) → `XpFor` itemised XP (100/KO, 10/min up
+    to 15 min, +50 for finishing (≥2 min), +150 for most KOs; training ×0.4 capped at 150, no win bonus; deaths cost
+    nothing). Level curve 1–50 (`XpToNext` = 250 + 50·level: 300, 350, …), `LevelFor`, `LevelProgress`, `AddXp`
+    (old/new level + unlocks passed). Unlock table: face-part presets (ids = `JawPreset`/`ChinPreset`/`NosePreset`/
+    `EarPreset` names; Classic and Head1 are free) and titles. Accounts should store total XP only and derive the rest.
+  - Tests: `ProgressionTests` (7), run outside Unity with NUnit: pass.
+  - To do once accounts land: record a `MatchResult` per player at match end / leaving (PlayerStats.Kos/Deaths, match
+    timer, training flag), save XP, post-match XP + level-up screen, lock face-part presets in the creator by level.
 - Whole-head presets (same branch) — optional, no fighter uses one now.
   - `CharacterRecipe.headPreset` (`HeadPreset` enum in `Characters/HeadPreset.cs`): `Procedural` (SDF head + painted
     face + hair) or a hand-made head mesh from `Resources/Heads/<name>.json` (`Head1` = the Blockbench head).
