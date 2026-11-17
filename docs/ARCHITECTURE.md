@@ -290,16 +290,29 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
   - Verified outside Unity only: compiled against Input System 1.19.0 source + uGUI source + Unity 2021.3 reference
     assemblies (URP asset stubbed). Not run in the editor: layout/fit of the two dialogs, rebinding feel, quality
     switching on a device.
-- Leveling rules (branch `claude/sharp-dijkstra-ka57x9`) — pure rules only, waiting for the accounts work (still
-  uncommitted on the user's PC, session "Creating 3D models from drawings") to store XP and show it.
-  - `Core/Progression.cs`: `MatchResult` (KOs, deaths, minutes, won, training) → `XpFor` itemised XP (100/KO, 10/min up
-    to 15 min, +50 for finishing (≥2 min), +150 for most KOs; training ×0.4 capped at 150, no win bonus; deaths cost
-    nothing). Level curve 1–50 (`XpToNext` = 250 + 50·level: 300, 350, …), `LevelFor`, `LevelProgress`, `AddXp`
-    (old/new level + unlocks passed). Unlock table: face-part presets (ids = `JawPreset`/`ChinPreset`/`NosePreset`/
-    `EarPreset` names; Classic and Head1 are free) and titles. Accounts should store total XP only and derive the rest.
-  - Tests: `ProgressionTests` (7), run outside Unity with NUnit: pass.
-  - To do once accounts land: record a `MatchResult` per player at match end / leaving (PlayerStats.Kos/Deaths, match
-    timer, training flag), save XP, post-match XP + level-up screen, lock face-part presets in the creator by level.
+- Accounts + leveling (branch `claude/sharp-dijkstra-ka57x9`) — built here; the user chose not to use the uncommitted
+  accounts work on their PC.
+  - Rules `Core/Progression.cs`: `MatchResult` (KOs, deaths, minutes, won, training) → `XpFor` itemised XP (100/KO,
+    10/min up to 15 min, +50 finishing (≥2 min), +150 most KOs; training ×0.4 capped at 150, no win bonus; deaths cost
+    nothing). Levels 1–50 (`XpToNext` = 250 + 50·level), `LevelFor`, `LevelProgress`, `AddXp` (level-ups + unlocks).
+    Unlock table: face-part presets (ids = the preset enum names; Classic/Head1 free) and titles (Rookie 2, Brawler 10,
+    Ace 20, Champion 30, Legend 50). Accounts store total XP only; level/title/unlocks are derived.
+  - `Accounts/AccountStore.cs`: accounts on this device in `persistentDataPath/accounts.json` (storage behind two
+    delegates → swap for an online backend later). Names 3–16 `[A-Za-z0-9_]` (case-insensitive unique), passwords
+    ≥6, stored as salted PBKDF2-SHA256 (60k iterations) only. Stays signed in (`lastSignedIn`). `Record(MatchResult)`
+    adds XP/stats (matches, wins, KOs, downs, training sessions, minutes); guests get a result but nothing is saved.
+  - `Accounts/MatchTracker.cs`: `NetworkBootstrap.StartHost/StartClient/StartTraining` → `Begin`; `MatchSession.Leave`
+    (and Application.quitting mid-match) → `Finish` reads `PlayerStats.Local` Kos/Deaths, won = most KOs (≥1),
+    skips visits under 30 s with no KO.
+  - `PlayerIdentity`: a signed-in owner sends its account name (`ServerSetName` ServerRpc, validated) → HUD names.
+  - Menu (`MainMenuUI.Account.cs`): player card = account name, "Lv N · Title", XP bar, click → Account dialog
+    (`State.Account`: sign in / create, or profile: level, XP, stats, unlocked list, next unlock, sign out); Settings →
+    Account row opens it too. Back in the menu after a match → results dialog (`State.Results`: XP lines, total,
+    level bar, LEVEL UP + unlocks; guests get a "Create account" button). MenuTheme playerName/Level/Rank are unused now.
+  - Tests: `ProgressionTests` (7) + `AccountTests` (6), run outside Unity with NUnit: pass. The whole runtime compiled
+    against FishNet + Input System source and Unity 2021.3 reference assemblies (only library-version errors left).
+  - Not done / not verified: face-part unlocks aren't enforced (no character creator yet), online accounts (needs a
+    server), the dialogs' look and typing on iPhone/gamepad, a real two-player match with names.
 - Whole-head presets (same branch) — optional, no fighter uses one now.
   - `CharacterRecipe.headPreset` (`HeadPreset` enum in `Characters/HeadPreset.cs`): `Procedural` (SDF head + painted
     face + hair) or a hand-made head mesh from `Resources/Heads/<name>.json` (`Head1` = the Blockbench head).

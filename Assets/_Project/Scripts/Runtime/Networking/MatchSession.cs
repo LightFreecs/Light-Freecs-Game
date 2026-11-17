@@ -219,6 +219,7 @@ namespace LightMMORPG.Networking
             Debug.Log("[Net] Leaving match" + (error != null ? ": " + error : ""));
             PlayerInputReader.MenuOpen = false;
             PlayerInputReader.LockCursor(false);
+            Accounts.MatchTracker.Finish(); // XP + stats for the account (needs the players' stats, so before stopping)
             var b = NetworkBootstrap.Instance;
             if (b != null) b.StopAll();
             NetLaunch.ReturnToMenu(error);

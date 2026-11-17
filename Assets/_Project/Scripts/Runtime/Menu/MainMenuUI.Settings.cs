@@ -64,7 +64,7 @@ namespace LightMMORPG.Menu
             Row("Invert look up/down", () => GameSettings.InvertLookY ? "On" : "Off", () => GameSettings.InvertLookY = !GameSettings.InvertLookY);
             Row("Key bindings", () => "Edit  ›", () => SetState(State.Controls));
             Row("Audio", () => "No sound yet", null);
-            Row("Account", () => T.comingSoon, null);
+            Row("Account", () => Accounts.AccountStore.Instance.Current?.username ?? "Sign in  ›", () => OpenAccount(State.Settings));
 
             for (int i = 1; i < _settingRows.Count; i++) Chain(_settingRows[i - 1], _settingRows[i]);
             return y;

@@ -21,7 +21,7 @@ namespace LightMMORPG.Menu
     /// </summary>
     public sealed partial class MainMenuUI : MonoBehaviour
     {
-        public enum State { Title, Main, PlayOnline, Settings, Controls }
+        public enum State { Title, Main, PlayOnline, Settings, Controls, Account, Results }
 
         /// <summary>Screenshots: safe area in camera pixels (null = Screen.safeArea).</summary>
         public static Rect? SafeAreaOverride;
@@ -70,6 +70,7 @@ namespace LightMMORPG.Menu
             bool back = NetLaunch.LastError != null || NetLaunch.ReturnedFromArena;
             NetLaunch.ReturnedFromArena = false;
             SetState(back ? State.Main : State.Title, instant: true);
+            if (back) ShowResults(Accounts.AccountStore.Instance.TakeLastMatch());
             if (NetLaunch.LastError != null)
             {
                 ShowToast(NetLaunch.LastError);
@@ -79,6 +80,7 @@ namespace LightMMORPG.Menu
 
         private void OnDestroy()
         {
+            OnDestroyAccount();
             if (_sky != null) _sky.Changed -= Recolor;
         }
 
@@ -141,6 +143,8 @@ namespace LightMMORPG.Menu
             BuildPlayDialog(dialogs);
             BuildSettingsDialog(dialogs);
             BuildControlsDialog(dialogs);
+            BuildAccountDialog(dialogs);
+            BuildResultsDialog(dialogs);
             BuildToast(_safe);
             WireRibbonNavigation();
             _built = true;
@@ -222,7 +226,7 @@ namespace LightMMORPG.Menu
             card.rectTransform.Place(new Vector2(T.edgeMargin, 1f - T.cornerTop), new Vector2(0f, 1f), Vector2.zero, card.rectTransform.sizeDelta);
             var av = MenuUi.Img(card.transform, "Avatar", MenuUi.GradientAvatar(new Color(0.48f, 0.78f, 1f), new Color(0.26f, 0.16f, 0.42f)), Color.white);
             av.rectTransform.Place(new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(12f, 0f), new Vector2(76f, 76f));
-            var initial = MenuUi.Label(av.transform, "Initial", T.playerName.Substring(0, 1).ToUpperInvariant(), T.titleFont, 32, Color.white);
+            var initial = MenuUi.Label(av.transform, "Initial", "?", T.titleFont, 32, Color.white);
             initial.rectTransform.Fill();
             var name = Label(card.transform, "Name", T.playerName, T.boldFont, 28, _ => Color.white, TextAnchor.MiddleLeft);
             name.rectTransform.Place(new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(104f, 16f), new Vector2(240f, 34f));
@@ -230,6 +234,7 @@ namespace LightMMORPG.Menu
             sub.rectTransform.Place(new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(104f, -18f), new Vector2(240f, 28f));
             float w = 104f + Mathf.Max(MenuUi.Width(name), MenuUi.Width(sub)) + 30f;
             card.rectTransform.sizeDelta = new Vector2(Mathf.Max(260f, w), 100f);
+            MakeAccountCard(card, initial, name, sub); // account name, level and XP (MainMenuUI.Account.cs)
         }
 
         private void BuildCurrency(Transform parent)
@@ -727,6 +732,8 @@ namespace LightMMORPG.Menu
                 State.PlayOnline => _hostButton.gameObject,
                 State.Settings => from == State.Controls ? _settingRows[0].gameObject : _skyButtons[(int)_sky.Current].b.gameObject,
                 State.Controls => _bindButtons[0].gameObject,
+                State.Account => Accounts.AccountStore.Instance.SignedIn ? _signOutButton.gameObject : _userField.gameObject,
+                State.Results => _resultsContinue.gameObject,
                 _ => null,
             };
             if (from == State.Main && s != State.Main && es != null && es.currentSelectedGameObject != null) _lastMainSelection = es.currentSelectedGameObject;
@@ -738,10 +745,13 @@ namespace LightMMORPG.Menu
                 _playDlg.alpha = s == State.PlayOnline ? 1f : 0f;
                 _settingsDlg.alpha = s == State.Settings ? 1f : 0f;
                 _controlsDlg.alpha = s == State.Controls ? 1f : 0f;
-                _backdrop.alpha = s is State.PlayOnline or State.Settings or State.Controls ? 1f : 0f;
+                _accountDlg.alpha = s == State.Account ? 1f : 0f;
+                _resultsDlg.alpha = s == State.Results ? 1f : 0f;
+                _backdrop.alpha = s is State.PlayOnline or State.Settings or State.Controls or State.Account or State.Results ? 1f : 0f;
                 foreach (var g in _all) g.Snap();
             }
             if (s is State.Settings or State.Controls) RefreshSettingValues();
+            if (s == State.Account) RefreshAccountUI();
             UpdateGroups();
         }
 
@@ -750,11 +760,13 @@ namespace LightMMORPG.Menu
             float step = T.fadeTime > 0f ? Time.unscaledDeltaTime / T.fadeTime : 1f;
             Fade(_hud, Current != State.Title, step, Current == State.Main);
             Fade(_press, Current == State.Title, step, false);
-            bool dialog = Current is State.PlayOnline or State.Settings or State.Controls;
+            bool dialog = Current is State.PlayOnline or State.Settings or State.Controls or State.Account or State.Results;
             Fade(_backdrop, dialog, step, dialog);
             Fade(_playDlg, Current == State.PlayOnline, step, Current == State.PlayOnline);
             Fade(_settingsDlg, Current == State.Settings, step, Current == State.Settings);
             Fade(_controlsDlg, Current == State.Controls, step, Current == State.Controls);
+            Fade(_accountDlg, Current == State.Account, step, Current == State.Account);
+            Fade(_resultsDlg, Current == State.Results, step, Current == State.Results);
         }
 
         private static void Fade(CanvasGroup g, bool show, float step, bool interactive)
@@ -782,6 +794,8 @@ namespace LightMMORPG.Menu
             if (Current == State.Title && AnyPress()) SetState(State.Main);
             else if (Current is State.PlayOnline or State.Settings && CancelPressed()) SetState(State.Main);
             else if (Current == State.Controls && !RebindBusy && CancelPressed()) SetState(State.Settings);
+            else if (Current == State.Account && CancelPressed()) SetState(_accountReturn);
+            else if (Current == State.Results && CancelPressed()) SetState(State.Main);
 
             // keep something selected for keyboard/gamepad (mouse clicks on empty space clear it)
             var es = EventSystem.current;

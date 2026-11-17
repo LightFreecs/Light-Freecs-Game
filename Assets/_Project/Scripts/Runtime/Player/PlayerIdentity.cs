@@ -10,7 +10,7 @@ namespace LightMMORPG.Player
 {
     /// <summary>
     /// Per-player name + fighter palette (0 orange, 1 blue, 2 green, 3 purple). The server assigns the lowest free
-    /// palette slot on spawn. <see cref="All"/> lists every spawned player on this machine (lock-on, HUD, scoreboard).
+    /// palette slot on spawn and a "Player N (Colour)" name; a signed-in owner replaces it with its account name. <see cref="All"/> lists every spawned player on this machine (lock-on, HUD, scoreboard).
     /// </summary>
     public sealed class PlayerIdentity : NetworkBehaviour
     {
@@ -61,7 +61,19 @@ namespace LightMMORPG.Player
             DisplayName.Value = "Player " + (slot + 1) + " (" + PaletteNames[slot % PaletteNames.Length] + ")";
         }
 
-        public override void OnStartClient() => ApplyPalette(PaletteIndex.Value);
+        public override void OnStartClient()
+        {
+            ApplyPalette(PaletteIndex.Value);
+            // signed-in players show their account name instead of "Player N (Colour)"
+            var account = IsOwner ? Accounts.AccountStore.Instance.Current : null;
+            if (account != null) ServerSetName(account.username);
+        }
+
+        [ServerRpc]
+        private void ServerSetName(string username)
+        {
+            if (Accounts.AccountStore.IsValidName(username)) DisplayName.Value = username;
+        }
 
         private int _builtPalette = -1;
 

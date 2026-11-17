@@ -84,6 +84,7 @@ namespace LightMMORPG.Networking
         {
             Debug.Log("[Net] Starting host on port " + Port);
             StartedMode = NetMode.Host;
+            Accounts.MatchTracker.Begin(training: false);
             SetPort();
             Manager.ServerManager.StartConnection(Port);
             Manager.ClientManager.StartConnection(DefaultAddress, Port);
@@ -95,6 +96,7 @@ namespace LightMMORPG.Networking
             Port = TrainingSession.Port;
             Debug.Log("[Net] Starting training (local only) on port " + Port);
             StartedMode = NetMode.Training;
+            Accounts.MatchTracker.Begin(training: true);
             SetPort();
             var t = Manager.TransportManager.Transport;
             if (t != null)
@@ -111,6 +113,7 @@ namespace LightMMORPG.Networking
         {
             Debug.Log("[Net] Connecting to " + address + ":" + Port);
             StartedMode = NetMode.Client;
+            Accounts.MatchTracker.Begin(training: false);
             Address = address;
             SetPort();
             Manager.ClientManager.StartConnection(address, Port);
