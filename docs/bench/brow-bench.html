@@ -117,11 +117,17 @@ code{font-family:var(--f-mono);font-size:12.5px}
     </section>
   </div>
 
-  <section style="display:flex;flex-direction:column;gap:8px">
-    <h2>Character creator sliders</h2>
-    <div class="slider"><label for="s-brow">Brow height</label><input type="range" id="s-brow" min="-0.03" max="0.04" step="0.001" value="0"><output id="o-brow">0.000</output></div>
-    <div class="slider"><label for="s-eye">Eye size</label><input type="range" id="s-eye" min="0.75" max="1.25" step="0.01" value="1"><output id="o-eye">1.00</output></div>
-  </section>
+  <div class="two">
+    <section style="display:flex;flex-direction:column;gap:8px">
+      <h2>Brow sliders</h2>
+      <div id="sliders-brow" style="display:flex;flex-direction:column;gap:8px"></div>
+    </section>
+    <section style="display:flex;flex-direction:column;gap:8px">
+      <h2>Eye sliders</h2>
+      <div id="sliders-eye" style="display:flex;flex-direction:column;gap:8px"></div>
+    </section>
+  </div>
+  <div class="row"><button class="chip" id="reset">Reset sliders</button></div>
 
   <section>
     <h2>Every pairing</h2>
@@ -143,7 +149,7 @@ code{font-family:var(--f-mono);font-size:12.5px}
     <ul>
       <li>A <b>Brow</b> picker in the character creator: Classic (today's brow) and Sharp. More styles slot in as you send them.</li>
       <li>A new <b>Sharp</b> eye next to Drawn, Tall, Wide and Hand-made.</li>
-      <li>The brow rests on whichever eye is picked, and the Brow height slider still moves it.</li>
+      <li>The brow rests on whichever eye is picked, and the player can then change its size, angle, height and spacing.</li>
       <li>Brow colour still follows the hair colour.</li>
     </ul>
   </section>
@@ -157,7 +163,7 @@ function halfWidth(y) {
   for (let i = 1; i < BASE_FACE.length; i++) if (y >= BASE_FACE[i][0]) { const a = BASE_FACE[i - 1], b = BASE_FACE[i]; return b[1] + (a[1] - b[1]) * (y - b[0]) / (a[0] - b[0]); }
   return BASE_FACE[BASE_FACE.length - 1][1];
 }
-const shapeOf = st => ({ EyeX: 0.15, EyeY: 0.38, EyeSize: st.eyeSize, BrowY: 0.522 + st.browH + (st.eyeSize - 1) * 0.06, MouthY: 0.165, MouthW: 0.09, MouthH: 0.034 });
+const shapeOf = st => ({ EyeX: 0.15 + st.eyeX, EyeY: 0.38 + st.eyeY, EyeSize: st.eyeSize, BrowY: 0.522 + st.eyeY + st.browH + (st.eyeSize - 1) * 0.06, MouthY: 0.165, MouthW: 0.09, MouthH: 0.034 });
 
 // ================================================================== eyes (ToonFacePainter.SketchEye) — eye space: u 0 inner corner → 1 outer, v up, in eye widths, v = 0 at the iris
 const S3 = a => { const r = []; for (let i = 0; i < a.length; i += 3) r.push([a[i], a[i + 1], a[i + 2]]); return r; };
@@ -342,21 +348,28 @@ function paintFeatures(g, st) {
   const ink = [0.09, 0.05, 0.06];
   const browCol = css(mix(mix(hex(st.hair), hex("#3a2218"), 0.5), ink, 0.3));
   const lift = browLift(st, ES);
-  g.fillStyle = browCol;
-  for (const side of [-1, 1]) {
-    if (st.brow === "sharp") { poly(g, sharpBrowPts(H, sharpBrow(st), side, lift)); g.fill(); continue; }
+  // the brow outline for the right side (x outward), at the fitted height
+  let pts;
+  if (st.brow === "sharp") pts = sharpBrowPts(H, sharpBrow(st), 1, lift);
+  else {
     // Classic: PaintBrow, from the bench's 512 × 128 canvas path (canvas y down)
     const cx = H.EyeX + 0.01, cy = H.BrowY + lift, w = 0.215, h = 0.066;
-    const C = (px, py) => [side * (cx + (px / 512 - 0.5) * w), cy + ((1 - py / 128) - 0.5) * h];
-    const pts = [C(22, 118)];
+    const C = (px, py) => [cx + (px / 512 - 0.5) * w, cy + ((1 - py / 128) - 0.5) * h];
+    pts = [C(22, 118)];
     const bez = (a, b, c, d) => { for (let i = 1; i <= 24; i++) { const t = i / 24, u = 1 - t; pts.push([0, 1].map(j => u * u * u * a[j] + 3 * u * u * t * b[j] + 3 * u * t * t * c[j] + t * t * t * d[j])); } };
     bez(C(22, 118), C(130, 44), C(330, 18), C(498, 50)); bez(C(498, 50), C(330, 42), C(150, 74), C(28, 128));
-    poly(g, pts); g.fill();
   }
+  // player edits: size and angle about the brow's middle, then spacing (outward); height is already in BrowY.
+  // Angle > 0 turns the outer end up and the inner end down.
+  let mx = 0, my = 0; for (const p of pts) { mx += p[0]; my += p[1]; } mx /= pts.length; my /= pts.length;
+  const a = st.browAngle * Math.PI / 180, ca = Math.cos(a) * st.browSize, sa = Math.sin(a) * st.browSize;
+  pts = pts.map(([x, y]) => [mx + st.browX + (x - mx) * ca - (y - my) * sa, my + (x - mx) * sa + (y - my) * ca]);
+  g.fillStyle = browCol;
+  for (const side of [-1, 1]) { poly(g, pts.map(([x, y]) => [side * x, y])); g.fill(); }
   // mouth
   const M = (px, py) => [(px / 256 - 0.5) * H.MouthW, H.MouthY + ((1 - py / 128) - 0.5) * H.MouthH];
-  const a = M(70, 70), c = M(128, 84), b = M(186, 66), mp = [];
-  for (let i = 0; i <= 16; i++) { const t = i / 16; mp.push([0, 1].map(j => (1 - t) * (1 - t) * a[j] + 2 * (1 - t) * t * c[j] + t * t * b[j]).concat(0.0028)); }
+  const m0 = M(70, 70), m1 = M(128, 84), m2 = M(186, 66), mp = [];
+  for (let i = 0; i <= 16; i++) { const t = i / 16; mp.push([0, 1].map(j => (1 - t) * (1 - t) * m0[j] + 2 * (1 - t) * t * m1[j] + t * t * m2[j]).concat(0.0028)); }
   g.fillStyle = "#8a3a30"; strokeVar(g, mp, p => p, p => p[2]);
 }
 
@@ -398,7 +411,22 @@ function drawView(cv, view, dpr) {
 }
 
 // ================================================================== state + UI
-const state = { eye: "sharp", brow: "sharp", iris: "#c8741e", hair: "#1a1418", browH: 0, eyeSize: 1, nose: "point", view: "face" };
+// sliders: [state key, label, min, max, step, default, format]
+const SLIDERS = {
+  "sliders-brow": [
+    ["browSize", "Size", 0.7, 1.4, 0.01, 1, v => "×" + v.toFixed(2)],
+    ["browAngle", "Angle", -25, 25, 0.5, 0, v => (v > 0 ? "+" : "") + v.toFixed(1) + "°"],
+    ["browH", "Height", -0.03, 0.04, 0.001, 0, v => (v >= 0 ? "+" : "") + v.toFixed(3)],
+    ["browX", "Spacing", -0.03, 0.03, 0.001, 0, v => (v >= 0 ? "+" : "") + v.toFixed(3)],
+  ],
+  "sliders-eye": [
+    ["eyeSize", "Size", 0.75, 1.25, 0.01, 1, v => "×" + v.toFixed(2)],
+    ["eyeY", "Height", -0.05, 0.05, 0.001, 0, v => (v >= 0 ? "+" : "") + v.toFixed(3)],
+    ["eyeX", "Spacing", -0.03, 0.03, 0.001, 0, v => (v >= 0 ? "+" : "") + v.toFixed(3)],
+  ],
+};
+const state = { eye: "sharp", brow: "sharp", iris: "#c8741e", hair: "#1a1418", nose: "point", view: "face" };
+for (const list of Object.values(SLIDERS)) for (const s of list) state[s[0]] = s[5];
 try { const saved = JSON.parse(localStorage.getItem("brow-bench-2") || "null"); if (saved) Object.assign(state, saved); } catch (e) {}
 const save = () => { try { localStorage.setItem("brow-bench-2", JSON.stringify(state)); } catch (e) {} };
 
@@ -426,9 +454,18 @@ for (const [id, key] of [["pick-nose", "nose"]])
   for (const b of document.getElementById(id).children) b.addEventListener("click", () => { state[key] = b.dataset.v; update(); });
 const pressRow = (id, val) => { for (const b of document.getElementById(id).children) b.setAttribute("aria-pressed", String(b.dataset.v === val)); };
 
-const sBrow = document.getElementById("s-brow"), sEye = document.getElementById("s-eye");
-sBrow.addEventListener("input", () => { state.browH = +sBrow.value; update(); });
-sEye.addEventListener("input", () => { state.eyeSize = +sEye.value; update(); });
+const sliderEls = [];
+for (const [box, list] of Object.entries(SLIDERS))
+  for (const [key, label, min, max, step, , fmt] of list) {
+    const wrap = document.createElement("div"); wrap.className = "slider";
+    const id = "s-" + key;
+    wrap.innerHTML = `<label for="${id}">${label}</label><input type="range" id="${id}" min="${min}" max="${max}" step="${step}"><output></output>`;
+    const input = wrap.querySelector("input"), out = wrap.querySelector("output");
+    input.addEventListener("input", () => { state[key] = +input.value; update(); });
+    document.getElementById(box).appendChild(wrap);
+    sliderEls.push({ key, input, out, fmt });
+  }
+document.getElementById("reset").addEventListener("click", () => { for (const list of Object.values(SLIDERS)) for (const s of list) state[s[0]] = s[5]; update(); });
 for (const [id, v] of [["v-face", "face"], ["v-close", "close"]]) document.getElementById(id).addEventListener("click", () => { state.view = v; update(); });
 
 // pairing thumbnails
@@ -452,9 +489,7 @@ function update() {
   pressRow("pick-nose", state.nose);
   document.getElementById("v-face").setAttribute("aria-pressed", String(state.view === "face"));
   document.getElementById("v-close").setAttribute("aria-pressed", String(state.view === "close"));
-  sBrow.value = state.browH; sEye.value = state.eyeSize;
-  document.getElementById("o-brow").textContent = (state.browH >= 0 ? "+" : "") + state.browH.toFixed(3);
-  document.getElementById("o-eye").textContent = state.eyeSize.toFixed(2);
+  for (const s of sliderEls) { s.input.value = state[s.key]; s.out.textContent = s.fmt(state[s.key]); }
   document.getElementById("now").textContent = `${BROWS[state.brow].label} brow · ${EYES[state.eye].label} eye`;
   if (queued) return;
   queued = true;
