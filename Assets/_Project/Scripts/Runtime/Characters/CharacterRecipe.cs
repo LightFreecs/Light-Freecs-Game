@@ -31,8 +31,6 @@ namespace LightMMORPG.Characters
         [Range(0.8f, 1.2f)] public float waist = 1f;
         [Tooltip("Head scale; ~1.3 gives youthful ~6-heads-tall shonen proportions.")]
         [Range(0.85f, 1.45f)] public float headSize = 1f;
-        [Tooltip("Hand-made head model (Resources/Heads) instead of the procedural one. Preset heads get no procedural hair, and their skin uses Skin Tone.")]
-        public HeadPreset headPreset = HeadPreset.Procedural;
         public Color skinTone = new(1f, 0.84f, 0.72f);
 
         [Header("Face parts: pick a preset, then adjust it with the sliders below it")]
@@ -69,9 +67,14 @@ namespace LightMMORPG.Characters
         [Range(0.3f, 2f)] public float spikeLength = 1f;
         [Range(0f, 1f)] public float spikeCurl = 0.3f;
 
+        [Header("Head (Toon Head: shape sliders + painted eye)")]
+        public ToonHeadSettings toonHead = new();
+
         [Header("Face")]
-        public EyeShape eyeShape = EyeShape.Sharp;
+        [Tooltip("Iris colour of the painted eye.")]
         public Color eyeColor = new(0.2f, 0.25f, 0.35f);
+        [Tooltip("Old procedural face only (FacePainter); the Toon Head uses toonHead.eyeStyle.")]
+        public EyeShape eyeShape = EyeShape.Sharp;
         [Tooltip("Positive = angry (inner end lower).")]
         [Range(-1f, 1.5f)] public float browAngle = 0.6f;
         [Range(0.5f, 1.8f)] public float browThickness = 1f;
@@ -104,7 +107,12 @@ namespace LightMMORPG.Characters
         [Header("Powers")]
         public Color auraColor = new(1.8f, 1.1f, 0.15f);
 
-        public CharacterRecipe Clone() => (CharacterRecipe)MemberwiseClone();
+        public CharacterRecipe Clone()
+        {
+            var c = (CharacterRecipe)MemberwiseClone();
+            c.toonHead = toonHead?.Clone() ?? new ToonHeadSettings();
+            return c;
+        }
 
         /// <summary>Stable key for mesh/material caches (same recipe → same key).</summary>
         public string CacheKey() => JsonUtility.ToJson(this);

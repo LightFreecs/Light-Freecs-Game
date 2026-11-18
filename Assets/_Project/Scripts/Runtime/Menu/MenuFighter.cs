@@ -39,6 +39,7 @@ namespace LightMMORPG.Menu
         private FaceCustomization _jobFace;
         private Mesh _previewMesh;
         private Texture2D _previewFace;
+        private Texture2D _previewShadow;
 
         /// <summary>Extra turn (degrees) on top of the menu pose; the Customize screen drags it, otherwise it eases back to 0.</summary>
         public float Turn { get; set; }
@@ -94,7 +95,9 @@ namespace LightMMORPG.Menu
             hero.transform.SetParent(transform, false);
             if (_hero != null) Destroy(_hero);
             if (_previewMesh != null) Destroy(_previewMesh);
+            if (_previewShadow != null) Destroy(_previewShadow);
             _previewMesh = gen.Mesh;
+            _previewShadow = gen.ShadowMap;
             _previewFace = gen.Face;
             _hero = hero;
             _rig = hero.GetComponent<CharacterRig>();
@@ -106,6 +109,7 @@ namespace LightMMORPG.Menu
         {
             if (_previewMesh != null) Destroy(_previewMesh);
             if (_previewFace != null) Destroy(_previewFace);
+            if (_previewShadow != null) Destroy(_previewShadow);
         }
 
         private void Build(MenuMaterials m, int palette)

@@ -73,28 +73,6 @@ namespace LightMMORPG.Tests
         }
 
         [Test]
-        public void PresetHead_ReplacesProceduralHeadAndHair()
-        {
-            Assert.IsNotNull(HeadPresetLibrary.Get(HeadPreset.Head1), "Resources/Heads/Head1.json loads");
-            var r = CharacterPresets.Brawler();
-            r.headPreset = HeadPreset.Head1;
-            var preset = ProceduralCharacterBuilder.GenerateData(r);
-            r.headPreset = HeadPreset.Procedural;
-            var procedural = ProceduralCharacterBuilder.GenerateData(r);
-
-            Assert.IsFalse(preset.Slots.Exists(s => s.Kind == ProceduralCharacterBuilder.SlotKind.Hair || s.Kind == ProceduralCharacterBuilder.SlotKind.Face));
-            Assert.IsTrue(preset.Slots.Exists(s => s.Kind == ProceduralCharacterBuilder.SlotKind.Detail), "eye pieces get their own slots");
-            Assert.IsTrue(procedural.Slots.Exists(s => s.Kind == ProceduralCharacterBuilder.SlotKind.Hair));
-
-            // the crown sits where the procedural skull's crown is (0.26 head units above the Head bone)
-            float scale = r.height / ProceduralCharacterBuilder.RefHeight;
-            float headY = preset.BonePositions[(int)CharacterBone.Head].y;
-            float top = float.MinValue;
-            foreach (var p in preset.Positions) top = Mathf.Max(top, p.y);
-            Assert.AreEqual(headY + 0.26f * r.headSize * scale, top, 0.02f);
-        }
-
-        [Test]
         public void ClassicPartPresets_AreTheOriginalHead()
         {
             var f = FaceParts.Resolve(new CharacterRecipe());
@@ -132,15 +110,6 @@ namespace LightMMORPG.Tests
                 Vector3 p = g.Positions[v], n = g.Normals[v];
                 Assert.IsFalse(float.IsNaN(p.x + p.y + p.z) || float.IsNaN(n.x + n.y + n.z), "NaN at " + v);
                 Assert.AreEqual(1f, n.magnitude, 0.01f, "normal not unit at " + v);
-            }
-            // the chosen parts change the head (compared with the all-Classic head)
-            if (jaw != JawPreset.Classic || extremes)
-            {
-                var c = CharacterPresets.Distinct(1);
-                var gc = ProceduralCharacterBuilder.GenerateData(c);
-                bool differs = gc.VertexCount != g.VertexCount;
-                for (int v = 0; !differs && v < g.VertexCount; v++) differs = gc.Positions[v] != g.Positions[v];
-                Assert.IsTrue(differs);
             }
         }
 

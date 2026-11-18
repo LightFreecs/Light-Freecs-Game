@@ -39,6 +39,7 @@ namespace LightMMORPG.Characters
         public static CharacterRecipe Brawler() => new()
         {
             displayName = "Kaien",
+            toonHead = ToonHeadPresets.Get(0, ToonEyeStyle.Drawn),
             seed = 101,
             height = 2.28f, muscle = 0.75f, bulk = 0.95f, shoulderWidth = 1f, waist = 0.95f, headSize = 1.3f,
             jawPreset = JawPreset.Head1, chinPreset = ChinPreset.Head1, nosePreset = NosePreset.Head1, earPreset = EarPreset.Head1,
@@ -59,6 +60,7 @@ namespace LightMMORPG.Characters
         public static CharacterRecipe Warrior() => new()
         {
             displayName = "Seiran",
+            toonHead = ToonHeadPresets.Get(3, ToonEyeStyle.Wide),
             seed = 202,
             height = 2.32f, muscle = 0.85f, bulk = 0.95f, shoulderWidth = 1.05f, waist = 0.95f, headSize = 1.25f,
             skinTone = new Color(0.98f, 0.8f, 0.68f),
@@ -77,6 +79,7 @@ namespace LightMMORPG.Characters
         public static CharacterRecipe Berserker() => new()
         {
             displayName = "Gorran",
+            toonHead = ToonHeadPresets.Get(4, ToonEyeStyle.Tall),
             seed = 303,
             height = 2.38f, muscle = 1.05f, bulk = 1.05f, shoulderWidth = 1.1f, waist = 1f, headSize = 1.22f,
             skinTone = new Color(0.86f, 0.6f, 0.42f),
@@ -95,6 +98,7 @@ namespace LightMMORPG.Characters
         public static CharacterRecipe Rival() => new()
         {
             displayName = "Veyl",
+            toonHead = ToonHeadPresets.Get(6, ToonEyeStyle.HandMade),
             seed = 404,
             height = 2.34f, muscle = 0.75f, bulk = 0.92f, shoulderWidth = 1f, waist = 0.92f, headSize = 1.25f,
             skinTone = new Color(1f, 0.88f, 0.8f),

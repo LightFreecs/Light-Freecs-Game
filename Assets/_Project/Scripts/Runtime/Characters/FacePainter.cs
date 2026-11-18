@@ -80,22 +80,14 @@ namespace LightMMORPG.Characters
             var skinLine = new Color(skin.r * 0.55f, skin.g * 0.38f, skin.b * 0.36f);
             var brow = Color.Lerp(r.hairColor, ink, 0.55f);
             var ep = Params(r.eyeShape);
-            bool layered = EyeLayers.Loaded;
-            if (layered)
-            {
-                // the hand-made eye is taller than the procedural ones: size the brow anchor to it
-                ep = new EyeParams { Ew = EyeLayers.WidthM * 0.5f, Eh = EyeLayers.HeightM * 0.47f, X = ep.X, Y = ep.Y };
-            }
             for (int side = -1; side <= 1; side += 2)
             {
-                if (layered) PaintEyeLayers(cv, side, ep, r.eyeColor);
-                else PaintEye(cv, side, ep, r.eyeColor, ink, skinLine);
+                PaintEye(cv, side, ep, r.eyeColor, ink, skinLine);
                 PaintBrow(cv, side, ep, brow, r.browAngle, r.browThickness);
             }
-            // nose: small shadow stroke on one side + tip line, following the nose preset/sliders
-            float noseDy = FaceParts.Resolve(r).Nose.Tip.y - FaceParts.ClassicNoseTipY;
-            Stroke(cv, new Vector2(0.006f, 0.052f + noseDy), new Vector2(0.0015f, 0.038f + noseDy), 0.0009f, 0.0006f, skinLine, 0.75f);
-            Stroke(cv, new Vector2(-0.004f, 0.0365f + noseDy), new Vector2(0.004f, 0.0365f + noseDy), 0.0006f, 0.0006f, skinLine, 0.45f);
+            // nose: small shadow stroke on one side + tip line
+            Stroke(cv, new Vector2(0.006f, 0.052f), new Vector2(0.0015f, 0.038f), 0.0009f, 0.0006f, skinLine, 0.75f);
+            Stroke(cv, new Vector2(-0.004f, 0.0365f), new Vector2(0.004f, 0.0365f), 0.0006f, 0.0006f, skinLine, 0.45f);
             PaintMouth(cv, r.expression, ink, skinLine);
 
             return cv.Px;
@@ -137,33 +129,6 @@ namespace LightMMORPG.Characters
             Curve(cv, -0.015f, 0.015f, x => 0.006f - 0.0022f * (x / 0.015f) * (x / 0.015f) + 0.0006f + tilt * Mathf.Max(0f, x / 0.015f) * (x / 0.015f) * 1.6f,
                 x => 0.0012f * (1f - 0.55f * Mathf.Abs(x / 0.015f)), lip, 1f);
             Curve(cv, -0.006f, 0.006f, x => -0.0035f, x => 0.0009f * (1f - Mathf.Abs(x / 0.006f)), skinLine, 0.45f);
-        }
-
-        /// <summary>Composites the hand-made eye layers (mirrored per side), iris tinted with the recipe's eye colour. 2x2 supersampled.</summary>
-        private static void PaintEyeLayers(Canvas cv, int side, EyeParams e, Color eyeColor)
-        {
-            float cx = side * e.X, cy = e.Y;
-            cv.Rect(new Vector2(cx - EyeLayers.WidthM * 0.5f - 0.002f, cy - EyeLayers.HeightM * 0.5f - 0.002f),
-                new Vector2(cx + EyeLayers.WidthM * 0.5f + 0.002f, cy + EyeLayers.HeightM * 0.5f + 0.002f), out int x0, out int y0, out int x1, out int y1);
-            float q = cv.MetersPerPx * 0.25f;
-            for (int y = y0; y <= y1; y++)
-                for (int x = x0; x <= x1; x++)
-                {
-                    Vector2 l = cv.ToLocal(x, y);
-                    float ar = 0, ag = 0, ab = 0, aa = 0;
-                    for (int s = 0; s < 4; s++)
-                    {
-                        float lx = l.x + ((s & 1) == 0 ? -q : q), ly = l.y + ((s >> 1) == 0 ? -q : q);
-                        float u = 0.5f + (lx - cx) * side / EyeLayers.WidthM, v = 0.5f + (ly - cy) / EyeLayers.HeightM;
-                        EyeLayers.Sample(u, v, eyeColor, out float r, out float g, out float b, out float a);
-                        ar += r; ag += g; ab += b; aa += a;
-                    }
-                    if (aa <= 0f) continue;
-                    int i = x + y * cv.Size;
-                    float inv = 0.25f, A = aa * inv;
-                    var d = cv.Px[i];
-                    cv.Px[i] = new Color(d.r * (1f - A) + ar * inv, d.g * (1f - A) + ag * inv, d.b * (1f - A) + ab * inv, d.a);
-                }
         }
 
         private static float UpperLid(in EyeParams e, float nx)
