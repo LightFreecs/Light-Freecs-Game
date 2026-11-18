@@ -130,7 +130,7 @@ namespace LightMMORPG.Accounts
             AccountError.WrongPassword => "Wrong name or password",
             AccountError.PasswordWeak => "Passwords need " + MinOnlinePassword + "–" + MaxOnlinePassword + " characters with upper and lower case letters, a number and a symbol",
             AccountError.Offline => "Can't reach the account server. Check your connection",
-            AccountError.NotSetUp => "Online accounts aren't set up in this build yet",
+            AccountError.NotSetUp => "Online accounts aren't turned on yet (Unity Cloud: Username & Password sign-in)",
             AccountError.Busy => "Still working on the last request",
             AccountError.Failed => "Something went wrong. Try again",
             _ => "",

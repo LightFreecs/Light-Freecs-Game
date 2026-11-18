@@ -266,11 +266,24 @@ namespace LightMMORPG.Accounts
             if (c == CommonErrorCodes.ApiMissing || c == CommonErrorCodes.ProjectPolicyAccessDenied ||
                 c == AuthenticationErrorCodes.EnvironmentMismatch || c == AuthenticationErrorCodes.InvalidProvider)
                 return AccountError.NotSetUp;
+            // the Username & Password provider is off in the Unity Cloud dashboard: the server answers 401 / 10002
+            // "usernamepassword external id provider is not available: PERMISSION_DENIED" to every request
+            string msg = r.Message ?? "";
+            if (msg.IndexOf("provider is not available", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                msg.IndexOf("PERMISSION_DENIED", StringComparison.OrdinalIgnoreCase) >= 0)
+                return AccountError.NotSetUp;
             if (c == CommonErrorCodes.TooManyRequests) return AccountError.Busy;
             if (signingUp)
             {
-                if (c == AuthenticationErrorCodes.AccountAlreadyLinked || c == CommonErrorCodes.Conflict) return AccountError.NameTaken;
-                if (c == AuthenticationErrorCodes.InvalidParameters) return AccountError.PasswordWeak;
+                if (c == AuthenticationErrorCodes.AccountAlreadyLinked || c == CommonErrorCodes.Conflict ||
+                    msg.IndexOf("already exists", StringComparison.OrdinalIgnoreCase) >= 0) return AccountError.NameTaken;
+                // 10002 covers any bad field; name and password were already checked here, so only blame the
+                // password when the server says it is the password
+                if (c == AuthenticationErrorCodes.InvalidParameters)
+                {
+                    if (msg.IndexOf("password", StringComparison.OrdinalIgnoreCase) >= 0) return AccountError.PasswordWeak;
+                    if (msg.IndexOf("username", StringComparison.OrdinalIgnoreCase) >= 0) return AccountError.NameInvalid;
+                }
                 return AccountError.Failed;
             }
             if (c == AuthenticationErrorCodes.InvalidParameters || c == CommonErrorCodes.InvalidToken ||
