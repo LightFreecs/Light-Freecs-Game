@@ -88,9 +88,9 @@ namespace LightMMORPG.Menu
             _accountPanel.sizeDelta = new Vector2(T.subPanelWidth, form ? _accountPanelOutH : _accountPanelInH);
             if (form)
             {
-                _acctBlurb.text = a == null
-                    ? "Online account: your name, level and stats on every device."
-                    : a.username + " is saved on this device only. Create an online account with that name to take it online.";
+                // a device-only account is moved online by creating an account with its name
+                if (a != null && !_createMode) SetAuthMode(true, false);
+                UpdateBlurb();
                 if (a != null && _prefilledFor != a.username && string.IsNullOrEmpty(_userField.text)) _userField.text = a.username;
                 _prefilledFor = a?.username;
                 return;
@@ -113,32 +113,36 @@ namespace LightMMORPG.Menu
             _acctNext.text = next.HasValue ? $"Next: {next.Value.DisplayName} at level {next.Value.Level}" : "Everything unlocked";
         }
 
-        private void OpenAccount(State returnTo)
+        private void OpenAccount(State returnTo, bool? create = null)
         {
             _accountReturn = returnTo;
+            if (create.HasValue && _tabCreate != null) SetAuthMode(create.Value, false);
             SetState(State.Account);
         }
 
         // ------------------------------------------------------------------ account dialog
 
-        private InputField Field(RectTransform panel, string placeholder, float y, float width, bool password)
+        private InputField Field(RectTransform panel, string placeholder, float width, bool password, out RectTransform box)
         {
-            var field = Panel(panel, "Field_" + placeholder, new Vector2(width, 80f), 22, _ => new Color(0f, 0f, 0f, 0.28f), p => p.accent, 2f);
-            field.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, y), new Vector2(width, 80f));
+            var field = Panel(panel, "Field_" + placeholder, new Vector2(width, FieldH), 20, _ => new Color(0f, 0f, 0f, 0.28f), p => p.accent, 2f);
+            field.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(width, FieldH));
             field.raycastTarget = true;
+            box = field.rectTransform;
+            float right = password ? 120f : 24f;
             var text = MenuUi.Label(field.transform, "Text", "", T.bodyFont, 30, Color.white, TextAnchor.MiddleLeft);
             text.rectTransform.Fill();
-            text.rectTransform.offsetMin = new Vector2(26f, 0f);
-            text.rectTransform.offsetMax = new Vector2(-26f, 0f);
+            text.rectTransform.offsetMin = new Vector2(24f, 0f);
+            text.rectTransform.offsetMax = new Vector2(-right, 0f);
             text.horizontalOverflow = HorizontalWrapMode.Overflow;
-            var ph = MenuUi.Label(field.transform, "Placeholder", placeholder, T.bodyFont, 28, new Color(1f, 1f, 1f, 0.4f), TextAnchor.MiddleLeft);
+            var ph = MenuUi.Label(field.transform, "Placeholder", placeholder, T.bodyFont, 26, new Color(1f, 1f, 1f, 0.35f), TextAnchor.MiddleLeft);
             ph.rectTransform.Fill();
-            ph.rectTransform.offsetMin = new Vector2(26f, 0f);
+            ph.rectTransform.offsetMin = new Vector2(24f, 0f);
+            ph.rectTransform.offsetMax = new Vector2(-right, 0f);
             var f = field.gameObject.AddComponent<InputField>();
             f.textComponent = text;
             f.placeholder = ph;
             f.contentType = password ? InputField.ContentType.Password : InputField.ContentType.Alphanumeric;
-            f.characterLimit = password ? 64 : 16;
+            f.characterLimit = password ? AccountStore.MaxOnlinePassword : 16;
             f.transition = Selectable.Transition.None;
             f.caretWidth = 3;
             f.customCaretColor = true;
@@ -146,7 +150,25 @@ namespace LightMMORPG.Menu
             var nav = f.navigation; nav.mode = Navigation.Mode.Explicit; f.navigation = nav;
             Bind(p => f.selectionColor = A(p.accent, 0.45f));
             field.gameObject.AddComponent<IpFieldGlow>().Init(f, field);
+            if (password)
+            {
+                // SHOW / HIDE toggle inside the field, on the right
+                var rt = MenuUi.Rect("Reveal", field.transform).Place(new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-8f, 0f), new Vector2(104f, FieldH - 16f));
+                var hit = rt.gameObject.AddComponent<Image>();
+                hit.color = Color.clear;
+                hit.raycastTarget = true;
+                var lbl = MenuUi.Label(rt, "Label", "SHOW", T.boldFont, 20, Color.white, TextAnchor.MiddleCenter, 0.15f);
+                lbl.rectTransform.Fill();
+                rt.gameObject.AddComponent<PasswordReveal>().Init(f, lbl, () => _sky.Preset.accent);
+            }
             return f;
+        }
+
+        private Text FieldLabel(RectTransform parent, string text)
+        {
+            var t = MenuUi.Label(parent, "Label_" + text, text.ToUpperInvariant(), T.boldFont, 18, new Color(1f, 1f, 1f, 0.6f), TextAnchor.MiddleLeft, 0.15f);
+            t.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(T.subPanelWidth - 80f, 24f));
+            return t;
         }
 
         private Text Body(RectTransform parent, string name, int size, float y, float height, TextAnchor align = TextAnchor.UpperLeft, float alpha = 1f)
@@ -170,6 +192,172 @@ namespace LightMMORPG.Menu
             return fill.rectTransform;
         }
 
+        // ------------------------------------------------------------------ sign in / create form
+
+        private const float FieldH = 72f;
+        private static readonly Color BadColor = new(1f, 0.55f, 0.5f, 1f);
+        private bool _createMode;
+        private InputField _confirmField;
+        private RectTransform _userBox, _passBox, _confirmBox, _rulesRt;
+        private Text _userLabel, _passLabel, _confirmLabel, _matchText, _submitLabel;
+        private GlowSelectable _tabSignIn, _tabCreate, _backOut;
+        private readonly List<(Image dot, Text text, System.Func<string, bool> ok)> _rules = new();
+
+        private GlowSelectable Tab(RectTransform bar, string label, float x, float width, bool create)
+        {
+            var rt = MenuUi.Rect("Tab_" + label, bar).Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(x, 0f), new Vector2(width, 48f));
+            var pill = MenuUi.Img(rt, "Pill", MenuUi.RoundedRect(16), Color.clear, true);
+            pill.rectTransform.Fill();
+            var t = MenuUi.Label(rt, "Label", label, T.boldFont, 24, Color.white, TextAnchor.MiddleCenter);
+            t.rectTransform.Fill();
+            var sel = AddSelectable(rt.gameObject);
+            sel.OnClick = () => SetAuthMode(create, true);
+            sel.OnGlow = g =>
+            {
+                var p = _sky.Preset;
+                bool on = _createMode == create;
+                pill.color = on ? p.accent : A(Color.white, 0.10f * g);
+                var dark = p.dialog; dark.a = 1f;
+                t.color = on ? dark : A(Color.white, Mathf.Lerp(0.6f, 1f, g));
+            };
+            return sel;
+        }
+
+        private void BuildAuthForm(RectTransform outRt, float w)
+        {
+            _acctBlurb = Body(outRt, "Blurb", 22, -96f, 44f, TextAnchor.MiddleLeft, 0.75f);
+
+            // Sign in | Create account
+            var bar = Panel(outRt, "Tabs", new Vector2(w, 60f), 20, _ => new Color(0f, 0f, 0f, 0.28f), null);
+            bar.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -156f), new Vector2(w, 60f));
+            float tw = (w - 12f) * 0.5f;
+            _tabSignIn = Tab(bar.rectTransform, "Sign in", -tw * 0.5f - 2f, tw - 4f, false);
+            _tabCreate = Tab(bar.rectTransform, "Create account", tw * 0.5f + 2f, tw - 4f, true);
+
+            _userLabel = FieldLabel(outRt, "Name");
+            _userField = Field(outRt, "3–16 letters, numbers or _", w, false, out _userBox);
+            _passLabel = FieldLabel(outRt, "Password");
+            _passField = Field(outRt, "Password", w, true, out _passBox);
+            _confirmLabel = FieldLabel(outRt, "Confirm password");
+            _confirmField = Field(outRt, "Type it again", w, true, out _confirmBox);
+
+            _matchText = Body(outRt, "Match", 20, 0f, 28f, TextAnchor.MiddleLeft);
+
+            // live password rules, two columns
+            _rulesRt = MenuUi.Rect("Rules", outRt).Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(w, 60f));
+            AddRule(_rulesRt, AccountStore.MinOnlinePassword + "–" + AccountStore.MaxOnlinePassword + " characters", 0, w,
+                p => p.Length >= AccountStore.MinOnlinePassword && p.Length <= AccountStore.MaxOnlinePassword);
+            AddRule(_rulesRt, "Upper and lower case", 1, w, p => HasAny(p, char.IsUpper) && HasAny(p, char.IsLower));
+            AddRule(_rulesRt, "A number", 2, w, p => HasAny(p, char.IsDigit));
+            AddRule(_rulesRt, "A symbol (! ? # …)", 3, w, p => HasAny(p, c => !char.IsLetterOrDigit(c) && !char.IsWhiteSpace(c)));
+
+            _signInButton = DialogButton(outRt, "Sign in", null, 0f, w, 76f, () => DoAccount(_createMode), centred: true);
+            _submitLabel = _signInButton.transform.Find("Label").GetComponent<Text>();
+            _backOut = TextButton(outRt, "Back", 0f, () => SetState(_accountReturn));
+
+            _passField.onValueChanged.AddListener(_ => RefreshPasswordHints());
+            _confirmField.onValueChanged.AddListener(_ => RefreshPasswordHints());
+            _userField.onSubmit.AddListener(_ => Focus(_passField));
+            _passField.onSubmit.AddListener(_ => { if (_createMode) Focus(_confirmField); else DoAccount(false); });
+            _confirmField.onSubmit.AddListener(_ => DoAccount(true));
+            Bind(_ => RefreshPasswordHints());
+            SetAuthMode(false, false);
+        }
+
+        private static bool HasAny(string s, System.Func<char, bool> f)
+        {
+            foreach (char c in s) if (f(c)) return true;
+            return false;
+        }
+
+        private void AddRule(RectTransform parent, string label, int i, float w, System.Func<string, bool> ok)
+        {
+            float x = (i % 2) * (w * 0.5f), y = -(i / 2) * 30f;
+            var dot = MenuUi.Img(parent, "Dot", MenuUi.RoundedRect(6), Color.white, true);
+            dot.rectTransform.Place(new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(x, y - 14f), new Vector2(12f, 12f));
+            var t = MenuUi.Label(parent, "Rule", label, T.bodyFont, 20, Color.white, TextAnchor.MiddleLeft);
+            t.rectTransform.Place(new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(x + 24f, y - 14f), new Vector2(w * 0.5f - 30f, 28f));
+            _rules.Add((dot, t, ok));
+        }
+
+        private static void Focus(InputField f)
+        {
+            if (EventSystem.current != null) EventSystem.current.SetSelectedGameObject(f.gameObject);
+            f.ActivateInputField();
+        }
+
+        private void RefreshPasswordHints()
+        {
+            if (_rules.Count == 0 || _sky == null) return;
+            var accent = _sky.Preset.accent;
+            string p = _passField.text ?? "";
+            foreach (var (dot, text, ok) in _rules)
+            {
+                bool met = ok(p);
+                dot.color = met ? accent : new Color(1f, 1f, 1f, 0.22f);
+                text.color = new Color(1f, 1f, 1f, met ? 0.95f : 0.5f);
+            }
+            string c = _confirmField.text ?? "";
+            bool match = c == p;
+            _matchText.text = c.Length == 0 ? "" : match ? "Passwords match" : "Passwords don't match";
+            _matchText.color = match ? accent : BadColor;
+        }
+
+        private void SetAuthMode(bool create, bool focus)
+        {
+            _createMode = create;
+            float y = -236f;
+            void Put(RectTransform rt, float h) { rt.anchoredPosition = new Vector2(0f, y); y -= h; }
+            Put(_userLabel.rectTransform, 26f);
+            Put(_userBox, FieldH + 20f);
+            Put(_passLabel.rectTransform, 26f);
+            Put(_passBox, FieldH + (create ? 20f : 32f));
+            _confirmLabel.gameObject.SetActive(create);
+            _confirmBox.gameObject.SetActive(create);
+            _matchText.gameObject.SetActive(create);
+            _rulesRt.gameObject.SetActive(create);
+            if (create)
+            {
+                Put(_confirmLabel.rectTransform, 26f);
+                Put(_confirmBox, FieldH + 6f);
+                Put(_matchText.rectTransform, 34f);
+                Put(_rulesRt, 78f);
+            }
+            else _confirmField.text = "";
+            Put((RectTransform)_signInButton.transform, 96f);
+            Put((RectTransform)_backOut.transform, 0f);
+            _accountPanelOutH = -y + 84f;
+            _submitLabel.text = create ? "Create account" : "Sign in";
+            ((Text)_passField.placeholder).text = create ? "Choose a password" : "Password";
+            if (_accountPanel != null && _acctOut != null && _acctOut.activeSelf) _accountPanel.sizeDelta = new Vector2(T.subPanelWidth, _accountPanelOutH);
+            UpdateBlurb();
+
+            // navigation: tabs → name → password → (confirm) → submit → back
+            var nt = _tabSignIn.navigation; nt.selectOnRight = _tabCreate; nt.selectOnDown = _userField; _tabSignIn.navigation = nt;
+            nt = _tabCreate.navigation; nt.selectOnLeft = _tabSignIn; nt.selectOnDown = _userField; _tabCreate.navigation = nt;
+            var nu = _userField.navigation; nu.selectOnUp = create ? _tabCreate : _tabSignIn; nu.selectOnDown = _passField; _userField.navigation = nu;
+            Selectable last = create ? _confirmField : _passField;
+            var np = _passField.navigation; np.selectOnUp = _userField; np.selectOnDown = create ? _confirmField : _signInButton; _passField.navigation = np;
+            var nc = _confirmField.navigation; nc.selectOnUp = _passField; nc.selectOnDown = _signInButton; _confirmField.navigation = nc;
+            var ns = _signInButton.navigation; ns.selectOnUp = last; ns.selectOnDown = _backOut; _signInButton.navigation = ns;
+            var nb = _backOut.navigation; nb.selectOnUp = _signInButton; _backOut.navigation = nb;
+
+            if (_sky != null) { _tabSignIn.Snap(); _tabCreate.Snap(); }
+            RefreshPasswordHints();
+            if (focus && EventSystem.current != null) EventSystem.current.SetSelectedGameObject(create ? _tabCreate.gameObject : _tabSignIn.gameObject);
+        }
+
+        private void UpdateBlurb()
+        {
+            if (_acctBlurb == null) return;
+            var a = Store.Current;
+            _acctBlurb.text = a != null && !a.online
+                ? a.username + " is saved on this device only. Create an online account with that name to take it online."
+                : _createMode
+                    ? "An online account keeps your name, level and stats on every device."
+                    : "Welcome back. Sign in to load your progress.";
+        }
+
         private void BuildAccountDialog(RectTransform parent)
         {
             float w = T.subPanelWidth - 80f;
@@ -178,23 +366,7 @@ namespace LightMMORPG.Menu
 
             // signed out: sign in or create
             _acctOut = MenuUi.Rect("SignedOut", _accountPanel).Fill().gameObject;
-            var outRt = (RectTransform)_acctOut.transform;
-            _acctBlurb = Body(outRt, "Blurb", 24, -100f, 52f, TextAnchor.MiddleLeft, 0.75f);
-            _userField = Field(outRt, "Name", -160f, w, false);
-            _passField = Field(outRt, "Password", -256f, w, true);
-            float bw = (w - 16f) * 0.5f;
-            _signInButton = DialogButton(outRt, "Sign in", null, -356f, bw, 80f, () => DoAccount(false), -(bw + 16f) * 0.5f, centred: true);
-            var create = DialogButton(outRt, "Create account", null, -356f, bw, 80f, () => DoAccount(true), (bw + 16f) * 0.5f, centred: true);
-            var hint = Body(outRt, "Hint", 22, -452f, 34f, TextAnchor.MiddleCenter, 0.55f);
-            hint.text = "Names: 3–16 letters, numbers or _ · passwords: " + AccountStore.MinOnlinePassword + "+ with Aa, 1 and !";
-            var backOut = TextButton(outRt, "Back", -516f, () => SetState(_accountReturn));
-            _accountPanelOutH = 516f + 84f;
-            var nu = _userField.navigation; nu.selectOnDown = _passField; _userField.navigation = nu;
-            var np = _passField.navigation; np.selectOnUp = _userField; np.selectOnDown = _signInButton; _passField.navigation = np;
-            var ns = _signInButton.navigation; ns.selectOnUp = _passField; ns.selectOnRight = create; ns.selectOnDown = backOut; _signInButton.navigation = ns;
-            var nc = create.navigation; nc.selectOnUp = _passField; nc.selectOnLeft = _signInButton; nc.selectOnDown = backOut; create.navigation = nc;
-            var nb = backOut.navigation; nb.selectOnUp = _signInButton; backOut.navigation = nb;
-            _passField.onSubmit.AddListener(_ => DoAccount(false));
+            BuildAuthForm((RectTransform)_acctOut.transform, w);
 
             // signed in: profile
             _acctIn = MenuUi.Rect("SignedIn", _accountPanel).Fill().gameObject;
@@ -223,6 +395,13 @@ namespace LightMMORPG.Menu
         {
             if (OnlineAccounts.Busy) return;
             string user = _userField.text, pass = _passField.text;
+            if (create)
+            {
+                // check here first so the player sees what to fix before anything is sent
+                var check = AccountStore.ValidateOnline(user, pass);
+                if (check != AccountError.None) { ShowToast(AccountStore.Describe(check)); return; }
+                if (_confirmField.text != pass) { ShowToast("The passwords don't match"); Focus(_confirmField); return; }
+            }
             ShowToast(create ? "Creating account…" : "Signing in…");
             var err = create ? await OnlineAccounts.Create(user, pass) : await OnlineAccounts.SignIn(user, pass);
             if (this == null) return; // menu closed meanwhile
@@ -232,7 +411,10 @@ namespace LightMMORPG.Menu
                 return;
             }
             _passField.text = "";
+            _confirmField.text = "";
             _userField.text = "";
+            PasswordReveal.HideAll(_acctOut.transform);
+            SetAuthMode(false, false);
             ShowToast((create ? "Welcome, " : "Signed in as ") + Store.Current.username);
             if (Current == State.Account) SetState(State.Account);
         }
@@ -256,7 +438,7 @@ namespace LightMMORPG.Menu
             _resGuest = Body(_resultsPanel, "Guest", 24, -420f, 64f, TextAnchor.UpperLeft, 0.8f);
             _resGuest.text = "Playing as guest, so this XP was not saved. Create an account to keep your progress.";
             _resultsContinue = DialogButton(_resultsPanel, "Continue", null, -546f, 300f, 72f, () => SetState(State.Main), -170f, centred: true);
-            _resultsCreate = DialogButton(_resultsPanel, "Create account", null, -546f, 300f, 72f, () => OpenAccount(State.Main), 170f, centred: true);
+            _resultsCreate = DialogButton(_resultsPanel, "Create account", null, -546f, 300f, 72f, () => OpenAccount(State.Main, create: true), 170f, centred: true);
             var a = _resultsContinue.navigation; a.selectOnRight = _resultsCreate; _resultsContinue.navigation = a;
             var b = _resultsCreate.navigation; b.selectOnLeft = _resultsContinue; _resultsCreate.navigation = b;
             _resultsPanel.sizeDelta = new Vector2(T.subPanelWidth, 546f + 72f + 40f);
@@ -301,6 +483,63 @@ namespace LightMMORPG.Menu
             }
             SetState(State.Results, instant: true);
             return true;
+        }
+    }
+
+    /// <summary>SHOW / HIDE inside a password field: toggles between masked and plain text, keeping the field focused.</summary>
+    public sealed class PasswordReveal : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler
+    {
+        private InputField _field;
+        private Text _label;
+        private System.Func<Color> _accent;
+        private bool _shown, _hover, _wasFocused;
+
+        public void Init(InputField field, Text label, System.Func<Color> accent)
+        {
+            _field = field;
+            _label = label;
+            _accent = accent;
+            Paint();
+        }
+
+        public static void HideAll(Transform root)
+        {
+            foreach (var r in root.GetComponentsInChildren<PasswordReveal>(true)) r.Set(false);
+        }
+
+        public void Set(bool shown)
+        {
+            _shown = shown;
+            _field.contentType = shown ? InputField.ContentType.Standard : InputField.ContentType.Password;
+            _field.ForceLabelUpdate();
+            Paint();
+        }
+
+        // the click deselects the field before it reaches us, so remember whether it was being typed in
+        private void LateUpdate() => _wasFocused = _field != null && _field.isFocused;
+
+        public void OnPointerClick(PointerEventData e)
+        {
+            if (e.button != PointerEventData.InputButton.Left) return;
+            bool refocus = _wasFocused;
+            Set(!_shown);
+            if (refocus && EventSystem.current != null)
+            {
+                EventSystem.current.SetSelectedGameObject(_field.gameObject);
+                _field.ActivateInputField();
+                _field.MoveTextEnd(false);
+            }
+        }
+
+        public void OnPointerEnter(PointerEventData e) { _hover = true; Paint(); }
+        public void OnPointerExit(PointerEventData e) { _hover = false; Paint(); }
+
+        private void Paint()
+        {
+            if (_label == null) return;
+            _label.text = _shown ? "HIDE" : "SHOW";
+            var c = _accent != null ? _accent() : Color.white;
+            _label.color = _hover || _shown ? c : new Color(1f, 1f, 1f, 0.55f);
         }
     }
 }

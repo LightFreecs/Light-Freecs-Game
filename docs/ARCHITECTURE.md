@@ -306,7 +306,7 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     skips visits under 30 s with no KO.
   - `PlayerIdentity`: a signed-in owner sends its account name (`ServerSetName` ServerRpc, validated) → HUD names.
   - Menu (`MainMenuUI.Account.cs`): player card = account name, "Lv N · Title", XP bar, click → Account dialog
-    (`State.Account`: sign in / create, or profile: level, XP, stats, unlocked list, next unlock, sign out); Settings →
+    (`State.Account`: Sign in / Create account tabs with SHOW/HIDE on password fields (`PasswordReveal`), confirm password and a live password-rule checklist; or profile: level, XP, stats, unlocked list, next unlock, sign out); Settings →
     Account row opens it too. Back in the menu after a match → results dialog (`State.Results`: XP lines, total,
     level bar, LEVEL UP + unlocks; guests get a "Create account" button). MenuTheme playerName/Level/Rank are unused now.
   - Tests: `ProgressionTests` (7) + `AccountTests` (6), run outside Unity with NUnit: pass. The whole runtime compiled
