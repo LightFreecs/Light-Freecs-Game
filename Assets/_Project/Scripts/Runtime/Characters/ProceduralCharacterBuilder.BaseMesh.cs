@@ -19,7 +19,22 @@ namespace LightMMORPG.Characters
             private Vector3[] _segA, _segB;
             private float _shoulderDx;
 
-            private const float ShoulderShift = 0.22f, NeckFitStart = 1.74f, NeckFitFull = 1.80f;
+            private const float ShoulderShift = 0.22f, NeckFitStart = 1.795f, NeckFitFull = 1.815f;
+            // the Toon Head's neck at neckWidth 1 (ToonHead.Apply), to keep the player's neck-width slider as a ratio
+            private const float ToonNeckW = 0.148f, ToonNeckF = 0.155f, ToonNeckB = 0.160f;
+
+            /// <summary>
+            /// The body's own neck is what shows; the head keeps only a short collar of its neck. Size that collar to the
+            /// body's neck just under the chin (3 % bigger so it overlaps), scaled by the player's neck-width slider.
+            /// </summary>
+            private void FitHeadNeckToBody()
+            {
+                var bb = BaseBody.Get();
+                float u = HeadUnit * _hs / 1.03f;
+                _toon.NeckW = bb.NeckHalfWidth / u * (_toon.NeckW / ToonNeckW);
+                _toon.NeckF = bb.NeckFront / u * (_toon.NeckF / ToonNeckF);
+                _toon.NeckB = bb.NeckBack / u * (_toon.NeckB / ToonNeckB);
+            }
 
             private static bool IsArm(int b)
             {
@@ -128,15 +143,18 @@ namespace LightMMORPG.Characters
                 return proj + off * scale;
             }
 
-            /// <summary>Tucks the top of the body's neck inside the Toon Head's neck (whatever the neck width slider says).</summary>
+            /// <summary>
+            /// Fits the top of the body's neck just inside the head's collar (grows or shrinks it), so the two meet whatever
+            /// the neck-width slider says; below <see cref="NeckFitStart"/> the neck keeps the base mesh's shape.
+            /// </summary>
             private Vector3 FitNeck(Vector3 p)
             {
                 if (p.y <= NeckFitStart) return p;
                 float t = Smooth01(NeckFitStart, NeckFitFull, p.y);
-                float s = HeadUnit * _hs * 0.92f, dz = p.z - _bb.NeckZ;
+                float s = HeadUnit * _hs * 0.97f, dz = p.z - _bb.NeckZ;
                 float ex = p.x / (_toon.NeckW * s), ez = dz / ((dz >= 0f ? _toon.NeckF : _toon.NeckB) * s);
                 float e = Mathf.Sqrt(ex * ex + ez * ez);
-                if (e <= 1f) return p;
+                if (e < 1e-4f) return p;
                 float k = Mathf.Lerp(1f, 1f / e, t);
                 return new Vector3(p.x * k, p.y, _bb.NeckZ + dz * k);
             }

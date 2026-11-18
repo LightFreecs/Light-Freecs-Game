@@ -15,6 +15,9 @@ namespace LightMMORPG.Characters
     {
         public const string ResourcePath = "Bodies/BaseBody";
 
+        /// <summary>Height where the neck is measured for the head's collar (just under the chin).</summary>
+        public const float CollarY = 1.815f;
+
         /// <summary>One mesh piece: positions, 4 bone indices + 4 weights per vertex (largest first), triangles.</summary>
         public sealed class Part
         {
@@ -31,6 +34,8 @@ namespace LightMMORPG.Characters
             public float ChinY, NeckZ;
             /// <summary>Waistband height and the bottom of the trunk legs.</summary>
             public float TrunksTop, TrunksBottom;
+            /// <summary>The body's neck just under the chin (<see cref="CollarY"/>): half width, front and back from <see cref="NeckZ"/>.</summary>
+            public float NeckHalfWidth, NeckFront, NeckBack;
             /// <summary>Bind-pose joint positions in <see cref="CharacterBone"/> order (Head is re-placed per recipe).</summary>
             public Vector3[] Joints;
             public Part Body, Trunks, Band;
@@ -67,7 +72,23 @@ namespace LightMMORPG.Characters
             d.Body = ReadPart(r);
             d.Trunks = ReadPart(r);
             d.Band = ReadPart(r);
+            MeasureNeck(d);
             return d;
+        }
+
+        private static void MeasureNeck(Data d)
+        {
+            float w = 0f, f = 0f, b = 0f;
+            foreach (var p in d.Body.Positions)
+            {
+                if (Mathf.Abs(p.y - CollarY) > 0.006f || Mathf.Abs(p.x) > 0.15f) continue;
+                w = Mathf.Max(w, Mathf.Abs(p.x));
+                f = Mathf.Max(f, p.z - d.NeckZ);
+                b = Mathf.Max(b, d.NeckZ - p.z);
+            }
+            d.NeckHalfWidth = w > 0f ? w : 0.055f;
+            d.NeckFront = f > 0f ? f : 0.058f;
+            d.NeckBack = b > 0f ? b : 0.06f;
         }
 
         private static Vector3 ReadV3(BinaryReader r) => new(r.ReadSingle(), r.ReadSingle(), r.ReadSingle());

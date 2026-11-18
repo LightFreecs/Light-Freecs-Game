@@ -533,6 +533,14 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     are pushed halfway towards a straight rib-to-hip line (50 % of the gap; 0.144 → 0.156 m half width at 1.37 m; the owner
     found a straight side too much, so a soft waist curve stays), weighted
     by |x|² so the middle of the front and back stays put.
+  - Follow-ups after the owner's in-game check (menu pose, arms out by IK): (1) the lats bulged and the waist looked
+    notched because torso skin below the armpit was weighted to the upper arm; now torso vertices may take the upper arm
+    only above 1.56 m (shoulder cap) and arm weights on torso skin fade out from 1.60 to 1.50 m (moved to Chest /
+    UpperChest). (2) "Use the neck from the model": the body keeps its own neck (cut 1.825 m front, 1.93 m back), its top
+    turns 70 % with the Head bone from 1.79 to 1.86 m, and the Toon Head stops at a short collar (its first neck row,
+    `ToonHead.MeshData.CollarTriangleCount`). `FitHeadNeckToBody` sizes that collar to the body's neck measured at
+    `BaseBody.CollarY` (1.815 m; +3 %), times the player's neck-width slider; `FitNeck` (1.795 → 1.815 m) fits the
+    neck's top just inside the collar either way.
   - `Characters/BaseBody.cs`: loads/parses `Resources/Bodies/BaseBody.bytes` ("LBB1": chin, neck z, trunks range, joints,
     body / trunks / band parts). `EnsureLoaded` runs on the main thread wherever `ToonEyeLayers.EnsureLoaded` does.
   - `CharacterRecipe.body` (`BodyModel.Procedural` = the old SDF body + outfits, still used by the test recipes;

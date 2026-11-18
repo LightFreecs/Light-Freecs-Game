@@ -370,6 +370,7 @@ namespace LightMMORPG.Characters
                 _rnd = new System.Random(r.seed * 7919 + 17);
                 _mesh = r.body == BodyModel.BaseMesh;
                 _toon = ToonHead.Apply(r.toonHead);
+                if (_mesh) FitHeadNeckToBody();
                 // the hair's scalp ellipsoid follows the toon skull (same as the old one for the base head)
                 float crown = ChinHL + _toon.Top * HeadUnit;
                 float ry = 0.128f * (crown + 0.003f) / 0.256f;
@@ -601,9 +602,12 @@ namespace LightMMORPG.Characters
                     float front = hp.z > 0f && n.z > 0.05f ? Mathf.SmoothStep(0f, 1f, (n.z - 0.05f) / 0.25f) : 0f;
                     _faceData.Add(new Vector4(fc.x, fc.y, fc.z, front));
                 }
+                // the base mesh body brings its own neck: the head stops at a short collar over it
+                int headEnd = _mesh ? mesh.CollarTriangleCount * 3 : mesh.HeadTriangleCount * 3;
+                for (int i = 0; i < headEnd; i++) tris.Add(start + mesh.Triangles[i]);
                 // hair that covers the ears (Messy layers): the head is built without them
-                int count = ToonHair.HidesEars(_r.hairStyle) ? mesh.HeadTriangleCount * 3 : mesh.Triangles.Count;
-                for (int i = 0; i < count; i++) tris.Add(start + mesh.Triangles[i]);
+                if (!ToonHair.HidesEars(_r.hairStyle))
+                    for (int i = mesh.HeadTriangleCount * 3; i < mesh.Triangles.Count; i++) tris.Add(start + mesh.Triangles[i]);
                 _toonMesh = mesh;
             }
 

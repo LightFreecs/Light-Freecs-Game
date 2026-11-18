@@ -78,8 +78,9 @@ g = np.stack([v[:, 0] * s, (v[:, 2] - floor) * s, -(v[:, 1] - 3.1) * s], 1)
 # neck centre just under the jaw
 sl = g[(g[:, 1] > 1.79) & (g[:, 1] < 1.80)]
 zc = float((sl[:, 2].min() + sl[:, 2].max()) / 2)
-# slanted cut: 1.80 m at the front of the neck, 1.84 m at the back (the Toon Head's neck ends higher at the back)
-def cut_y(z): return 1.80 + np.clip((zc - z) / 0.06, 0, 1) * 0.04
+# slanted cut: the mesh's own neck stays up to just under the chin (1.825 m) at the front and 1.93 m at the back, where
+# the Toon Head's short neck collar (its first neck row) covers it
+def cut_y(z): return 1.825 + np.clip((zc - z) / 0.06, 0, 1) * 0.105
 keep = np.all(g[tri][:, :, 1] < cut_y(g[tri][:, :, 2]), 1)
 tri = tri[keep]
 used = np.unique(tri); remap = -np.ones(len(g), int); remap[used] = np.arange(len(used)); g = g[used]; tri = remap[tri]
@@ -167,7 +168,7 @@ allow(leg, lambda S: [S + 'UpperLeg', S + 'LowerLeg', S + 'Foot', S + 'Toes'])
 torso = ~arm & ~leg
 for nm in ['Hips', 'Spine', 'Chest', 'UpperChest', 'Neck']: allowed[torso, BI[nm]] = True
 allow(torso, lambda S: [S + 'Shoulder'])
-allow(torso & (y > 1.48), lambda S: [S + 'UpperArm'])
+allow(torso & (y > 1.56), lambda S: [S + 'UpperArm'])   # only the shoulder cap; the lats and ribs stay on the torso
 allow(torso & (y < 1.16), lambda S: [S + 'UpperLeg'])
 
 W = np.zeros((n, NB), np.float32)
@@ -205,6 +206,19 @@ def smooth(W, iters, mask=None):
 body_mask = ~hand
 W = smooth(W, 14, body_mask)          # elbows, knees, shoulders, hips, spine
 W = smooth(W, 3)                      # knuckles and the wrist get a light blend
+
+# torso skin follows the arm only from the armpit up: fade arm weights out below it (else the lats bulge when the arm moves)
+arm_bones = [BI[b] for b in BONES if ('Arm' in b or 'Hand' in b or 'Thumb' in b or 'Index' in b or 'Middle' in b or 'Ring' in b or 'Little' in b)]
+fade = np.where(torso, np.clip((y - 1.50) / 0.10, 0, 1) ** 2, 1.0)
+moved = W[:, arm_bones].sum(1) * (1 - fade)
+W[:, arm_bones] *= fade[:, None]
+chest_side = np.where(y > 1.47, BI['UpperChest'], BI['Chest'])
+W[np.arange(n), chest_side] += moved
+
+# top of the neck turns partly with the head (it sits inside the Toon Head's collar, which is skinned to the head)
+hw = np.where(torso, np.clip((y - 1.79) / 0.07, 0, 1) * 0.7, 0)
+W *= (1 - hw)[:, None]
+W[:, BI['Head']] += hw
 
 def top4(W):
     idx = np.argsort(-W, 1)[:, :4]; w = np.take_along_axis(W, idx, 1)

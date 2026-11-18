@@ -240,6 +240,8 @@ namespace LightMMORPG.Characters
             public readonly List<float> NeckBlend = new();
             public readonly List<int> Triangles = new();
             public int HeadTriangleCount, EarTriangleCount;
+            /// <summary>Triangles of the head down to the first neck row only (a short collar): bodies with their own neck use these.</summary>
+            public int CollarTriangleCount;
         }
 
         public static MeshData BuildMesh(ToonHeadShape H)
@@ -296,6 +298,7 @@ namespace LightMMORPG.Characters
                 }
                 rows.Add(row);
             }
+            int neckRow0 = rows.Count;
             for (int i = 0; i <= NeckRows; i++)
             {
                 float t = i / (float)NeckRows;
@@ -310,11 +313,14 @@ namespace LightMMORPG.Characters
             int bottom = Add(new Vector3(0f, (H.NeckBottom + H.NeckBottomBack) / 2f, H.NeckZ), null, 1f);
             for (int j = 0; j < N; j++) tris.AddRange(new[] { crown, rows[0][j], rows[0][(j + 1) % N] });
             for (int r = 0; r < rows.Count - 1; r++)
+            {
                 for (int j = 0; j < N; j++)
                 {
                     int a = rows[r][j], b = rows[r][(j + 1) % N], c = rows[r + 1][(j + 1) % N], d = rows[r + 1][j];
                     tris.AddRange(new[] { a, d, c, a, c, b });
                 }
+                if (r == neckRow0) m.CollarTriangleCount = tris.Count / 3;
+            }
             var last = rows[rows.Count - 1];
             for (int j = 0; j < N; j++) tris.AddRange(new[] { bottom, last[(j + 1) % N], last[j] });
             m.HeadTriangleCount = tris.Count / 3;
