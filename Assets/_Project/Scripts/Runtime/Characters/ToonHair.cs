@@ -206,7 +206,7 @@ namespace LightMMORPG.Characters
                         var p = ToonHead.Surface(H, th, Fit(deg, y));
                         float tk = tuck > 0f ? Lerp(tuck, 1f, Smooth((y - 0.3f) / 0.3f)) : 1f;
                         float off = (capOff * (1f - 0.6f * Smooth((s - 0.75f) / 0.25f)) + capTop * (1f - s) * (1f - s)) * tk;
-                        off += lip * back * Smooth((s - 0.55f) / 0.45f);
+                        off += lip * back * Smooth((s - 0.7f) / 0.3f);
                         row[j] = G.Push(p + Outward(p) * off, 0.04f + 0.08f * s);
                     }
                     rows.Add(row);
@@ -221,6 +221,49 @@ namespace LightMMORPG.Characters
                     }
                 if (layerY > 0f) UnderLayer(hairline, layerY, capOff * 0.4f);
                 Underside();
+            }
+
+            /// <summary>
+            /// One layer of hair all round the dome: from <paramref name="y0"/> (hidden under the layer above) down to a row
+            /// of pointed locks at <paramref name="edge"/>, each lock leaning back a little and lifting off the head toward its
+            /// tip (by <paramref name="lip"/>) so the layer below shows from under it. <paramref name="phase"/> 2 puts the points
+            /// between the points of a phase-0 layer. Where the hairline comes down past the edge the layer lies flat.
+            /// </summary>
+            private void Tier(float[][] hairline, float y0, float edge, float depth, float lip, int phase, float off, float lean = 12f)
+            {
+                const int N = 80, R = 12;   // 20 locks round the head
+                static float Hash(float key)
+                {
+                    double v = Math.Sin(key * 12.9898) * 43758.5453;
+                    return (float)(v - Math.Floor(v));
+                }
+                var rows = new List<int[]>();
+                for (int i = 0; i <= R; i++)
+                {
+                    float s = i / (float)R;
+                    var row = new int[N];
+                    for (int j = 0; j < N; j++)
+                    {
+                        float deg0 = -180f + 360f * j / N, deg = deg0 + lean * s * Mathf.Sin(Rad(deg0));
+                        float hl = Hairline(hairline, deg);
+                        int k = (j + phase) % 4;
+                        float tooth = 1f - Mathf.Abs(k - 2) / 2f;
+                        float centre = Mathf.Abs(deg0 + 360f / N * (2 - k));
+                        if (centre > 180f) centre = 360f - centre;
+                        float tip = depth * (0.7f + 0.6f * Hash(Mathf.Round(centre) + edge * 100f));
+                        float h = Mathf.Max(hl, edge - tip * tooth), top = Mathf.Max(y0, h + 0.03f);
+                        float room = Smooth((edge - hl) / (depth + 0.04f));
+                        row[j] = G.Push(S(deg, Lerp(top, h, s), off + lip * room * s * s), 0.04f + 0.08f * s);
+                    }
+                    rows.Add(row);
+                }
+                var t = G.Triangles;
+                for (int r = 0; r < R; r++)
+                    for (int j = 0; j < N; j++)
+                    {
+                        int a = rows[r][j], b = rows[r][(j + 1) % N], c = rows[r + 1][(j + 1) % N], d = rows[r + 1][j];
+                        t.AddRange(new[] { a, d, c, a, c, b });
+                    }
             }
 
             /// <summary>
@@ -496,6 +539,8 @@ namespace LightMMORPG.Characters
             public void Light()
             {
                 Shell(HairlineFull, 0.025f, 0f, 0f, 0.42f, 0.05f);
+                Tier(HairlineFull, 1f, 0.82f, 0.09f, 0.035f, 0, 0.037f);     // from the crown
+                Tier(HairlineFull, 0.88f, 0.64f, 0.1f, 0.035f, 2, 0.037f);   // the middle layer, points between the ones above
                 int from = G.Positions.Count;
                 Imported();
                 foreach (var (th, w) in new[] { (-26f, 0.4f), (0f, 0.44f), (26f, 0.4f) })
