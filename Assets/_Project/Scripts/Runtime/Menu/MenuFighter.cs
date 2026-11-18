@@ -40,6 +40,7 @@ namespace LightMMORPG.Menu
         private Mesh _previewMesh;
         private Texture2D _previewFace;
         private Texture2D _previewShadow;
+        private Texture2D _previewEyes, _previewBrows;
 
         /// <summary>Extra turn (degrees) on top of the menu pose; the Customize screen drags it, otherwise it eases back to 0.</summary>
         public float Turn { get; set; }
@@ -49,6 +50,20 @@ namespace LightMMORPG.Menu
         public Vector3 HeadPosition => _rig != null ? _rig[CharacterBone.Head].position : transform.position + Vector3.up * _height * 0.9f;
         /// <summary>True while a face change is still being built.</summary>
         public bool Rebuilding => _job != null;
+
+        /// <summary>Plays the next face expression (Customize: tap the fighter).</summary>
+        public void PlayNextExpression()
+        {
+            var face = _hero != null ? _hero.GetComponent<ToonFaceAnimator>() : null;
+            if (face != null) face.PlayNext();
+        }
+
+        // the menu fighter looks at the camera
+        private void SetupFace(GameObject hero)
+        {
+            var face = hero.GetComponent<ToonFaceAnimator>();
+            if (face != null && Camera.main != null) face.LookTarget = Camera.main.transform;
+        }
 
         public static MenuFighter Create(Transform parent, MenuMaterials m, int palette, Vector3 localPos, float yaw)
         {
@@ -96,8 +111,13 @@ namespace LightMMORPG.Menu
             if (_hero != null) Destroy(_hero);
             if (_previewMesh != null) Destroy(_previewMesh);
             if (_previewShadow != null) Destroy(_previewShadow);
+            if (_previewEyes != null) Destroy(_previewEyes);
+            if (_previewBrows != null) Destroy(_previewBrows);
             _previewMesh = gen.Mesh;
             _previewShadow = gen.ShadowMap;
+            _previewEyes = gen.FaceEyeMask;
+            _previewBrows = gen.FaceBrowMap;
+            SetupFace(hero);
             _previewFace = gen.Face;
             _hero = hero;
             _rig = hero.GetComponent<CharacterRig>();
@@ -110,6 +130,8 @@ namespace LightMMORPG.Menu
             if (_previewMesh != null) Destroy(_previewMesh);
             if (_previewFace != null) Destroy(_previewFace);
             if (_previewShadow != null) Destroy(_previewShadow);
+            if (_previewEyes != null) Destroy(_previewEyes);
+            if (_previewBrows != null) Destroy(_previewBrows);
         }
 
         private void Build(MenuMaterials m, int palette)
@@ -121,6 +143,7 @@ namespace LightMMORPG.Menu
             hero.transform.SetParent(transform, false);
             _hero = hero;
             _rig = hero.GetComponent<CharacterRig>();
+            SetupFace(hero);
             if (_rig != null) _height = _rig.Height;
             Color aura = _rig != null ? _rig.AuraColor : recipe.auraColor;
 

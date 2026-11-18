@@ -4,8 +4,14 @@ using UnityEngine;
 
 namespace LightMMORPG.Characters
 {
-    /// <summary>Which painted eye the toon head wears (the three traced sketches + the hand-made layered eye).</summary>
-    public enum ToonEyeStyle { Drawn, Tall, Wide, HandMade }
+    /// <summary>Which painted eye the toon head wears (the traced sketches + the hand-made layered eye). Append only: saves store the index.</summary>
+    public enum ToonEyeStyle { Drawn, Tall, Wide, HandMade, Sharp, Arch }
+
+    /// <summary>Which brow the toon head wears (Brow Bench). Classic = the original painted brow. Append only.</summary>
+    public enum ToonBrowStyle { Classic, Sharp, Peak, Block }
+
+    /// <summary>Face expressions of the Brow Bench, played by <see cref="ToonFaceAnimator"/> on top of the player's sliders.</summary>
+    public enum ToonExpression { Neutral, Determined, Angry, Sad, Surprised, Happy, Joy }
 
     /// <summary>
     /// Player-facing head settings: the 22 sliders of the Toon Head bench (all 1 / 0 = the measured base head) and the eye.
@@ -15,6 +21,7 @@ namespace LightMMORPG.Characters
     public sealed class ToonHeadSettings
     {
         public ToonEyeStyle eyeStyle = ToonEyeStyle.Drawn;
+        public ToonBrowStyle browStyle = ToonBrowStyle.Classic;
 
         [Header("Skull")]
         [Range(0.85f, 1.15f)] public float headWidth = 1f;
@@ -46,6 +53,13 @@ namespace LightMMORPG.Characters
         [Range(-0.05f, 0.05f)] public float eyeHeight = 0f;
         [Range(-0.03f, 0.03f)] public float eyeSpacing = 0f;
         [Range(-0.03f, 0.04f)] public float browHeight = 0f;
+
+        [Header("Brows (Brow Bench)")]
+        [Range(0.7f, 1.4f)] public float browSize = 1f;
+        [Tooltip("Degrees; positive turns the outer end up and the nose end down.")]
+        [Range(-25f, 25f)] public float browAngle = 0f;
+        [Tooltip("Moves both brows outward (head units).")]
+        [Range(-0.03f, 0.03f)] public float browSpacing = 0f;
 
         [Header("Ears & neck")]
         [Range(0.7f, 1.4f)] public float earSize = 1f;
@@ -90,6 +104,8 @@ namespace LightMMORPG.Characters
         public float NoseY, NoseH, NoseW, NoseLen;
         public float EyeX, EyeY, EyeSize;
         public float BrowY, BrowW, BrowH;
+        /// <summary>Brow line at brow height 0 (the measured brows are fitted to the eye here, then the slider moves them).</summary>
+        public float BrowY0;
         public float MouthY, MouthW, MouthH;
         public float EarY, EarZ, EarSu, EarSv, EarFlare;
         public float Top;
@@ -158,7 +174,8 @@ namespace LightMMORPG.Characters
             o.CheekY = Y(0.20f); o.CheekH = 0.06f; o.CheekA = 0.24f; o.CheekSpread = 0.11f; o.CheekAmount = 0.004f;
             o.NoseY = Y(0.272f) + s.noseHeight; o.NoseH = 0.048f * s.noseSize; o.NoseW = 0.022f; o.NoseLen = 0.045f;
             o.EyeX = 0.150f + s.eyeSpacing; o.EyeY = Y(0.380f) + s.eyeHeight; o.EyeSize = s.eyeSize;
-            o.BrowY = Y(0.522f) + s.eyeHeight + s.browHeight + (s.eyeSize - 1f) * 0.06f; o.BrowW = 0.215f; o.BrowH = 0.066f;
+            o.BrowY0 = Y(0.522f) + s.eyeHeight + (s.eyeSize - 1f) * 0.06f;
+            o.BrowY = o.BrowY0 + s.browHeight; o.BrowW = 0.215f; o.BrowH = 0.066f;
             o.MouthY = Y(0.165f) + s.mouthHeight; o.MouthW = 0.09f; o.MouthH = 0.034f;
             o.EarY = Y(0.39f) + s.earHeight; o.EarZ = -0.11f; o.EarSu = 1.31f * s.earSize; o.EarSv = 1.02f * s.earSize; o.EarFlare = 40f + s.earFlare;
             o.Top = Y(1f);

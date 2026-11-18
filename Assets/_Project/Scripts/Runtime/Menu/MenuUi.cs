@@ -175,7 +175,7 @@ namespace LightMMORPG.Menu
             return Mathf.Min((p - e0).magnitude, (p - e1).magnitude);
         }
 
-        public enum IconKind { Friends, Settings, Quit, Diamond, Crystal, Eye, Head, Jaw, Nose, Ear, Dice, Undo, Check, Plus, Minus, Hair, Body }
+        public enum IconKind { Friends, Settings, Quit, Diamond, Crystal, Eye, Head, Jaw, Nose, Ear, Dice, Undo, Check, Plus, Minus, Hair, Body, Brow }
 
         private static float Poly(Vector2 p, params Vector2[] pts)
         {
@@ -261,6 +261,14 @@ namespace LightMMORPG.Menu
                     d = Mathf.Min(d, Poly(p, new Vector2(38, 40), new Vector2(40, 34), new Vector2(56, 34), new Vector2(58, 40)));
                     d = Mathf.Min(d, Mathf.Min(Seg(p, new Vector2(42, 34), new Vector2(40, 10)), Seg(p, new Vector2(54, 34), new Vector2(56, 10))));
                     return Stroke(d);
+                },
+                IconKind.Brow => (x, y) =>
+                {
+                    // a bold arched brow over a small eye
+                    var p = new Vector2(x, y);
+                    float d = Mathf.Min(Arc(p, new Vector2(48, 30), 40f, 50f, 130f), Arc(p, new Vector2(48, 28), 34f, 55f, 125f));
+                    d = Mathf.Min(d, Arc(p, new Vector2(48, 4), 36f, 58f, 122f));
+                    return Mathf.Max(Stroke(d), Disc(p, new Vector2(48, 30), 7f));
                 },
                 IconKind.Plus => (x, y) => Stroke(Mathf.Min(Seg(new Vector2(x, y), new Vector2(24, 48), new Vector2(72, 48)), Seg(new Vector2(x, y), new Vector2(48, 24), new Vector2(48, 72)))),
                 _ => (x, y) => Stroke(Seg(new Vector2(x, y), new Vector2(24, 48), new Vector2(72, 48))),

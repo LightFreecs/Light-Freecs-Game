@@ -4,6 +4,9 @@
 //   Head axes come from the skinned tangent (= the head's right), so the shadow turns with the head.
 // * Two tones (lit / warm shade) with a narrow soft edge, SH ambient, faint rim; cast shadows from the world.
 // * Painted features (eyes, brows, mouth) from _BaseMap over the front of the face (uv1.w = front weight).
+// * Moving face (Brow Bench): irises, blinking / expression lids and brows are drawn here every frame from material values
+//   (ToonFaceAnimator), so the face texture is never repainted. Irises and lids stay inside _EyeMask (eye white minus lid
+//   lines); the brow is sampled from _BrowTex after undoing the expression's bend and the player's transform per pixel.
 // * Inverted-hull outline in the outline colour, thinner across the face (uv1.z = face mask).
 // Vertex data: TANGENT.xyz = head right, TEXCOORD0 = face texture uv, TEXCOORD1 = (sin θ, height, face mask, front weight).
 // Lives in Resources so builds always include it (materials are created at runtime by ProceduralCharacterBuilder).
@@ -27,6 +30,26 @@ Shader "LightMMORPG/ToonFace"
         _OutlineColor ("Outline Color", Color) = (0.61,0.33,0.27,1)
         _OutlineWidth ("Outline Width (1/1000 screen height)", Range(0,10)) = 3
         _FaceOutlineScale ("Outline Width Across the Face", Range(0,1)) = 0.45
+
+        [Header(Moving face)]
+        _EyeLive ("Live Eyes (0 = painted)", Float) = 0
+        _BrowLive ("Live Brows (0 = painted)", Float) = 0
+        [NoScaleOffset] _EyeMask ("Eye Mask (R white, G height in white, B white height)", 2D) = "black" {}
+        [NoScaleOffset] _BrowTex ("Brow Map (R coverage, G middle line)", 2D) = "black" {}
+        _EyeGeo ("Eye (x, y, width, shift)", Vector) = (0.15,0.38,0.17,0)
+        _Iris0 ("Iris (u, v, rx, ry)", Vector) = (0.466,0,0.18,0.232)
+        _Iris1 ("Iris (ring, dark top)", Vector) = (0.026,0,0,0)
+        _Shine0 ("Shine 1 (u, v, r, on)", Vector) = (0,0,0,0)
+        _Shine1 ("Shine 2 (u, v, r, on)", Vector) = (0,0,0,0)
+        _IrisColor ("Iris Color", Color) = (0.2,0.25,0.35,1)
+        _Look ("Look (right u, v, left u, v)", Vector) = (0,0,0,0)
+        _EyeAnim ("Eyes (iris scale, upper lid, lower lid)", Vector) = (1,0,0,0)
+        _BrowColor ("Brow Color", Color) = (0.1,0.07,0.07,1)
+        _BrowRest ("Brow Rest (mean x, mean y, x0, length)", Vector) = (0.15,0.55,0.05,0.2)
+        _BrowMapRange ("Brow Map (s0, s span, d half)", Vector) = (-0.03,1.06,0.03,0)
+        _BrowXform ("Brow Transform (dx, dy, cos/size, sin/size)", Vector) = (0,0,1,0)
+        _BrowBend0 ("Brow Bend (inner, outer, arch, pinch)", Vector) = (0,0,0,0)
+        _BrowBend1 ("Brow Bend (thick, thick inner)", Vector) = (0,0,0,0)
     }
 
     SubShader
@@ -53,12 +76,32 @@ Shader "LightMMORPG/ToonFace"
             half4 _OutlineColor;
             float _OutlineWidth;
             half _FaceOutlineScale;
+            float _EyeLive;
+            float _BrowLive;
+            float4 _EyeGeo;
+            float4 _Iris0;
+            float4 _Iris1;
+            float4 _Shine0;
+            float4 _Shine1;
+            half4 _IrisColor;
+            float4 _Look;
+            float4 _EyeAnim;
+            half4 _BrowColor;
+            float4 _BrowRest;
+            float4 _BrowMapRange;
+            float4 _BrowXform;
+            float4 _BrowBend0;
+            float4 _BrowBend1;
         CBUFFER_END
 
         TEXTURE2D(_BaseMap);
         SAMPLER(sampler_BaseMap);
         TEXTURE2D(_ShadowMap);
         SAMPLER(sampler_ShadowMap);
+        TEXTURE2D(_EyeMask);
+        SAMPLER(sampler_EyeMask);
+        TEXTURE2D(_BrowTex);
+        SAMPLER(sampler_BrowTex);
         ENDHLSL
 
         // ---------------------------------------------------------------- Forward
@@ -129,6 +172,56 @@ Shader "LightMMORPG/ToonFace"
                 return smoothstep(threshold - soft, threshold + soft, ndl);
             }
 
+            // Brow Bench paintIris: the iris (moved by look, scaled by k) over the face features, clipped to the eye mask
+            half3 LiveIris(half3 col, float2 e, float px, half m, float side)
+            {
+                float2 look = side > 0.0 ? _Look.xy : _Look.zw;
+                float k = _EyeAnim.x;
+                float2 c = _Iris0.xy + look;
+                float rx = _Iris0.z * k, ry = _Iris0.w * k, rm = min(rx, ry);
+                float r = length((e - c) / float2(rx, ry));
+                half3 iris = _IrisColor.rgb, top = iris * 0.32h, glow = lerp(iris, half3(1, 1, 1), 0.55h);
+                half3 ic;
+                if (_Iris1.y > 0.0)
+                {
+                    float cut = c.y + _Iris0.w * k * (1.0 - 2.0 * _Iris1.y);
+                    ic = lerp(iris, top, saturate((e.y - cut) / px + 0.5));
+                }
+                else
+                {
+                    float t = saturate((c.y + ry - e.y) / (2.0 * ry));   // 0 at the top
+                    ic = t < 0.5 ? lerp(top, iris, t / 0.5) : lerp(iris, glow, saturate((t - 0.5) / 0.4));
+                }
+                col = lerp(col, ic, saturate((1.0 - r) * rm / px + 0.5) * m);
+                col = lerp(col, top, saturate((_Iris1.x * k * 0.5 - abs(r - 1.0) * rm) / px + 0.5) * m);
+                float2 s0 = c + (_Shine0.xy - _Iris0.xy) * k, s1 = c + (_Shine1.xy - _Iris0.xy) * k;
+                half sh = max(_Shine0.w * saturate((_Shine0.z * k - length(e - s0)) / px + 0.5), _Shine1.w * saturate((_Shine1.z * k - length(e - s1)) / px + 0.5));
+                return lerp(col, half3(1, 1, 1), sh * m);
+            }
+
+            // Brow Bench bendBrow + paintBrows, inverted: where this point came from on the resting brow, and its coverage there
+            half LiveBrow(float2 hp)
+            {
+                float2 p = float2(abs(hp.x), hp.y) - _BrowRest.xy - _BrowXform.xy;
+                float2 b = _BrowRest.xy + float2(p.x * _BrowXform.z + p.y * _BrowXform.w, -p.x * _BrowXform.w + p.y * _BrowXform.z);
+                float x0 = _BrowRest.z, L = max(_BrowRest.w, 1e-4), pinch = _BrowBend0.w;
+                float s = (b.x - x0) / L;
+                [unroll] for (int it = 0; it < 3; it++)
+                {
+                    float om = saturate(1.0 - s);
+                    float f = x0 + L * s - pinch * L * pow(om, 2.2) - b.x;
+                    float df = L + pinch * L * 2.2 * pow(om, 1.2);
+                    s -= f / df;
+                }
+                float sc = saturate(s), fi = pow(1.0 - sc, 2.2), fo = pow(sc, 2.2), fa = 4.0 * sc * (1.0 - sc);
+                float u = (s - _BrowMapRange.x) / _BrowMapRange.y;
+                float mid = SAMPLE_TEXTURE2D_LOD(_BrowTex, sampler_BrowTex, float2(u, 0.5), 0).g + _BrowRest.y;
+                float t = max(0.2, 1.0 + _BrowBend1.x + _BrowBend1.y * fi);
+                float d = (b.y - mid - L * (_BrowBend0.x * fi + _BrowBend0.y * fo + _BrowBend0.z * fa)) / t;
+                float v = (d + _BrowMapRange.z) / (2.0 * max(_BrowMapRange.z, 1e-4));
+                return SAMPLE_TEXTURE2D_LOD(_BrowTex, sampler_BrowTex, float2(u, v), 0).r;
+            }
+
             half4 Frag(Varyings input) : SV_Target
             {
                 UNITY_SETUP_INSTANCE_ID(input);
@@ -190,7 +283,48 @@ Shader "LightMMORPG/ToonFace"
                 // painted features over the front of the face (no face shadow on them, a little of the light's colour)
                 half4 feat = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv);
                 half3 featLight = lerp(half3(1, 1, 1), saturate(mainLight.color * 0.85h + ambient * 0.3h), _FeatureLight);
-                color = lerp(color, feat.rgb * featLight, feat.a * saturate(input.face.w));
+                half front = saturate(input.face.w);
+                half3 skin = color;
+                // head position of this texel (the face texture spans x -0.5..0.5, y -0.1..0.9 head units)
+                float2 hp = float2(input.uv.x - 0.5, input.uv.y - 0.1);
+                float side = hp.x >= 0.0 ? 1.0 : -1.0;
+                float W = max(_EyeGeo.z, 1e-4);
+                float2 e = float2((side * hp.x - _EyeGeo.x) / W + 0.5, (hp.y - _EyeGeo.y) / W - _EyeGeo.w);
+                float px = max(max(fwidth(e.x), fwidth(e.y)), 1e-5);   // eye widths per screen pixel
+                half4 em = half4(0, 0, 0, 0);
+                if (_EyeLive > 0.5)
+                {
+                    em = SAMPLE_TEXTURE2D_LOD(_EyeMask, sampler_EyeMask, input.uv, 0);
+                    if (em.r > 0.0) feat.rgb = LiveIris(feat.rgb, e, px, em.r, side);
+                }
+                color = lerp(color, feat.rgb * featLight, feat.a * front);
+
+                // blink / expression lids: skin slides over the white from the top and the bottom, with a line at the edge
+                if (_EyeLive > 0.5 && em.r > 0.0)
+                {
+                    float h = em.b * 1.5, w = em.g, lb = saturate(_EyeAnim.z), lt = saturate(_EyeAnim.y) * (1.0 - lb);
+                    half m = em.r * front;
+                    if (lb > 0.002)
+                    {
+                        color = lerp(color, skin, saturate((lb - w) * h / px + 0.5) * m);
+                        half a = saturate((0.011 - abs(w - lb) * h) / px + 0.5) * min(1.0, lb * 6.0) * 0.8;
+                        color = lerp(color, half3(0.69, 0.47, 0.416) * featLight, a * m);
+                    }
+                    if (lt > 0.002)
+                    {
+                        float edge = 1.0 - lt;
+                        color = lerp(color, skin, saturate((w - edge) * h / px + 0.5) * m);
+                        half a = saturate((0.021 - abs(w - edge) * h) / px + 0.5) * min(1.0, lt * 6.0);
+                        color = lerp(color, half3(0.114, 0.086, 0.086) * featLight, a * m);
+                    }
+                }
+
+                // brows on top
+                if (_BrowLive > 0.5)
+                {
+                    half ba = LiveBrow(hp);
+                    color = lerp(color, _BrowColor.rgb * featLight, ba * front);
+                }
 
                 color = MixFog(color, input.fogFactor);
                 return half4(color, 1);

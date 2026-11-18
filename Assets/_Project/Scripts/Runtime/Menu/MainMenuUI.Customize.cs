@@ -9,8 +9,8 @@ using UnityEngine.UI;
 namespace LightMMORPG.Menu
 {
     /// <summary>
-    /// Customize (Fighters item), design bench <c>docs/bench/customize-ui.html</c>, "Bevel" style with no panel: seven
-    /// icon tabs (five head tabs, Hair, Body) floating along the top left, Random top right, and a frameless column on the right with (Eyes, Head, Jaw &amp; Chin, Nose &amp; Mouth, Ears &amp; Neck), eye-style tiles
+    /// Customize (Fighters item), design bench <c>docs/bench/customize-ui.html</c>, "Bevel" style with no panel: eight
+    /// icon tabs (six head tabs, Hair, Body) floating along the top left, Random top right, and a frameless column on the right with (Eyes, Brows, Head, Jaw &amp; Chin, Nose &amp; Mouth, Ears &amp; Neck), eye- and brow-style tiles
     /// showing the real painted eyes, slider rows with − / + buttons, a centred fill, a value tag and a per-row reset,
     /// and Random / Reset all / Done. Buttons are 9-sliced boxes with two cut corners (<see cref="MenuUi.BevelFill"/>).
     /// Keys: Z / C or LB / RB switch tabs, R / Y random, Backspace / X reset all, Enter / Start done, Esc / B done.
@@ -42,7 +42,8 @@ namespace LightMMORPG.Menu
 
         private static readonly (string name, MenuUi.IconKind icon, int[] rows)[] CustTabs =
         {
-            ("Eyes", MenuUi.IconKind.Eye, new[] { 14, 15, 16, 17 }),
+            ("Eyes", MenuUi.IconKind.Eye, new[] { 14, 15, 16 }),
+            ("Brows", MenuUi.IconKind.Brow, new[] { PlayerAppearance.BrowSliders, PlayerAppearance.BrowSliders + 1, 17, PlayerAppearance.BrowSliders + 2 }),
             ("Head", MenuUi.IconKind.Head, new[] { 0, 1, 2, 3, 4, 5 }),
             ("Jaw & Chin", MenuUi.IconKind.Jaw, new[] { 6, 7, 8, 9, 10 }),
             ("Nose & Mouth", MenuUi.IconKind.Nose, new[] { 11, 12, 13 }),
@@ -51,7 +52,7 @@ namespace LightMMORPG.Menu
             ("Body", MenuUi.IconKind.Body, new[] { 22, 23, 24, 25 }),
         };
 
-        private const int HairTab = 5, BodyTab = 6;
+        private const int BrowTab = 1, HairTab = 6, BodyTab = 7;
 
         /// <summary>The Body tab is open on Customize (the menu camera pulls back to show the whole fighter).</summary>
         public bool BodyTabOpen => Current == State.Customize && _custTab == BodyTab;
@@ -62,6 +63,8 @@ namespace LightMMORPG.Menu
         private readonly List<FaceRow> _faceRows = new();
         private readonly List<CustButton> _custButtons = new();
         private readonly List<CustButton> _eyeTiles = new();
+        private readonly List<CustButton> _browTiles = new();
+        private readonly List<Image> _browPreviews = new();
         private readonly List<CustButton> _hairTiles = new();
         private readonly List<CustButton> _hairColorTiles = new();
         private readonly List<Image> _hairPreviews = new();
@@ -90,7 +93,7 @@ namespace LightMMORPG.Menu
             var panel = MenuUi.Rect("Column", _custDlg.transform);
 
             // tab bar (top left)
-            const float tabH = 82f, tw = 160f, slot = 48f, gap = 8f;
+            const float tabH = 82f, tw = 140f, slot = 48f, gap = 8f;
             float barW = slot * 2f + tw * CustTabs.Length + gap * (CustTabs.Length - 1);
             var bar = MenuUi.Rect("TabBar", _custDlg.transform)
                 .Place(new Vector2(T.edgeMargin, 1f - T.cornerTop), new Vector2(0f, 1f), Vector2.zero, new Vector2(barW, tabH + 40f));
@@ -166,6 +169,38 @@ namespace LightMMORPG.Menu
                         _eyeTiles.Add(b);
                     }
                     y -= eh + 22f;
+                    SectionHead(page, "SHAPE", y);
+                }
+                else if (t == BrowTab)
+                {
+                    SectionHead(page, "STYLE", y);
+                    y -= 32f;
+                    const float bg = 14f, bh = 120f;
+                    int n = PlayerAppearance.BrowNames.Length;
+                    float bw = (CustW - bg * (n - 1)) / n;
+                    for (int i = 0; i < n; i++)
+                    {
+                        var style = (ToonBrowStyle)i;
+                        var b = CustomButton(page, "Brow_" + PlayerAppearance.BrowNames[i], new Vector2(i * (bw + bg), y), new Vector2(bw, bh), 10,
+                            () => { _face.browStyle = style; RefreshCust(); FaceChanged(); }, () => _face.browStyle == style);
+                        var pic = MenuUi.Img(b.rt, "Preview", null, Color.white);
+                        pic.preserveAspect = true;
+                        pic.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -12f), new Vector2(bw - 28f, 66f));
+                        pic.enabled = false;
+                        _browPreviews.Add(pic);
+                        var name = MenuUi.Label(b.rt, "Name", PlayerAppearance.BrowNames[i], T.bodyFont, 18, Color.white, TextAnchor.MiddleCenter, 0.06f);
+                        name.rectTransform.Place(new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 12f), new Vector2(bw, 24f));
+                        b.ink.Add((name, 1f));
+                        var badge = MenuUi.Img(b.rt, "Badge", null, Color.white);
+                        badge.rectTransform.Place(new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-8f, -8f), new Vector2(24f, 24f));
+                        Bind(p => badge.color = p.accent);
+                        var check = MenuUi.Img(badge.transform, "Check", MenuUi.Icon(MenuUi.IconKind.Check), Color.white);
+                        check.rectTransform.Fill(4f);
+                        Bind(p => { var d = p.dialog; d.a = 1f; check.color = d; });
+                        b.extra = _ => badge.gameObject.SetActive(_face.browStyle == style);
+                        _browTiles.Add(b);
+                    }
+                    y -= bh + 22f;
                     SectionHead(page, "SHAPE", y);
                 }
                 else if (t == HairTab)
@@ -440,7 +475,8 @@ namespace LightMMORPG.Menu
         {
             for (int t = 0; t < _tabDots.Count; t++)
             {
-                bool changed = (t == 0 && _face.eyeStyle != ToonEyeStyle.Drawn) || (t == HairTab && (_face.hair != PlayerHair.Light || _face.hairColor != 0));
+                bool changed = (t == 0 && _face.eyeStyle != ToonEyeStyle.Drawn) || (t == BrowTab && _face.browStyle != ToonBrowStyle.Classic)
+                    || (t == HairTab && (_face.hair != PlayerHair.Light || _face.hairColor != 0));
                 foreach (int i in CustTabs[t].rows) changed |= _face.sliders[i] != 0f;
                 _tabDots[t].gameObject.SetActive(changed);
             }
@@ -470,9 +506,10 @@ namespace LightMMORPG.Menu
             var rows = _faceRows.FindAll(r => r.tab == _custTab);
             var tab = _tabButtons[_custTab].sel;
             Selectable eye = _eyeTiles[(int)_face.eyeStyle].sel;
+            Selectable brow = _browTiles[(int)_face.browStyle].sel;
             Selectable hair = _hairTiles[(int)_face.hair].sel;
             Selectable colour = _hairColorTiles[_face.hairColor].sel;
-            Selectable first = _custTab == 0 ? eye : _custTab == HairTab ? hair : rows[0].s;
+            Selectable first = _custTab == 0 ? eye : _custTab == BrowTab ? brow : _custTab == HairTab ? hair : rows[0].s;
             Selectable last = rows.Count > 0 ? rows[^1].s : _custTab == HairTab ? colour : tab;
             for (int i = 0; i < _tabButtons.Count; i++)
                 Nav(_tabButtons[i].sel, _custRandom.sel, first, i > 0 ? _tabButtons[i - 1].sel : null, i < _tabButtons.Count - 1 ? _tabButtons[i + 1].sel : null);
@@ -480,6 +517,9 @@ namespace LightMMORPG.Menu
             if (_custTab == 0)
                 for (int i = 0; i < _eyeTiles.Count; i++)
                     Nav(_eyeTiles[i].sel, tab, rows[0].s, i > 0 ? _eyeTiles[i - 1].sel : null, i < _eyeTiles.Count - 1 ? _eyeTiles[i + 1].sel : null);
+            if (_custTab == BrowTab)
+                for (int i = 0; i < _browTiles.Count; i++)
+                    Nav(_browTiles[i].sel, tab, rows[0].s, i > 0 ? _browTiles[i - 1].sel : null, i < _browTiles.Count - 1 ? _browTiles[i + 1].sel : null);
             if (_custTab == HairTab)
                 for (int i = 0; i < _hairTiles.Count; i++)
                     Nav(_hairTiles[i].sel, tab, colour, i > 0 ? _hairTiles[i - 1].sel : null, i < _hairTiles.Count - 1 ? _hairTiles[i + 1].sel : null);
@@ -488,7 +528,7 @@ namespace LightMMORPG.Menu
                     Nav(_hairColorTiles[i].sel, hair, _custDone.sel, i > 0 ? _hairColorTiles[i - 1].sel : null, i < _hairColorTiles.Count - 1 ? _hairColorTiles[i + 1].sel : null);
             for (int k = 0; k < rows.Count; k++)
             {
-                Selectable up = k > 0 ? rows[k - 1].s : _custTab == 0 ? eye : tab;
+                Selectable up = k > 0 ? rows[k - 1].s : _custTab == 0 ? eye : _custTab == BrowTab ? brow : tab;
                 Selectable down = k < rows.Count - 1 ? rows[k + 1].s : _custDone.sel;
                 Nav(rows[k].s, up, down, null, null); // left / right move the slider
                 foreach (var b in new[] { rows[k].minus, rows[k].plus, rows[k].undo }) Nav(b.sel, up, down, rows[k].s, rows[k].s);
@@ -502,6 +542,7 @@ namespace LightMMORPG.Menu
         private void Randomize()
         {
             _face.eyeStyle = (ToonEyeStyle)UnityEngine.Random.Range(0, PlayerAppearance.EyeNames.Length);
+            _face.browStyle = (ToonBrowStyle)UnityEngine.Random.Range(0, PlayerAppearance.BrowNames.Length);
             _face.hair = (PlayerHair)UnityEngine.Random.Range(0, PlayerAppearance.HairNames.Length);
             _face.hairColor = UnityEngine.Random.Range(0, PlayerAppearance.HairColors.Length);
             for (int i = 0; i < FaceSliders.Count; i++) _face.sliders[i] = Mathf.Round(UnityEngine.Random.Range(-0.7f, 0.7f) * 100f) / 100f;
@@ -585,7 +626,8 @@ namespace LightMMORPG.Menu
         private void UpdateCustomize()
         {
             if (_custDlg.alpha <= 0.01f) return;
-            _custStatus.text = _fighter != null && _fighter.Rebuilding ? "Updating your fighter…" : TouchLayout ? "Drag your fighter to turn them." : "Drag your fighter to turn them  ·  Q / E";
+            _custStatus.text = _fighter != null && _fighter.Rebuilding ? "Updating your fighter…"
+                : TouchLayout ? "Drag your fighter to turn them, tap for an expression." : "Drag your fighter to turn them  ·  Q / E  ·  click for an expression";
             var kb = Keyboard.current;
             var gp = Gamepad.current;
 
@@ -676,6 +718,27 @@ namespace LightMMORPG.Menu
                 }
                 catch (Exception e) { Debug.LogWarning("[Menu] Eye preview " + (ToonEyeStyle)i + " failed: " + e.Message); }
             }
+            for (int i = 0; i < _browPreviews.Count; i++)
+            {
+                try
+                {
+                    _browPreviews[i].sprite = BrowPreview((ToonBrowStyle)i);
+                    _browPreviews[i].enabled = true;
+                }
+                catch (Exception e) { Debug.LogWarning("[Menu] Brow preview " + (ToonBrowStyle)i + " failed: " + e.Message); }
+            }
+        }
+
+        /// <summary>Paints the hero's face wearing a brow style (over the Sharp eye, as on the Brow Bench) and keeps one brow and eye.</summary>
+        private static Sprite BrowPreview(ToonBrowStyle style)
+        {
+            var hero = CharacterPresets.Hero();
+            var settings = hero.toonHead?.Clone() ?? new ToonHeadSettings();
+            settings.eyeStyle = ToonEyeStyle.Sharp;
+            settings.browStyle = style;
+            var H = ToonHead.Apply(settings);
+            var px = ToonFacePainter.Paint(H, settings, hero.eyeColor, hero.hairColor, hero.skinTone);
+            return Crop(px, new Vector3(H.EyeX - 0.14f, H.EyeY - 0.06f, 0f), new Vector3(H.EyeX + 0.16f, H.BrowY + 0.08f, 0f), "BrowPreview_" + style);
         }
 
         private static Sprite EyePreview(ToonEyeStyle style)
@@ -686,10 +749,16 @@ namespace LightMMORPG.Menu
             settings.eyeStyle = style;
             var H = ToonHead.Apply(settings);
             var px = ToonFacePainter.Paint(H, style, hero.eyeColor, hero.hairColor, hero.skinTone);
-            int N = ToonFacePainter.Size;
             float hx = H.EyeX + 0.12f;
-            Vector2 lo = ToonFacePainter.Uv(new Vector3(-hx, H.EyeY - 0.075f, 0f)) * N;
-            Vector2 hi = ToonFacePainter.Uv(new Vector3(hx, H.EyeY + 0.085f, 0f)) * N;
+            return Crop(px, new Vector3(-hx, H.EyeY - 0.075f, 0f), new Vector3(hx, H.EyeY + 0.085f, 0f), "EyePreview_" + style);
+        }
+
+        /// <summary>A half-size sprite of the painted face between two head-unit corners.</summary>
+        private static Sprite Crop(Color[] px, Vector3 headLo, Vector3 headHi, string name)
+        {
+            int N = ToonFacePainter.Size;
+            Vector2 lo = ToonFacePainter.Uv(headLo) * N;
+            Vector2 hi = ToonFacePainter.Uv(headHi) * N;
             int x0 = Mathf.Clamp((int)lo.x, 0, N - 2), y0 = Mathf.Clamp((int)lo.y, 0, N - 2);
             int w = Mathf.Min((int)(hi.x - lo.x), N - x0) / 2, h = Mathf.Min((int)(hi.y - lo.y), N - y0) / 2;
             var outPx = new Color[w * h];
@@ -706,7 +775,7 @@ namespace LightMMORPG.Menu
                         }
                     outPx[y * w + x] = a > 0.0001f ? new Color(r / a, g / a, b / a, a * 0.25f) : Color.clear;
                 }
-            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { name = "EyePreview_" + style, wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { name = name, wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
             tex.SetPixels(outPx);
             tex.Apply(false, true);
             return Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f);

@@ -32,6 +32,8 @@ namespace LightMMORPG.Menu
         /// <summary>0 = normal menu framing, 1 = Customize close-up on the fighter's face.</summary>
         private float _closeUp, _bodyView;
         private bool _dragging;
+        private Vector2 _pressAt;
+        private float _pressTime, _pressTravel;
 
         private void Awake()
         {
@@ -126,7 +128,14 @@ namespace LightMMORPG.Menu
             var ptr = Pointer.current;
             if (ptr != null)
             {
-                if (ptr.press.wasPressedThisFrame) _dragging = ptr.position.ReadValue().x < Screen.width * 0.42f; // left of the Customize panel
+                if (ptr.press.wasPressedThisFrame)
+                {
+                    _dragging = ptr.position.ReadValue().x < Screen.width * 0.42f; // left of the Customize panel
+                    _pressAt = ptr.position.ReadValue(); _pressTime = Time.unscaledTime; _pressTravel = 0f;
+                }
+                if (_dragging) _pressTravel = Mathf.Max(_pressTravel, (ptr.position.ReadValue() - _pressAt).magnitude);
+                // a tap on the fighter (no drag) plays the next face expression
+                if (ptr.press.wasReleasedThisFrame && _dragging && _pressTravel < 12f && Time.unscaledTime - _pressTime < 0.4f) _fighter.PlayNextExpression();
                 if (!ptr.press.isPressed) _dragging = false;
                 if (_dragging) _fighter.Turn -= ptr.delta.ReadValue().x * 0.35f;
             }
@@ -191,7 +200,7 @@ namespace LightMMORPG.Menu
                     Sky.Apply(shot.sky);
                     // -menuCaptureFace '<FaceCustomization json>' previews other face choices without touching the saved ones
                     string faceJson = Arg("-menuCaptureFace");
-                    if (shot.state == MainMenuUI.State.Customize) UI.ShowCustomize(faceJson != null ? PlayerAppearance.FromJson(faceJson) : PlayerAppearance.Load(), shot.name.EndsWith("_Jaw") ? 2 : 0);
+                    if (shot.state == MainMenuUI.State.Customize) UI.ShowCustomize(faceJson != null ? PlayerAppearance.FromJson(faceJson) : PlayerAppearance.Load(), shot.name.EndsWith("_Jaw") ? 3 : 0);
                     else if (shot.name == "Stats") UI.ShowStatsPreview(Core.Progression.XpForLevel(24) + 600, new Core.StatAllocation(8, 6, 3, 4, 0));
                     else if (shot.name == "Stats_Guest") UI.ShowStatsGuest();
                     else UI.SetState(shot.state, instant: true);

@@ -4,8 +4,9 @@ using UnityEngine;
 namespace LightMMORPG.Characters
 {
     /// <summary>
-    /// Player adjustments of the Toon Head (<see cref="ToonHeadSettings"/>, indices 0–21) and the body (22–25: build, muscle,
-    /// shoulders, waist), each -1..1 with 0 = the base head / base body: -1 / +1 reach the low / high end of the slider.
+    /// Player adjustments of the Toon Head (<see cref="ToonHeadSettings"/>, indices 0–21), the body (22–25: build, muscle,
+    /// shoulders, waist) and the brows (26–28: size, angle, spacing; brow height is 17), each -1..1 with 0 = the base head /
+    /// base body: -1 / +1 reach the low / high end of the slider.
     /// Indexed in the order of <see cref="PlayerAppearance.Sliders"/>.
     /// </summary>
     [Serializable]
@@ -18,8 +19,9 @@ namespace LightMMORPG.Characters
         public float eyeSize, eyeHeight, eyeSpacing, browHeight;
         public float earSize, earHeight, earFlare, neckWidth;
         public float bodyBuild, bodyMuscle, bodyShoulders, bodyWaist;
+        public float browSize, browAngle, browSpacing;
 
-        public const int Count = 26;
+        public const int Count = 29;
         /// <summary>Indices below this drive the head; the rest drive the body.</summary>
         public const int HeadCount = 22;
 
@@ -33,7 +35,8 @@ namespace LightMMORPG.Characters
                 11 => noseSize, 12 => noseHeight, 13 => mouthHeight,
                 14 => eyeSize, 15 => eyeHeight, 16 => eyeSpacing, 17 => browHeight,
                 18 => earSize, 19 => earHeight, 20 => earFlare, 21 => neckWidth,
-                22 => bodyBuild, 23 => bodyMuscle, 24 => bodyShoulders, _ => bodyWaist,
+                22 => bodyBuild, 23 => bodyMuscle, 24 => bodyShoulders, 25 => bodyWaist,
+                26 => browSize, 27 => browAngle, _ => browSpacing,
             };
             set
             {
@@ -64,7 +67,10 @@ namespace LightMMORPG.Characters
                     case 22: bodyBuild = value; break;
                     case 23: bodyMuscle = value; break;
                     case 24: bodyShoulders = value; break;
-                    default: bodyWaist = value; break;
+                    case 25: bodyWaist = value; break;
+                    case 26: browSize = value; break;
+                    case 27: browAngle = value; break;
+                    default: browSpacing = value; break;
                 }
             }
         }
@@ -73,11 +79,12 @@ namespace LightMMORPG.Characters
     /// <summary>Hairstyles the player can pick (the Hair Bench styles), in Customize order.</summary>
     public enum PlayerHair { Light, Messy }
 
-    /// <summary>The player's choices from the Customize screen: any eye style, a hairstyle, the head sliders and the body sliders.</summary>
+    /// <summary>The player's choices from the Customize screen: any eye and brow style, a hairstyle, the head, brow and body sliders.</summary>
     [Serializable]
     public struct FaceCustomization
     {
         public ToonEyeStyle eyeStyle;
+        public ToonBrowStyle browStyle;
         public PlayerHair hair;
         /// <summary>Index into <see cref="PlayerAppearance.HairColors"/>; any colour goes with any hairstyle.</summary>
         public int hairColor;
@@ -93,6 +100,7 @@ namespace LightMMORPG.Characters
                 f.sliders[i] = float.IsNaN(v) ? 0f : Mathf.Clamp(v, -1f, 1f);
             }
             if (!Enum.IsDefined(typeof(ToonEyeStyle), f.eyeStyle)) f.eyeStyle = ToonEyeStyle.Drawn;
+            if (!Enum.IsDefined(typeof(ToonBrowStyle), f.browStyle)) f.browStyle = ToonBrowStyle.Classic;
             if (!Enum.IsDefined(typeof(PlayerHair), f.hair)) f.hair = PlayerHair.Light;
             if (f.hairColor < 0 || f.hairColor >= PlayerAppearance.HairColors.Length) f.hairColor = 0;
             return f;
@@ -145,10 +153,20 @@ namespace LightMMORPG.Characters
             new("Muscle", "Lean", "Muscular", 0.6f, 1.4f),
             new("Shoulders", "Narrow", "Wide", 0.9f, 1.12f),
             new("Waist", "Narrow", "Wide", 0.86f, 1.15f),
+            // brows (Brow Bench sliders; ToonHeadSettings browSize / browAngle / browSpacing)
+            new("Brow size", "Small", "Large", 0.7f, 1.4f),
+            new("Brow angle", "Soft", "Fierce", -25f, 25f),
+            new("Brow spacing", "Close", "Wide", -0.03f, 0.03f),
         };
 
+        /// <summary>First brow slider index (size, angle, spacing follow).</summary>
+        public const int BrowSliders = 26;
+
         /// <summary>Names of the eye styles for the Customize screen, in <see cref="ToonEyeStyle"/> order.</summary>
-        public static readonly string[] EyeNames = { "Drawn", "Tall", "Wide", "Hand-made" };
+        public static readonly string[] EyeNames = { "Drawn", "Tall", "Wide", "Hand-made", "Sharp", "Arch" };
+
+        /// <summary>Names of the brow styles for the Customize screen, in <see cref="ToonBrowStyle"/> order.</summary>
+        public static readonly string[] BrowNames = { "Classic", "Sharp", "Peak", "Block" };
 
         /// <summary>Names of the hairstyles for the Customize screen, in <see cref="PlayerHair"/> order.</summary>
         public static readonly string[] HairNames = { "Light", "Messy layers" };
@@ -239,6 +257,7 @@ namespace LightMMORPG.Characters
             f = f.Sanitized();
             var head = recipe.toonHead = recipe.toonHead?.Clone() ?? new ToonHeadSettings();
             head.eyeStyle = f.eyeStyle;
+            head.browStyle = f.browStyle;
             recipe.hairStyle = ToHairStyle(f.hair);
             recipe.hairColor = recipe.hairTipColor = HairColors[f.hairColor].color;
             for (int i = 0; i < FaceSliders.HeadCount; i++)
@@ -251,6 +270,10 @@ namespace LightMMORPG.Characters
             recipe.muscle = Body(23, recipe.muscle);
             recipe.shoulderWidth = Body(24, recipe.shoulderWidth);
             recipe.waist = Body(25, recipe.waist);
+            float Brow(int i, float value) => Adjust(value, f.sliders[i], Sliders[i].Min, Sliders[i].Max);
+            head.browSize = Brow(BrowSliders, head.browSize);
+            head.browAngle = Brow(BrowSliders + 1, head.browAngle);
+            head.browSpacing = Brow(BrowSliders + 2, head.browSpacing);
             return recipe;
         }
 

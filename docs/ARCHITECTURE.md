@@ -581,3 +581,29 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     trunks pinch at the hip crease on very high knees.
   - Tests: `ProceduralCharacterTests` +2 (body sliders at −1/0/1 give valid meshes, chin meets the head, arm sides; soles on
     feet / toes, hands on arm bones). Verified: headless compile clean only (owner tests by hand).
+- Brow Bench in the game (2026-11-18): brows, new eyes and the moving face from `docs/bench/brow-bench.html` (commit 7511933),
+  bench numbers kept as they are.
+  - `ToonHead.cs`: `ToonEyeStyle` + `Sharp`, `Arch` (appended, saves keep their index); `ToonBrowStyle { Classic, Sharp, Peak, Block }`;
+    `ToonExpression` (Neutral, Determined, Angry, Sad, Surprised, Happy, Joy); `ToonHeadSettings.browStyle / browSize /
+    browAngle / browSpacing`; `ToonHeadShape.BrowY0` (brow line at brow height 0, where the measured brows are fitted).
+  - `ToonFacePainter.cs`: Sharp and Arch `SketchEye` data; the measured Sharp / Peak / Block brow outlines, Sharp and Block
+    levelled at rest (principal axis, `Level`), each resting its gap (0.12 / 0.34 / 0.06 eye widths) above the chosen eye's
+    upper lid (`Poke`), Classic as before; nose side = the bench default (pointed ends near the nose). `Paint` = everything
+    at rest (previews); `PaintLive` = the static layer only (no irises, no brows) + a `ToonFaceRig`.
+  - Moving face: `ToonFaceRig` (eye mask 1024² RGBA: R = eye white minus lid lines, G = height in the white, B = white
+    height; brow map RGHalf in the brow's bending frame: R = coverage, G = middle line), uploaded by the builder as
+    `GeneratedCharacter.FaceEyeMask / FaceBrowMap` and written into the face material (`ApplyTo`). `ToonFace.shader` draws
+    per pixel the iris (look offset, size, dark top / gradient, ring, shines) inside the mask, the lids (skin from the top and
+    bottom by the lid amounts, with their edge lines), and the brows by inverting the player's transform and the
+    expression's bend (pinch solved with 3 Newton steps) and sampling the brow map. The face texture is never repainted.
+    The hand-made eye stays painted (only its brows move).
+  - `ToonFaceAnimator` (added by `ProceduralCharacterBuilder.Build`): per-frame property block on the face material slot:
+    look-at (`LookTarget` / `LookPoint`, else wander; per-eye direction with depth ≥ 0.4 head units, clamped to the travel
+    ellipse, 55 ms smoothing, brows follow the gaze 0.005), blink (60 / 110 ms, every 2.5–5.5 s, 15 % double), expressions
+    (`Play`, `PlayNext`; 0.28 s overshoot blend, 2.6 s then back to Neutral). Head units → head bone: `HeadUnitOrigin/Scale`.
+    Per-style expression shapes are deferred (owner).
+  - Player data: `FaceCustomization.browStyle`; `FaceSliders` 26–28 = brow size / angle / spacing (brow height stays 17);
+    synced with the face JSON. Customize: new BROWS tab (`IconKind.Brow`) with four brow tiles (previews over the Sharp eye)
+    and size / angle / height / spacing; the Eyes tab has six eye tiles and size / height / spacing. The menu fighter looks
+    at the camera; tapping / clicking it in Customize plays the next expression.
+  - Verified: headless compile clean only (owner tests by hand).

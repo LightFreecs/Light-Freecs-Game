@@ -55,6 +55,12 @@ namespace LightMMORPG.Characters
             public float Height;
             public Vector3 ArmDirL, ArmDirR, PalmL, PalmR;
             public Texture2D Face;
+            /// <summary>The moving face (Brow Bench): shader data, eye mask and brow map (created by <see cref="Upload"/>).</summary>
+            public ToonFaceRig FaceRig;
+            public Texture2D FaceEyeMask, FaceBrowMap;
+            /// <summary>Head units → head bone local space: origin + h × scale.</summary>
+            public Vector3 HeadUnitOrigin;
+            public float HeadUnitScale;
             public ToonHeadShape HeadShape;
             public double Milliseconds;
             public Color Aura;
@@ -113,7 +119,12 @@ namespace LightMMORPG.Characters
             smr.bones = bones;
             smr.rootBone = bones[(int)B.Hips];
             var mats = new Material[gen.Slots.Count];
-            for (int i = 0; i < mats.Length; i++) mats[i] = GetMaterial(gen.Slots[i], gen.Face, gen.ShadowMap);
+            int faceSlot = -1;
+            for (int i = 0; i < mats.Length; i++)
+            {
+                mats[i] = GetMaterial(gen.Slots[i], gen.Face, gen.ShadowMap, gen);
+                if (gen.Slots[i].Kind == SlotKind.Face) faceSlot = i;
+            }
             smr.sharedMaterials = mats;
             var b = gen.Mesh.bounds;
             smr.localBounds = new Bounds(b.center - gen.BonePositions[(int)B.Hips], b.size * 1.6f);
@@ -123,6 +134,8 @@ namespace LightMMORPG.Characters
             var rig = root.AddComponent<CharacterRig>();
             rig.Init(bones, gen.Height, gen.ArmDirL, gen.ArmDirR, gen.PalmL, gen.PalmR, gen.Aura);
             rig.ApplyRestPose();
+            if (gen.FaceRig != null && faceSlot >= 0)
+                root.AddComponent<ToonFaceAnimator>().Init(smr, faceSlot, gen.FaceRig, bones[(int)B.Head], gen.HeadUnitOrigin, gen.HeadUnitScale);
             return root;
         }
 
@@ -168,6 +181,8 @@ namespace LightMMORPG.Characters
                 if (g.Mesh != null) UnityEngine.Object.DestroyImmediate(g.Mesh);
                 if (g.Face != null) UnityEngine.Object.DestroyImmediate(g.Face);
                 if (g.ShadowMap != null) UnityEngine.Object.DestroyImmediate(g.ShadowMap);
+                if (g.FaceEyeMask != null) UnityEngine.Object.DestroyImmediate(g.FaceEyeMask);
+                if (g.FaceBrowMap != null) UnityEngine.Object.DestroyImmediate(g.FaceBrowMap);
             }
             Cache.Clear();
             MaterialCache.Clear();
@@ -197,7 +212,7 @@ namespace LightMMORPG.Characters
             var gen = c.Finish();
             var head = recipe.toonHead ?? new ToonHeadSettings();
             gen.FaceSize = ToonFacePainter.Size;
-            gen.FacePixels = ToonFacePainter.Paint(gen.HeadShape, head.eyeStyle, recipe.eyeColor, recipe.hairColor, recipe.skinTone);
+            gen.FacePixels = ToonFacePainter.PaintLive(gen.HeadShape, head, recipe.eyeColor, recipe.hairColor, recipe.skinTone, out gen.FaceRig);
             gen.ShadowPixels = ToonHead.ShadowMap(gen.HeadShape);
             gen.Milliseconds = sw.Elapsed.TotalMilliseconds;
             return gen;
@@ -208,7 +223,7 @@ namespace LightMMORPG.Characters
         {
             if (g.Mesh != null && g.Face != null) return;
             var sw = Stopwatch.StartNew();
-            if (g.Mesh != null) { g.Face = FacePainter.ToTexture(g.FacePixels, g.FaceSize, "Face_" + g.Name); return; }
+            if (g.Mesh != null) { g.Face = FacePainter.ToTexture(g.FacePixels, g.FaceSize, "Face_" + g.Name); UploadFaceRig(g); return; }
             var mesh = new Mesh { name = "Fighter_" + g.Name, indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
             mesh.SetVertices(g.Positions);
             mesh.SetNormals(g.Normals);
@@ -225,7 +240,15 @@ namespace LightMMORPG.Characters
             g.Mesh = mesh;
             if (g.Face == null) g.Face = FacePainter.ToTexture(g.FacePixels, g.FaceSize, "Face_" + g.Name);
             g.ShadowMap = ShadowTexture(g.ShadowPixels, "FaceShadow_" + g.Name);
+            UploadFaceRig(g);
             g.UploadMilliseconds = sw.Elapsed.TotalMilliseconds;
+        }
+
+        private static void UploadFaceRig(GeneratedCharacter g)
+        {
+            if (g.FaceRig == null) return;
+            if (g.FaceEyeMask == null) g.FaceEyeMask = g.FaceRig.CreateEyeMaskTexture("FaceEyes_" + g.Name);
+            if (g.FaceBrowMap == null) g.FaceBrowMap = g.FaceRig.CreateBrowTexture("FaceBrows_" + g.Name);
         }
 
         // ------------------------------------------------------------------ materials
@@ -241,9 +264,9 @@ namespace LightMMORPG.Characters
             return t;
         }
 
-        public static Material GetMaterial(SlotDef slot, Texture2D face, Texture2D faceShadow = null)
+        public static Material GetMaterial(SlotDef slot, Texture2D face, Texture2D faceShadow = null, GeneratedCharacter gen = null)
         {
-            if (slot.Kind == SlotKind.Face) return GetFaceMaterial(slot, face, faceShadow);
+            if (slot.Kind == SlotKind.Face) return GetFaceMaterial(slot, face, faceShadow, gen);
             string key = slot.Kind + "|" + ColorUtility.ToHtmlStringRGBA(slot.Color) + "|" + ColorUtility.ToHtmlStringRGBA(slot.Color2) + (slot.Kind == SlotKind.Face && face != null ? "|" + System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(face) : "");
             if (MaterialCache.TryGetValue(key, out var m) && m != null) return m;
             m = CreateToonMaterial();
@@ -287,11 +310,16 @@ namespace LightMMORPG.Characters
         }
 
         /// <summary>The Toon Head's skin (<c>LightMMORPG/ToonFace</c>): same lit/shade colours as the body skin so the neck joins cleanly.</summary>
-        private static Material GetFaceMaterial(SlotDef slot, Texture2D face, Texture2D faceShadow)
+        private static Material GetFaceMaterial(SlotDef slot, Texture2D face, Texture2D faceShadow, GeneratedCharacter gen)
         {
             string key = "ToonFace|" + ColorUtility.ToHtmlStringRGBA(slot.Color) + "|" + (face != null ? System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(face) : 0)
                 + "|" + (faceShadow != null ? System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(faceShadow) : 0);
-            if (MaterialCache.TryGetValue(key, out var m) && m != null) return m;
+            if (MaterialCache.TryGetValue(key, out var m) && m != null)
+            {
+                // the face texture is the material's identity; previews reuse one, so the moving-face values follow the newest build
+                if (gen?.FaceRig != null && m.shader.name == "LightMMORPG/ToonFace") gen.FaceRig.ApplyTo(m, gen.FaceEyeMask, gen.FaceBrowMap);
+                return m;
+            }
             var shader = Shader.Find("LightMMORPG/ToonFace");
             if (shader == null) { m = CreateToonMaterial(); m.SetTexture("_BaseMap", face); return m; }
             m = new Material(shader) { name = "ToonFace_" + slot.Key };
@@ -312,6 +340,7 @@ namespace LightMMORPG.Characters
             m.SetColor("_OutlineColor", new Color(0.61f, 0.33f, 0.27f));   // reddish brown, like the bench (#9c5446)
             m.SetFloat("_OutlineWidth", 3f);
             m.SetFloat("_FaceOutlineScale", 0.45f);
+            if (gen?.FaceRig != null) gen.FaceRig.ApplyTo(m, gen.FaceEyeMask, gen.FaceBrowMap);
             MaterialCache[key] = m;
             return m;
         }
@@ -1238,6 +1267,7 @@ namespace LightMMORPG.Characters
                 return new GeneratedCharacter
                 {
                     FaceCoords = faceCoords, Tangents = tangents, HeadShape = _toon,
+                    HeadUnitOrigin = new Vector3(0f, ChinHL, AxisZ) * (_hs * s), HeadUnitScale = HeadUnit * _hs * s,
                     Name = _r.displayName,
                     Positions = pos.ToArray(), Normals = _buf.Normals.ToArray(), Uvs = _buf.Uvs.ToArray(), Weights = _buf.Weights.ToArray(),
                     Triangles = _buf.Triangles.GetRange(0, _slots.Count).ToArray(),
