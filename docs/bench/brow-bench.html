@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Brow Bench</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
@@ -46,6 +47,9 @@ p{margin:0;max-width:65ch}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .chip{border:1px solid var(--line);background:var(--chip);border-radius:12px;padding:9px 14px;font-weight:600}
 .chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+.chip:disabled{opacity:.45;cursor:not-allowed}
+.sub{font-size:12.5px;font-weight:600;color:var(--muted);margin:0 0 6px}
+.anim{display:flex;flex-direction:column;gap:12px}
 .chip .new{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-left:6px}
 .dot{display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:8px;vertical-align:-2px;border:1px solid color-mix(in srgb,var(--ink) 20%,transparent)}
 .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
@@ -83,8 +87,23 @@ code{font-family:var(--f-mono);font-size:12.5px}
 <main class="panel">
   <div style="display:flex;flex-direction:column;gap:6px">
     <h1>Brow Bench</h1>
-    <p class="lede">Brows and eyes are picked separately, so any brow goes with any eye. The new <b>Sharp</b> brow and <b>Sharp</b> eye are measured from your drawing, line by line, then smoothed. The face is painted the way the game paints it: same layout and numbers, at the game's texture size (1024 texels across the head).</p>
+    <p class="lede">Brows and eyes are picked separately, so any brow goes with any eye. The new <b>Sharp</b> brow and <b>Sharp</b> eye are measured from your drawing, line by line, then smoothed. The face is painted the way the game paints it: same layout and numbers, at the game's texture size (1024 texels across the head). The face now moves too: the eyes follow your pointer (or your finger on the face), blink, and change with the expression buttons.</p>
   </div>
+
+  <section class="anim">
+    <div>
+      <h2>Expression</h2>
+      <div class="row" role="group" aria-label="Expression" id="pick-expr"></div>
+    </div>
+    <div>
+      <p class="sub">The eyes look at</p>
+      <div class="row" role="group" aria-label="The eyes look at" id="pick-look"></div>
+    </div>
+    <div class="row">
+      <button class="chip" id="blink" aria-pressed="true">Blink every few seconds</button>
+    </div>
+    <p class="lede" id="rm-note" hidden>Your device asks for less motion, so blinking and wandering are off. Following the pointer and the expressions still work, without the blend.</p>
+  </section>
 
   <section class="card ask">
     <h2>One thing to settle from the drawing</h2>
@@ -154,6 +173,17 @@ code{font-family:var(--f-mono);font-size:12.5px}
       <li>New <b>Sharp</b> and <b>Arch</b> eyes next to Drawn, Tall, Wide and Hand-made.</li>
       <li>The brow rests on whichever eye is picked, and the player can then change its size, angle, height and spacing.</li>
       <li>Brow colour still follows the hair colour.</li>
+      <li>Eyes that look around and blink, and the five expressions, on every character.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>How the moving face maps to the game</h2>
+    <ul>
+      <li><b>Static face texture.</b> Eye whites, lid shading, lid lines and the mouth are painted once into the 1024 face texture, only when the player changes a style, colour or slider. A spare mask channel marks the eye white (minus the lid lines), so the shader knows where an iris may show. This page does the same with two still layers, under and over the iris.</li>
+      <li><b>Iris and blink in the face shader.</b> Each frame the C# side sends a look offset per eye (u, v in eye widths, already clamped to that eye's travel), the iris size and the two lid amounts as material values. The shader draws the iris, its dark top and shine inside the white mask, then slides the skin lid over it. The face texture is never repainted while playing.</li>
+      <li><b>Brows as separate patches.</b> Each brow is a small mesh over the face built from the measured outline, so size, angle, height and spacing, and every expression, are just a transform each frame.</li>
+      <li><b>Expressions are blended value sets.</b> Neutral, Angry, Surprised, Sad and Happy each hold offsets (brow angle, height, spacing, size, lid amounts, iris size, a gaze nudge) added on top of the player's sliders and blended over 0.25 s. Emotes or combat pick one; look-at and blinking run on top.</li>
     </ul>
   </section>
 </main>
@@ -317,8 +347,12 @@ function strokeVar(g, pts, pos, width) {
   }
 }
 
-function paintEye(g, H, ES, side, sz, iris) {
-  const W = ES.Width * sz;
+// The face is split the way the game will draw it:
+//   static, painted once per style / colour / slider change: eye whites + lid shading (under the iris), lid lines + mouth (over it);
+//   moving, drawn every frame: irises (clipped to the white), blink / expression lids, brows (a transform of a fixed outline).
+// Each eye's geometry in head units, built once per change. Its white polygon is the iris's clip (in the game: the eye-white mask).
+function eyeGeo(H, ES, side) {
+  const W = ES.Width * H.EyeSize;
   const E = (u, v) => [side * (H.EyeX + (u - 0.5) * W), H.EyeY + (v + ES.Shift) * W];
   let whiteTop, whiteBot;
   const wr = ES.WhiteRange || [0, 0.94];
@@ -335,30 +369,72 @@ function paintEye(g, H, ES, side, sz, iris) {
     return pts;
   };
   const whitePts = band(whiteBot, whiteTop);
-  g.fillStyle = "#fbf8f4"; poly(g, whitePts); g.fill();
-  g.save(); poly(g, whitePts); g.clip();
-  if (ES.LidShade) { const sh = pw(ES.LidShade); g.fillStyle = ES.LidShadeColor || "#b9bcc8"; poly(g, band(u => Math.max(whiteBot(u), whiteTop(u) - sh(u)), whiteTop)); g.fill(); }
+  const clip = new Path2D();
+  whitePts.forEach((p, i) => i ? clip.lineTo(p[0], p[1]) : clip.moveTo(p[0], p[1])); clip.closePath();
+  // how far the iris may travel, in eye widths: a share of the white's half-width, and of its half-height at the iris
+  const uI = Math.max(wr[0], Math.min(wr[1], ES.IrisU));
+  const ru = 0.36 * 0.5 * (wr[1] - wr[0]), rv = Math.max(0.04, 0.35 * 0.5 * Math.max(0, whiteTop(uI) - whiteBot(uI)));
+  return { side, W, E, ES, whiteTop, whiteBot, wr, band, whitePts, clip, ru, rv, centre: E(ES.IrisU, ES.IrisV) };
+}
+
+function paintEyeUnder(g, e) {
+  g.fillStyle = "#fbf8f4"; poly(g, e.whitePts); g.fill();
+  if (e.ES.LidShade) {
+    const sh = pw(e.ES.LidShade);
+    g.save(); g.clip(e.clip); g.fillStyle = e.ES.LidShadeColor || "#b9bcc8";
+    poly(g, e.band(u => Math.max(e.whiteBot(u), e.whiteTop(u) - sh(u)), e.whiteTop)); g.fill(); g.restore();
+  }
+}
+// the iris (and its shine) moved by (du, dv) eye widths and scaled by k, clipped to the white
+function paintIris(g, e, iris, du, dv, k) {
+  const ES = e.ES, W = e.W, E = e.E;
   const irisTop = iris.map(v => v * 0.32), glow = mix(iris, [1, 1, 1], 0.55);
-  const ic = E(ES.IrisU, ES.IrisV), rx = ES.IrisRx * W, ry = ES.IrisRy * W;
+  const cu = ES.IrisU + du, cv = ES.IrisV + dv;
+  const ic = E(cu, cv), rx = ES.IrisRx * W * k, ry = ES.IrisRy * W * k;
   const ell = () => { g.beginPath(); g.ellipse(ic[0], ic[1], rx, ry, 0, 0, Math.PI * 2); };
+  g.save(); g.clip(e.clip);
   if (ES.DarkTop > 0) {
     g.fillStyle = css(iris); ell(); g.fill();
-    const cut = E(0, ES.IrisV + ES.IrisRy * (1 - 2 * ES.DarkTop))[1];
+    const cut = E(0, cv + ES.IrisRy * k * (1 - 2 * ES.DarkTop))[1];
     g.save(); g.beginPath(); g.rect(-2, cut, 4, 4); g.clip(); g.fillStyle = css(irisTop); ell(); g.fill(); g.restore();
   } else {
     const gr = g.createLinearGradient(0, ic[1] + ry, 0, ic[1] - ry);
     gr.addColorStop(0, css(irisTop)); gr.addColorStop(0.5, css(iris)); gr.addColorStop(0.9, css(glow)); gr.addColorStop(1, css(glow));
     g.fillStyle = gr; ell(); g.fill();
   }
-  g.strokeStyle = css(irisTop); g.lineWidth = ES.IrisRing * W; ell(); g.stroke();
+  g.strokeStyle = css(irisTop); g.lineWidth = ES.IrisRing * W * k; ell(); g.stroke();
   g.fillStyle = "#ffffff";
-  for (const s of ES.Shine) { const c = E(s[0], s[1]); g.beginPath(); g.arc(c[0], c[1], s[2] * W, 0, Math.PI * 2); g.fill(); }
+  for (const s of ES.Shine) { const c = E(cu + (s[0] - ES.IrisU) * k, cv + (s[1] - ES.IrisV) * k); g.beginPath(); g.arc(c[0], c[1], s[2] * W * k, 0, Math.PI * 2); g.fill(); }
   g.restore();
+}
+// skin lids over the white: top = how far the upper lid has come down (1 = shut), bot = how far the lower lid has come up
+function paintLids(g, e, top, bot) {
+  if (top < 0.002 && bot < 0.002) return;
+  const { E, W, wr } = e, T = u => Math.max(e.whiteBot(u), e.whiteTop(u)), B = e.whiteBot, us = [];
+  for (let i = 0; i <= 40; i++) us.push(wr[0] + (wr[1] - wr[0]) * i / 40);
+  const lid = (from, to, amt, over, col, lw, alpha) => {
+    const edge = us.map(u => E(u, from(u) + (to(u) - from(u)) * amt));
+    g.save(); g.clip(e.clip); g.fillStyle = SKIN;
+    poly(g, [...us.map(u => E(u, from(u) + over)), ...edge.slice().reverse()]); g.fill(); g.restore();
+    g.save(); g.globalAlpha = alpha; g.strokeStyle = col; g.lineWidth = lw * W; g.lineCap = g.lineJoin = "round";
+    g.beginPath(); edge.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.stroke(); g.restore();
+  };
+  if (bot > 0.002) lid(B, T, bot, -0.1, "#b0786a", 0.022, Math.min(1, bot * 6) * 0.8);
+  const t = top * (1 - bot);   // a shut upper lid meets the raised lower lid
+  if (t > 0.002) lid(T, B, t, 0.1, "#1d1616", 0.042, Math.min(1, t * 6));
+}
+function paintEyeLines(g, e) {
   g.fillStyle = "#1d1616";
-  const st = pts => strokeVar(g, densify(pts, 6), p => E(p[0], p[1]), p => p[2] * W);
-  st(ES.Upper);
-  if (ES.Extra) for (const e of ES.Extra) st(e);
-  if (ES.Lower) st(ES.Lower);
+  const st = pts => strokeVar(g, densify(pts, 6), p => e.E(p[0], p[1]), p => p[2] * e.W);
+  st(e.ES.Upper);
+  if (e.ES.Extra) for (const x of e.ES.Extra) st(x);
+  if (e.ES.Lower) st(e.ES.Lower);
+}
+function paintMouth(g, H) {
+  const M = (px, py) => [(px / 256 - 0.5) * H.MouthW, H.MouthY + ((1 - py / 128) - 0.5) * H.MouthH];
+  const m0 = M(70, 70), m1 = M(128, 84), m2 = M(186, 66), mp = [];
+  for (let i = 0; i <= 16; i++) { const t = i / 16; mp.push([0, 1].map(j => (1 - t) * (1 - t) * m0[j] + 2 * (1 - t) * t * m1[j] + t * t * m2[j]).concat(0.0028)); }
+  g.fillStyle = "#8a3a30"; strokeVar(g, mp, p => p, p => p[2]);
 }
 
 // a measured brow's outline in head units for one side
@@ -395,14 +471,10 @@ function browLift(st, ES) {
   }
   return Math.max(0, sketchTop(ES) - sketchTop(EYES.drawn)) * st.eyeSize;
 }
-
-function paintFeatures(g, st) {
-  const H = shapeOf(st), ES = eyeOf(st.eye, st), iris = hex(st.iris);
-  for (const side of [-1, 1]) paintEye(g, H, ES, side, H.EyeSize, iris);
-  const ink = [0.09, 0.05, 0.06];
-  const browCol = css(mix(mix(hex(st.hair), hex("#3a2218"), 0.5), ink, 0.3));
+// the brow outline for the right side (x outward) at its fitted height, before the player's size / angle / spacing:
+// in the game this is the brow patch's mesh, built once; everything after it is a per-frame transform
+function browBase(st, H, ES) {
   const lift = browLift(st, ES);
-  // the brow outline for the right side (x outward), at the fitted height
   let pts;
   if (BROW_SHAPES[st.brow]) pts = browPts(H, browShape(st.brow, st), 1, lift);
   else {
@@ -413,34 +485,53 @@ function paintFeatures(g, st) {
     const bez = (a, b, c, d) => { for (let i = 1; i <= 24; i++) { const t = i / 24, u = 1 - t; pts.push([0, 1].map(j => u * u * u * a[j] + 3 * u * u * t * b[j] + 3 * u * t * t * c[j] + t * t * t * d[j])); } };
     bez(C(22, 118), C(130, 44), C(330, 18), C(498, 50)); bez(C(498, 50), C(330, 42), C(150, 74), C(28, 128));
   }
-  // player edits: size and angle about the brow's middle, then spacing (outward); height is already in BrowY.
-  // Angle > 0 turns the outer end up and the inner end down.
   let mx = 0, my = 0; for (const p of pts) { mx += p[0]; my += p[1]; } mx /= pts.length; my /= pts.length;
-  const a = st.browAngle * Math.PI / 180, ca = Math.cos(a) * st.browSize, sa = Math.sin(a) * st.browSize;
-  pts = pts.map(([x, y]) => [mx + st.browX + (x - mx) * ca - (y - my) * sa, my + (x - mx) * sa + (y - my) * ca]);
-  g.fillStyle = browCol;
+  const ink = [0.09, 0.05, 0.06];
+  return { pts, mx, my, col: css(mix(mix(hex(st.hair), hex("#3a2218"), 0.5), ink, 0.3)) };
+}
+// player edits plus the expression's offsets: size and angle about the brow's middle, then spacing (outward) and height.
+// Angle > 0 turns the outer end up and the inner end down.
+function paintBrows(g, G, st, A) {
+  const b = G.brow, a = (st.browAngle + A.angle) * Math.PI / 180, k = st.browSize * (1 + A.size);
+  const ca = Math.cos(a) * k, sa = Math.sin(a) * k, dx = st.browX + A.x, dy = A.h;
+  const pts = b.pts.map(([x, y]) => [b.mx + dx + (x - b.mx) * ca - (y - b.my) * sa, b.my + dy + (x - b.mx) * sa + (y - b.my) * ca]);
+  g.fillStyle = b.col;
   for (const side of [-1, 1]) { poly(g, pts.map(([x, y]) => [side * x, y])); g.fill(); }
-  // mouth
-  const M = (px, py) => [(px / 256 - 0.5) * H.MouthW, H.MouthY + ((1 - py / 128) - 0.5) * H.MouthH];
-  const m0 = M(70, 70), m1 = M(128, 84), m2 = M(186, 66), mp = [];
-  for (let i = 0; i <= 16; i++) { const t = i / 16; mp.push([0, 1].map(j => (1 - t) * (1 - t) * m0[j] + 2 * (1 - t) * t * m1[j] + t * t * m2[j]).concat(0.0028)); }
-  g.fillStyle = "#8a3a30"; strokeVar(g, mp, p => p, p => p[2]);
 }
 
-// the face texture, same size and layout as the game: x ∈ [−0.5, 0.5], y ∈ [−0.1, 0.9], 1024 texels
-const FT = 1024, feat = document.createElement("canvas");
-feat.width = feat.height = FT;
-function renderFeatures(st) {
-  const g = feat.getContext("2d");
+function faceGeo(st) {
+  const H = shapeOf(st), ES = eyeOf(st.eye, st);
+  return { H, ES, iris: hex(st.iris), eyes: [-1, 1].map(side => eyeGeo(H, ES, side)), brow: browBase(st, H, ES) };
+}
+const paintUnder = (g, G) => { for (const e of G.eyes) paintEyeUnder(g, e); };
+const paintOver = (g, G) => { for (const e of G.eyes) paintEyeLines(g, e); paintMouth(g, G.H); };
+function paintMoving(g, G, A) {
+  G.eyes.forEach((e, i) => { paintIris(g, e, G.iris, A.look[i][0], A.look[i][1], A.iris); paintLids(g, e, A.lidTop, A.lidBot); });
+}
+// the face at rest: eyes ahead, lids open, no expression
+const REST = { look: [[0, 0], [0, 0]], iris: 1, lidTop: 0, lidBot: 0, angle: 0, h: 0, x: 0, size: 0 };
+
+// face textures, same size and layout as the game: x ∈ [−0.5, 0.5], y ∈ [−0.1, 0.9], 1024 texels.
+// feat = everything at rest (pairing thumbnails); featUnder / featOver = the stage's two static layers.
+const FT = 1024, makeTex = () => { const c = document.createElement("canvas"); c.width = c.height = FT; return c; };
+const feat = makeTex(), featUnder = makeTex(), featOver = makeTex();
+function texCtx(cv) {
+  const g = cv.getContext("2d");
   g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, FT, FT);
   g.setTransform(FT, 0, 0, -FT, 0.5 * FT, 0.9 * FT);
-  paintFeatures(g, st);
+  return g;
 }
+function renderFull(st) {
+  const G = faceGeo(st), g = texCtx(feat);
+  paintUnder(g, G); paintMoving(g, G, REST); paintOver(g, G); paintBrows(g, G, st, REST);
+}
+function renderStatic(G) { paintUnder(texCtx(featUnder), G); paintOver(texCtx(featOver), G); }
 
 // ================================================================== drawing a view (head silhouette + the face texture)
 const SKIN = "#ffe8dc", SKIN_SHADE = "#f2c4b6", LINE = "#9c5446";
 const VIEWS = { face: [-0.56, 0.56, -0.24, 1.04], close: [-0.36, 0.36, 0.26, 0.64] };
-function drawView(cv, view, dpr) {
+// clears the canvas, draws neck, ears and head, and returns the head-units → pixels transform
+function drawHead(cv, view, dpr) {
   const g = cv.getContext("2d"), Wp = cv.width, Hp = cv.height;
   g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, Wp, Hp);
   const [x0, x1, y0, y1] = view, s = Math.min(Wp / (x1 - x0), Hp / (y1 - y0));
@@ -458,11 +549,15 @@ function drawView(cv, view, dpr) {
   for (let i = 0; i <= 120; i++) { const y = 1 - i / 120; pts.push([halfWidth(y), y]); }
   for (let i = 120; i >= 0; i--) { const y = 1 - i / 120; pts.push([-halfWidth(y), y]); }
   poly(g, pts); g.fillStyle = SKIN; g.fill(); g.stroke();
-  // face texture, sampled smoothly like the game's bilinear texture
+  return { s, ox, oy, dpr };
+}
+// a face texture, sampled smoothly like the game's bilinear texture
+function placeTex(g, T, tex) {
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
-  g.drawImage(feat, ox - 0.5 * s, oy - 0.9 * s, s, s);
+  g.drawImage(tex, T.ox - 0.5 * T.s, T.oy - 0.9 * T.s, T.s, T.s);
 }
+function drawView(cv, view, dpr) { const T = drawHead(cv, view, dpr); placeTex(cv.getContext("2d"), T, feat); }
 
 // ================================================================== state + UI
 // sliders: [state key, label, min, max, step, default, format]
@@ -479,7 +574,7 @@ const SLIDERS = {
     ["eyeX", "Spacing", -0.03, 0.03, 0.001, 0, v => (v >= 0 ? "+" : "") + v.toFixed(3)],
   ],
 };
-const state = { eye: "sharp", brow: "sharp", iris: "#c8741e", hair: "#1a1418", nose: "point", view: "face" };
+const state = { eye: "sharp", brow: "sharp", iris: "#c8741e", hair: "#1a1418", nose: "point", view: "face", expr: "neutral", look: "pointer", blink: true };
 for (const list of Object.values(SLIDERS)) for (const s of list) state[s[0]] = s[5];
 try { const saved = JSON.parse(localStorage.getItem("brow-bench-2") || "null"); if (saved) Object.assign(state, saved); } catch (e) {}
 const save = () => { try { localStorage.setItem("brow-bench-2", JSON.stringify(state)); } catch (e) {} };
@@ -487,7 +582,7 @@ const save = () => { try { localStorage.setItem("brow-bench-2", JSON.stringify(s
 const HAIRS = { "#1a1418": "Black", "#5a3624": "Brown", "#d8b56a": "Blond", "#e8e6ee": "White", "#8e2a22": "Red", "#2a3a78": "Blue" };
 const IRISES = { "#c8741e": "Amber", "#7b5cc4": "Violet", "#2f9a95": "Teal", "#3f74c9": "Blue", "#4f9a4f": "Green", "#c23a3a": "Red", "#7b8390": "Grey" };
 
-function chips(id, entries, key, decorate) {
+function chips(id, entries, key, decorate, onPick) {
   const row = document.getElementById(id);
   row.innerHTML = "";
   for (const [v, label, isNew] of entries) {
@@ -495,7 +590,7 @@ function chips(id, entries, key, decorate) {
     b.className = "chip"; b.dataset.v = v; b.textContent = label;
     if (decorate) decorate(b, v);
     if (isNew) { const n = document.createElement("span"); n.className = "new"; n.textContent = "New"; b.appendChild(n); }
-    b.addEventListener("click", () => { state[key] = v; update(); });
+    b.addEventListener("click", () => { if (onPick) onPick(v); else { state[key] = v; update(); } });
     row.appendChild(b);
   }
 }
@@ -535,8 +630,45 @@ for (const b of Object.keys(BROWS)) for (const e of Object.keys(EYES)) {
   thumbs.push({ b, e, cv, btn });
 }
 
+// ================================================================== animation: expressions, blink, look-at
+// Expressions are saved value sets, added on top of the player's sliders and blended over 0.25 s.
+//   angle (°, > 0 = outer end up / inner end down), h (brow height, head units), x (brow spacing), size (× 1 + size),
+//   lidTop / lidBot (how far the upper lid comes down / the lower lid comes up, 0..1), iris (iris size, × 1 + iris),
+//   lookY (gaze nudge, −1 down … 1 up)
+const EXPRS = {
+  neutral:   { label: "Neutral",   v: { angle: 0,   h: 0,      x: 0,      size: 0,    lidTop: 0,    lidBot: 0,    iris: 0,     lookY: 0 } },
+  angry:     { label: "Angry",     v: { angle: 14,  h: -0.012, x: -0.008, size: 0.02, lidTop: 0.22, lidBot: 0.12, iris: -0.05, lookY: 0.1 } },
+  surprised: { label: "Surprised", v: { angle: -4,  h: 0.024,  x: 0.002,  size: 0.04, lidTop: 0,    lidBot: 0,    iris: -0.2,  lookY: 0 } },
+  sad:       { label: "Sad",       v: { angle: -14, h: 0.006,  x: -0.003, size: 0,    lidTop: 0.26, lidBot: 0,    iris: 0,     lookY: -0.45 } },
+  happy:     { label: "Happy",     v: { angle: -5,  h: 0.01,   x: 0,      size: 0,    lidTop: 0.1,  lidBot: 0.42, iris: 0,     lookY: 0.05 } },
+};
+const EXPR_KEYS = Object.keys(EXPRS.neutral.v);
+if (!EXPRS[state.expr]) state.expr = "neutral";
+if (!["pointer", "wander", "ahead"].includes(state.look)) state.look = "pointer";
+const RM = matchMedia("(prefers-reduced-motion: reduce)");
+const exprNow = { ...EXPRS[state.expr].v };
+let exprFrom = { ...exprNow }, exprT0 = -1e9;
+function setExpr(name) { exprFrom = { ...exprNow }; state.expr = name; exprT0 = performance.now(); save(); refreshAnimUI(); }
+
+chips("pick-expr", Object.entries(EXPRS).map(([k, v]) => [k, v.label]), "expr", null, setExpr);
+chips("pick-look", [["pointer", "Follow the pointer"], ["wander", "Wander"], ["ahead", "Look ahead"]], "look", null,
+  v => { state.look = v; ptr = null; save(); refreshAnimUI(); });
+const blinkBtn = document.getElementById("blink");
+blinkBtn.addEventListener("click", () => { state.blink = !state.blink; blinkAt = performance.now() + 500; save(); refreshAnimUI(); });
+function refreshAnimUI() {
+  const rm = RM.matches;
+  pressRow("pick-expr", state.expr); pressRow("pick-look", state.look);
+  blinkBtn.setAttribute("aria-pressed", String(state.blink && !rm)); blinkBtn.disabled = rm;
+  document.querySelector('#pick-look [data-v="wander"]').disabled = rm;
+  document.getElementById("rm-note").hidden = !rm;
+  // while the eyes follow the pointer, a finger on the face steers them instead of scrolling the page
+  stage.style.touchAction = state.look === "pointer" ? "none" : "";
+  document.getElementById("now").textContent = `${BROWS[state.brow].label} brow · ${EYES[state.eye].label} eye · ${EXPRS[state.expr].label}`;
+}
+RM.addEventListener && RM.addEventListener("change", () => { refreshAnimUI(); stageDirty = true; });
+
 const stage = document.getElementById("c");
-let queued = false;
+let queued = false, G = null, stageT = null, stageDirty = true;
 function update() {
   save();
   pressRow("pick-brow", state.brow); pressRow("pick-eye", state.eye); pressRow("pick-hair", state.hair); pressRow("pick-iris-col", state.iris);
@@ -544,26 +676,99 @@ function update() {
   document.getElementById("v-face").setAttribute("aria-pressed", String(state.view === "face"));
   document.getElementById("v-close").setAttribute("aria-pressed", String(state.view === "close"));
   for (const s of sliderEls) { s.input.value = state[s.key]; s.out.textContent = s.fmt(state[s.key]); }
-  document.getElementById("now").textContent = `${BROWS[state.brow].label} brow · ${EYES[state.eye].label} eye`;
+  refreshAnimUI();
   if (queued) return;
   queued = true;
-  requestAnimationFrame(() => { queued = false; draw(); });
+  requestAnimationFrame(() => { queued = false; rebuild(); });
 }
-function draw() {
+// a style / colour / slider change: repaint the static layers and thumbnails once; the frame loop does the rest
+function rebuild() {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   for (const t of thumbs) {
     const r = t.cv.getBoundingClientRect();
     if (r.width > 1) { t.cv.width = Math.round(r.width * dpr); t.cv.height = Math.round(r.width / 2 * dpr); }
-    renderFeatures({ ...state, brow: t.b, eye: t.e });
+    renderFull({ ...state, brow: t.b, eye: t.e });
     drawView(t.cv, VIEWS.close, dpr);
     t.btn.setAttribute("aria-pressed", String(t.b === state.brow && t.e === state.eye));
   }
-  const r = stage.getBoundingClientRect();
-  stage.width = Math.max(1, Math.round(r.width * dpr)); stage.height = Math.max(1, Math.round(r.height * dpr));
-  renderFeatures(state);
-  drawView(stage, VIEWS[state.view], dpr);
+  const r = stage.getBoundingClientRect(), w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+  if (stage.width !== w || stage.height !== h) { stage.width = w; stage.height = h; }
+  G = faceGeo(state); renderStatic(G); stageDirty = true;
+}
+// one stage frame: head, static under-layer, irises + lids, static over-layer, brows
+function drawStage(A) {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const T = stageT = drawHead(stage, VIEWS[state.view], dpr), g = stage.getContext("2d");
+  placeTex(g, T, featUnder);
+  g.setTransform(T.s, 0, 0, -T.s, T.ox, T.oy); paintMoving(g, G, A);
+  placeTex(g, T, featOver);
+  g.setTransform(T.s, 0, 0, -T.s, T.ox, T.oy); paintBrows(g, G, state, A);
 }
 new ResizeObserver(() => update()).observe(stage);
+
+// look-at: each eye turns toward a target point a little in front of the face, so the two eyes converge on near targets.
+// The direction (−1..1 per axis) times the eye's travel (ru, rv) is the iris offset in that eye's own (u, v).
+const LOOK_DEPTH = 0.4;   // head units between the face and the plane the target moves in
+const smooth = t => t * t * (3 - 2 * t), clamp01 = t => Math.max(0, Math.min(1, t)), rnd = (a, b) => a + Math.random() * (b - a);
+let ptr = null, ptrTimer = 0, lastKey = "", lastT = performance.now();
+let blinkAt = performance.now() + rnd(1500, 4000), blinkT0 = -1e9;
+const gaze = [[0, 0], [0, 0]];
+function headPoint(e) {
+  if (!stageT) return null;
+  const r = stage.getBoundingClientRect(), d = stageT.dpr;
+  return [((e.clientX - r.left) * d - stageT.ox) / stageT.s, (stageT.oy - (e.clientY - r.top) * d) / stageT.s];
+}
+// a mouse anywhere on the page steers the eyes; a finger only on the face
+addEventListener("pointermove", e => { if (state.look === "pointer" && (e.pointerType === "mouse" || e.target === stage)) { ptr = headPoint(e); clearTimeout(ptrTimer); } });
+stage.addEventListener("pointerdown", e => { if (state.look === "pointer") { ptr = headPoint(e); clearTimeout(ptrTimer); } });
+for (const ev of ["pointerup", "pointercancel"]) stage.addEventListener(ev, e => {
+  if (e.pointerType !== "mouse") { clearTimeout(ptrTimer); ptrTimer = setTimeout(() => { ptr = null; }, 1200); }
+});
+addEventListener("mouseout", e => { if (!e.relatedTarget) ptr = null; });
+// the wandering target drifts to a new spot, rests, and drifts again
+const wander = { from: [0, 0.38], to: [0, 0.38], t0: 0, dur: 1, until: 0 };
+const wanderPos = now => { const p = smooth(clamp01((now - wander.t0) / wander.dur)); return [0, 1].map(j => wander.from[j] + (wander.to[j] - wander.from[j]) * p); };
+function wanderAt(now) {
+  if (now >= wander.until) {
+    wander.from = wanderPos(now); wander.to = [rnd(-0.55, 0.55), rnd(0.05, 0.8)];
+    wander.t0 = now; wander.dur = rnd(900, 1700); wander.until = now + wander.dur + rnd(700, 2600);
+  }
+  return wanderPos(now);
+}
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.05, Math.max(0, (now - lastT) / 1000)); lastT = now;
+  if (!G) return;
+  const rm = RM.matches;
+  // expression blend (instant under reduced motion)
+  const p = rm ? 1 : smooth(clamp01((now - exprT0) / 250)), to = EXPRS[state.expr].v;
+  for (const k of EXPR_KEYS) exprNow[k] = exprFrom[k] + (to[k] - exprFrom[k]) * p;
+  // blink: 60 ms down, 110 ms up, every 2.5–5.5 s, now and then a double blink
+  let b = 0;
+  if (state.blink && !rm) {
+    if (now >= blinkAt) { blinkT0 = now; blinkAt = now + (Math.random() < 0.15 ? 280 : rnd(2500, 5500)); }
+    const t = (now - blinkT0) / 1000;
+    if (t < 0.17) b = smooth(clamp01(t < 0.06 ? t / 0.06 : 1 - (t - 0.06) / 0.11));
+  }
+  // where the eyes look
+  const target = state.look === "pointer" ? ptr : state.look === "wander" && !rm ? wanderAt(now) : null;
+  const A = { look: [], iris: 1 + exprNow.iris, lidTop: exprNow.lidTop + (1 - exprNow.lidTop) * b, lidBot: exprNow.lidBot,
+              angle: exprNow.angle, h: exprNow.h, x: exprNow.x, size: exprNow.size };
+  const f = 1 - Math.exp(-dt / 0.055);
+  G.eyes.forEach((e, i) => {
+    let w = [0, 0];
+    if (target) { const dx = target[0] - e.centre[0], dy = target[1] - e.centre[1], l = Math.hypot(dx, dy, LOOK_DEPTH); w = [dx / l, dy / l]; }
+    w[1] += exprNow.lookY;
+    const m = Math.hypot(w[0], w[1]); if (m > 1) w = [w[0] / m, w[1] / m];   // never past the travel ellipse
+    gaze[i][0] += (w[0] - gaze[i][0]) * f; gaze[i][1] += (w[1] - gaze[i][1]) * f;
+    A.look.push([e.side * gaze[i][0] * e.ru, gaze[i][1] * e.rv]);   // u points outward on both sides
+  });
+  // redraw only when something moved
+  const key = [A.iris, A.lidTop, A.lidBot, A.angle, A.h, A.x, A.size, ...A.look.flat()].map(v => v.toFixed(4)).join();
+  if (stageDirty || key !== lastKey) { stageDirty = false; lastKey = key; drawStage(A); }
+}
+requestAnimationFrame(frame);
 
 // ================================================================== tracing check (the drawing, displayed at 924 × 2000; the file is 1170 × 2532)
 const sketch = new Image();
