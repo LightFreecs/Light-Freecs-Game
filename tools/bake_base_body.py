@@ -86,6 +86,25 @@ used = np.unique(tri); remap = -np.ones(len(g), int); remap[used] = np.arange(le
 n = len(g)
 print('verts', n, 'tris', len(tri), 'neck centre z', round(zc, 4))
 
+# fill the waist: the mesh pinches in between the ribs and the hips (0.144 m half width at 1.37 m against 0.171 m at
+# 1.24 m and ~0.167 m under the armpits), which reads as a hungry dip from the front and back. Push the sides out
+# towards a straight rib-to-hip line (85 % of the gap); the middle of the front and back stays where it is.
+def waist_fill(g, y0=1.22, y1=1.47, fill=0.85):
+    out = g.copy()
+    flank = (g[:, 1] > y0 - 0.01) & (g[:, 1] < y1 + 0.01) & (np.abs(g[:, 0]) < 0.2)
+    ys = np.arange(y0, y1 + 1e-6, 0.01)
+    half = np.array([np.abs(g[flank & (np.abs(g[:, 1] - y) < 0.005), 0]).max() for y in ys])
+    line = np.interp(ys, [y0 + 0.02, y1 - 0.01], [half[2], 0.167])
+    gap = np.maximum(0, line - half) * fill
+    gap *= np.sin(np.clip((ys - y0) / (y1 - y0), 0, 1) * np.pi) ** 0.5     # fades out at both ends
+    m = np.where(flank)[0]
+    w = np.interp(g[m, 1], ys, half); d = np.interp(g[m, 1], ys, gap)
+    side = np.clip(np.abs(g[m, 0]) / w, 0, 1) ** 2.5
+    out[m, 0] = g[m, 0] * (1 + d / w * side)
+    return out, ys, half, half + gap
+g, _ys, _before, _after = waist_fill(g)
+print('waist fill: half width at 1.37 m', round(float(np.interp(1.37, _ys, _before)), 3), '->', round(float(np.interp(1.37, _ys, _after)), 3))
+
 # ---------------------------------------------------------------- joints (right side measured, left mirrored)
 J = np.zeros((NB, 3))
 def setj(name, x, y, z, mirror=True):
