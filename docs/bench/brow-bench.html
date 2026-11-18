@@ -142,13 +142,14 @@ code{font-family:var(--f-mono);font-size:12.5px}
       <figure><canvas id="t-eye" width="560" height="450"></canvas><figcaption>Sharp eye: lid lines at their real thickness, iris dashed</figcaption></figure>
       <figure><canvas id="t-brow" width="540" height="540"></canvas><figcaption>Sharp brow: the filled shape</figcaption></figure>
       <figure><canvas id="t-arch" width="400" height="400"></canvas><figcaption>Arch eye: lid lines at their real thickness, iris dashed</figcaption></figure>
+      <figure><canvas id="t-peak" width="486" height="280"></canvas><figcaption>Peak brow: the filled shape (the soft shadow under its tip is left out)</figcaption></figure>
     </div>
   </section>
 
   <section class="card">
     <h2>What goes into the game once you're happy</h2>
     <ul>
-      <li>A <b>Brow</b> picker in the character creator: Classic (today's brow) and Sharp. More styles slot in as you send them.</li>
+      <li>A <b>Brow</b> picker in the character creator: Classic (today's brow), Sharp and Peak. More styles slot in as you send them.</li>
       <li>New <b>Sharp</b> and <b>Arch</b> eyes next to Drawn, Tall, Wide and Hand-made.</li>
       <li>The brow rests on whichever eye is picked, and the player can then change its size, angle, height and spacing.</li>
       <li>Brow colour still follows the hair colour.</li>
@@ -228,9 +229,25 @@ const SHARP_BROW_DRAWN = {
   bottom: [[1.195,0.625],[1.124,0.612],[1.048,0.607],[0.972,0.592],[0.896,0.544],[0.82,0.488],[0.744,0.44],[0.668,0.382],[0.592,0.324],
            [0.516,0.258],[0.441,0.197],[0.365,0.147],[0.289,0.111],[0.213,0.088],[0.137,0.073],[0.051,0.06],[-0.025,0.055]],
 };
+SHARP_BROW_DRAWN.edges = [SHARP_BROW_DRAWN.top, SHARP_BROW_DRAWN.end, SHARP_BROW_DRAWN.bottom];
+SHARP_BROW_DRAWN.under = [SHARP_BROW_DRAWN.bottom];
+// Peak brow measured from the owner's reference picture (brow-ref-peak.jpg): a thin stroke rising from the outer tip to a sharp
+// peak, then a long arm tapering down toward the nose. Centre line + thickness per column, offset to an outline with a mitred
+// peak. Eye frame of the picture: u = (194 − x) / 155, v = (265 − y) / 155. It rests 0.34 eye widths above the upper lid.
+const PEAK_BROW_DRAWN = {
+  edges: [
+    [[1.227,0.73],[1.169,0.804],[1.098,0.892],[0.999,1.007],[0.899,1.112],[0.825,1.193],[0.742,1.278]],
+    [[0.742,1.278],[0.661,1.26],[0.582,1.233],[0.479,1.191],[0.377,1.142],[0.275,1.09],[0.173,1.036],[0.071,0.976],[-0.032,0.914],[-0.135,0.843],[-0.211,0.79],[-0.266,0.747]],
+    [[-0.263,0.744],[-0.202,0.777],[-0.123,0.826],[-0.02,0.895],[0.083,0.955],[0.188,1.007],[0.293,1.053],[0.397,1.095],[0.502,1.132],[0.605,1.164],[0.681,1.185],[0.718,1.194]],
+    [[0.718,1.194],[0.775,1.142],[0.855,1.067],[0.962,0.971],[1.07,0.865],[1.153,0.788],[1.224,0.728]],
+  ],
+  gap: 0.34,
+};
+PEAK_BROW_DRAWN.under = [PEAK_BROW_DRAWN.edges[2], PEAK_BROW_DRAWN.edges[3]];
+const BROW_SHAPES = { sharp: SHARP_BROW_DRAWN, peak: PEAK_BROW_DRAWN };
 // brow units: (u − 0.5, v − 0.935) × 0.17 head units from (EyeX, BrowY) — at default sliders that puts it where the drawing has it over the Sharp eye
 const BROW_SCALE = 0.17, BROW_DV = 0.935;
-const BROWS = { classic: { label: "Classic" }, sharp: { label: "Sharp", isNew: true } };
+const BROWS = { classic: { label: "Classic" }, sharp: { label: "Sharp", isNew: true }, peak: { label: "Peak", isNew: true } };
 
 // orientation / iris options from the "two things to settle" card
 const flipPts = pts => pts.map(p => [1 - p[0], ...p.slice(1)]);
@@ -245,10 +262,12 @@ function ownerEye(name, st) {
   return e;
 }
 const eyeOf = (name, st) => EYES[name].fromSketch ? ownerEye(name, st) : EYES[name];
-function sharpBrow(st) {
-  const b = SHARP_BROW_DRAWN;
-  return st.nose === "thick" ? { top: flipPts(b.top), end: flipPts(b.end), bottom: flipPts(b.bottom) } : b;
+function browShape(name, st) {
+  const b = BROW_SHAPES[name];
+  return st.nose === "thick" ? { ...b, edges: b.edges.map(flipPts), under: b.under.map(flipPts) } : b;
 }
+// densify each edge on its own so the corners between edges stay sharp
+const chain = edges => edges.flatMap((e, i) => i ? densify(e, 6).slice(1) : densify(e, 6));
 
 // ================================================================== curve helpers (same as the C#)
 const pw = pts => u => {
@@ -327,15 +346,15 @@ function paintEye(g, H, ES, side, sz, iris) {
   if (ES.Lower) st(ES.Lower);
 }
 
-// Sharp brow outline in head units for one side
-function sharpBrowPts(H, B, side, lift) {
+// a measured brow's outline in head units for one side
+function browPts(H, B, side, lift) {
   const P = p => [side * (H.EyeX + BROW_SCALE * (p[0] - 0.5)), H.BrowY + lift + BROW_SCALE * (p[1] - BROW_DV)];
-  return [...densify(B.top, 6), ...densify(B.end, 6).slice(1), ...densify(B.bottom, 6).slice(1)].map(P);
+  return chain(B.edges).map(P);
 }
-// how far the eye's upper lid reaches above the Sharp brow's lower edge (right side, brow at lift 0)
+// how far the eye's upper lid reaches above the brow's lower edge (right side, brow at lift 0)
 function poke(H, ES, B) {
   const W = ES.Width * H.EyeSize;
-  const bottom = densify(B.bottom, 6).map(p => [H.EyeX + BROW_SCALE * (p[0] - 0.5), H.BrowY + BROW_SCALE * (p[1] - BROW_DV)]).sort((a, b) => a[0] - b[0]);
+  const bottom = B.under.flatMap(e => densify(e, 6)).map(p => [H.EyeX + BROW_SCALE * (p[0] - 0.5), H.BrowY + BROW_SCALE * (p[1] - BROW_DV)]).sort((a, b) => a[0] - b[0]);
   const lids = [ES.Upper, ...(ES.Extra || [])];
   let m = -1e9;
   for (const L of lids) for (const p of densify(L, 6)) {
@@ -350,8 +369,14 @@ function poke(H, ES, B) {
 function browLift(st, ES) {
   const H0 = shapeOf({ ...st, browH: 0 });   // fit at the default brow height, then the slider moves it on top
   if (st.brow === "sharp") {
-    const B = sharpBrow(st), ref = poke(shapeOf({ ...st, browH: 0, eyeSize: 1 }), ownerEye("sharp", st), B);
+    // sits on the eye the way the drawing has it over the Sharp eye; only moves up for eyes that reach higher
+    const B = browShape("sharp", st), ref = poke(shapeOf({ ...st, browH: 0, eyeSize: 1 }), ownerEye("sharp", st), B);
     return Math.max(0, poke(H0, ES, B) - ref);
+  }
+  if (st.brow === "peak") {
+    // rests a fixed gap (in eye widths) above whichever eye is picked, as in the reference picture
+    const B = browShape("peak", st);
+    return poke(H0, ES, B) + B.gap * ES.Width * H0.EyeSize;
   }
   return Math.max(0, sketchTop(ES) - sketchTop(EYES.drawn)) * st.eyeSize;
 }
@@ -364,7 +389,7 @@ function paintFeatures(g, st) {
   const lift = browLift(st, ES);
   // the brow outline for the right side (x outward), at the fitted height
   let pts;
-  if (st.brow === "sharp") pts = sharpBrowPts(H, sharpBrow(st), 1, lift);
+  if (BROW_SHAPES[st.brow]) pts = browPts(H, browShape(st.brow, st), 1, lift);
   else {
     // Classic: PaintBrow, from the bench's 512 × 128 canvas path (canvas y down)
     const cx = H.EyeX + 0.01, cy = H.BrowY + lift, w = 0.215, h = 0.066;
@@ -537,7 +562,7 @@ sketch.onload = () => {
   // brow: x = 650 − 395 u, y = 1275 − 395 (v − 0.063)
   g = crop(document.getElementById("t-brow"), 150, 890);
   const Pb = p => [650 - 395 * p[0], 1275 - 395 * (p[1] - 0.063)], B = SHARP_BROW_DRAWN;
-  const out = [...densify(B.top, 6), ...densify(B.end, 6).slice(1), ...densify(B.bottom, 6).slice(1)].map(Pb);
+  const out = chain(B.edges).map(Pb);
   g.fillStyle = "rgba(242,107,29,0.4)"; poly(g, out); g.fill();
   g.strokeStyle = orange; g.lineWidth = 3; g.lineJoin = "round"; g.stroke();
 };
@@ -562,6 +587,17 @@ archSketch.onload = () => {
   traceEye(g, EYES.arch, 640, 1092, 310);
 };
 archSketch.src = "eye-sketch-arch.png";
+// Peak brow: x = 194 − 155 u, y = 265 − 155 v; picture shown at 2×
+const peakRef = new Image();
+peakRef.onload = () => {
+  const cv = document.getElementById("t-peak"), g = cv.getContext("2d"), sx = 0, sy = 40, s = 2;
+  g.drawImage(peakRef, sx, sy, cv.width / s, cv.height / s, 0, 0, cv.width, cv.height);
+  g.setTransform(s, 0, 0, s, -sx * s, -sy * s);
+  const P = p => [194 - 155 * p[0], 265 - 155 * p[1]];
+  g.fillStyle = "rgba(242,107,29,0.4)"; poly(g, chain(PEAK_BROW_DRAWN.edges).map(P)); g.fill();
+  g.strokeStyle = "rgba(242,107,29,0.9)"; g.lineWidth = 1; g.lineJoin = "round"; g.stroke();
+};
+peakRef.src = "brow-ref-peak.jpg";
 
 update();
 </script>
