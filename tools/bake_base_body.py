@@ -2,12 +2,14 @@
 """Bakes the anime base mesh (binary FBX, Z up, centimetres, facing -Y) into Assets/_Project/Resources/Bodies/BaseBody.bytes.
 
 Usage:  python tools/bake_base_body.py "character base.fbx" Assets/_Project/Resources/Bodies/BaseBody.bytes
-Needs numpy. The joint positions below were measured on that mesh; a different mesh needs new joints.
+Needs numpy and scipy. The joint positions below were measured on that mesh; a different mesh needs new joints.
 Format (little endian): "LBB1", int bones, float chinY, neckZ, trunksTop, trunksBottom, bones x float3 joints,
 then 3 parts (body, trunks, waistband): int verts, int tris, verts x float3, verts x 4 byte bone ids,
 verts x 4 float weights, tris x 3 ushort.
 """
 import struct, zlib, sys, numpy as np
+import scipy.sparse as sp, scipy.sparse.linalg as spl
+from scipy.sparse.csgraph import connected_components
 
 
 def read_fbx(path):
@@ -56,8 +58,10 @@ def read_fbx(path):
 
 
 # (bake) the owner's anime base mesh into the game's body asset:
-# game coordinates (metres, +Y up, +Z forward, chin at 1.83), head removed under the jaw, skin weights for the 42-bone
-# fighter rig (CharacterBone order), arms re-posed from the mesh's 14° to the rig's 40° A-pose, trunks + waistband.
+# game coordinates (metres, +Y up, +Z forward, chin at 1.83), the mesh's own head + neck replaced by a clean neck tube that
+# reaches up inside the Toon Head, skin weights for the 42-bone fighter rig (CharacterBone order) by heat diffusion, arms
+# re-posed from the mesh's 14.6° to the rig's 40° A-pose so that the game's skinning gives back the sculpt when the arms
+# hang at 14.6° again, trunks + waistband.
 
 BONES = ("Hips Spine Chest UpperChest Neck Head "
          "LeftShoulder LeftUpperArm LeftLowerArm LeftHand RightShoulder RightUpperArm RightLowerArm RightHand "
@@ -69,6 +73,11 @@ BONES = ("Hips Spine Chest UpperChest Neck Head "
 NB = len(BONES); BI = {n: i for i, n in enumerate(BONES)}
 assert NB == 42
 
+
+def smoothstep(a, b, x):
+    t = np.clip((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t)
+
+
 # ---------------------------------------------------------------- mesh in game coordinates
 v, p = read_fbx(sys.argv[1])
 tri = np.where(p < 0, ~p, p).reshape(-1, 3)
@@ -78,14 +87,53 @@ g = np.stack([v[:, 0] * s, (v[:, 2] - floor) * s, -(v[:, 1] - 3.1) * s], 1)
 # neck centre just under the jaw
 sl = g[(g[:, 1] > 1.79) & (g[:, 1] < 1.80)]
 zc = float((sl[:, 2].min() + sl[:, 2].max()) / 2)
-# slanted cut: the mesh's own neck stays up to just under the chin (1.825 m) at the front and 1.93 m at the back, where
-# the Toon Head's short neck collar (its first neck row) covers it
-def cut_y(z): return 1.825 + np.clip((zc - z) / 0.06, 0, 1) * 0.105
-keep = np.all(g[tri][:, :, 1] < cut_y(g[tri][:, :, 2]), 1)
-tri = tri[keep]
+
+# keep only the body: the mesh's head + neck is a separate piece that only overlaps the shoulders by a few millimetres
+# (skinned apart, the two opened a seam at the base of the neck); the body gets a new neck below
+lab = connected_components(sp.coo_matrix((np.ones(tri.size), (tri.ravel(), np.roll(tri, 1, 1).ravel())), shape=(len(g), len(g))),
+                           directed=False)[1]
+tri = tri[lab[tri[:, 0]] == np.bincount(lab).argmax()]
 used = np.unique(tri); remap = -np.ones(len(g), int); remap[used] = np.arange(len(used)); g = g[used]; tri = remap[tri]
+
+
+def boundary_loop(tri, ok):
+    """The open edge loop through vertices where ok, in the triangles' order (each edge a -> b as a triangle has it)."""
+    e = np.concatenate([tri[:, [0, 1]], tri[:, [1, 2]], tri[:, [2, 0]]])
+    _, inv, cnt = np.unique(np.sort(e, 1), axis=0, return_inverse=True, return_counts=True)
+    b = e[(cnt[inv.ravel()] == 1) & ok[e[:, 0]] & ok[e[:, 1]]]
+    nxt = dict(zip(b[:, 0].tolist(), b[:, 1].tolist()))
+    loop = [int(b[0, 0])]
+    while nxt[loop[-1]] != loop[0]: loop.append(nxt[loop[-1]])
+    assert len(loop) == len(b), 'the neck opening is not one loop'
+    return np.array(loop)
+
+
+# new neck: a clean tube from the body's neck opening (1.79 m at the front, 1.81 m at the back) straight up to NECK_TOP,
+# well inside the Toon Head. Its first 3 cm round off from the opening's shape into an ellipse; in the game its top is
+# fitted just outside the head's neck collar (FitNeck) and turns with the head, so the collar's rim and the tube's top
+# both stay hidden.
+NECK_TOP, NECK_ROWS = 2.03, 24
+rim = boundary_loop(tri, g[:, 1] > 1.7)
+Rm = g[rim]
+ex, ef, eb = np.abs(Rm[:, 0]).max(), Rm[:, 2].max() - zc, zc - Rm[:, 2].min()
+phi = np.arctan2(Rm[:, 0] / ex, (Rm[:, 2] - zc) / np.where(Rm[:, 2] >= zc, ef, eb))
+ell = np.stack([ex * np.sin(phi), np.zeros(len(Rm)), zc + np.where(np.cos(phi) >= 0, ef, eb) * np.cos(phi)], 1)
+rows = [rim]
+for k in range(1, NECK_ROWS + 1):
+    yk = Rm[:, 1] + (NECK_TOP - Rm[:, 1]) * k / NECK_ROWS
+    b = smoothstep(0, 0.03, yk - Rm[:, 1])
+    P = Rm * (1 - b)[:, None] + ell * b[:, None]; P[:, 1] = yk
+    rows.append(np.arange(len(g), len(g) + len(Rm))); g = np.concatenate([g, P])
+quads = []
+for k in range(NECK_ROWS):
+    a, c = rows[k], rows[k + 1]
+    for i in range(len(rim)):
+        j = (i + 1) % len(rim)      # the body has the opening's edge a[i] -> a[j]; the tube runs it the other way
+        quads += [(a[j], a[i], c[i]), (a[j], c[i], c[j])]
+tri = np.concatenate([tri, np.array(quads)])
 n = len(g)
-print('verts', n, 'tris', len(tri), 'neck centre z', round(zc, 4))
+neck_tube = np.zeros(n, bool); neck_tube[len(g) - NECK_ROWS * len(rim):] = True
+print('verts', n, 'tris', len(tri), 'neck centre z', round(zc, 4), 'neck opening', len(rim), 'verts')
 
 # fill the waist: the mesh pinches in between the ribs and the hips (0.144 m half width at 1.37 m against 0.171 m at
 # 1.24 m and ~0.167 m under the armpits), which reads as a hungry dip from the front and back. Push the sides out
@@ -171,14 +219,13 @@ allow(torso, lambda S: [S + 'Shoulder'])
 allow(torso & (y > 1.56), lambda S: [S + 'UpperArm'])   # only the shoulder cap; the lats and ribs stay on the torso
 allow(torso & (y < 1.16), lambda S: [S + 'UpperLeg'])
 
-W = np.zeros((n, NB), np.float32)
 Dm = np.where(allowed, D, 1e9)
-W[np.arange(n), Dm.argmin(1)] = 1
+nearest = Dm.argmin(1)
+dist = Dm[np.arange(n), nearest]
 
 # hand: palm → Hand; fingers by their position across the hand; thumb at the front
 for sd, S in ((1, 'Right'), (-1, 'Left')):
     hm = np.where(hand & (side == sd))[0]
-    W[hm] = 0
     P = g[hm]
     thumb = (P[:, 2] > 0.019) & (P[:, 1] < 1.055)
     for k, i in enumerate(hm):
@@ -189,34 +236,43 @@ for sd, S in ((1, 'Right'), (-1, 'Left')):
             f = min(FZ, key=lambda f: abs(pz - FZ[f]))
             if py > FK[f]: b = S + 'Hand'
             else: b = S + f + ('Proximal' if py > FM[f] else 'Intermediate')
-        W[i, BI[b]] = 1
+        nearest[i] = BI[b]; dist[i] = D[i, BI[b]]
 
-# ---------------------------------------------------------------- smoothing over the mesh (blends the joints)
-nbr = [[] for _ in range(n)]
-for a, b, c in tri:
-    nbr[a] += [b, c]; nbr[b] += [a, c]; nbr[c] += [a, b]
-rows = np.repeat(np.arange(n), [len(x) for x in nbr]); cols = np.concatenate([np.array(x, int) for x in nbr])
-deg = np.bincount(rows, minlength=n).astype(np.float32)
-def smooth(W, iters, mask=None):
-    for _ in range(iters):
-        acc = np.zeros_like(W); np.add.at(acc, rows, W[cols])
-        Wn = 0.5 * W + 0.5 * acc / np.maximum(deg, 1)[:, None]
-        W = Wn if mask is None else np.where(mask[:, None], Wn, W)
-    return W
-body_mask = ~hand
-W = smooth(W, 14, body_mask)          # elbows, knees, shoulders, hips, spine
-W = smooth(W, 3)                      # knuckles and the wrist get a light blend
-
-# torso skin follows the arm only from the armpit up: fade arm weights out below it (else the lats bulge when the arm moves)
+# ---------------------------------------------------------------- skin weights by heat diffusion (bone heat)
+# Each bone's weight w solves (L + M H) w = M H p over the surface: p = 1 where the bone is the vertex's nearest allowed
+# bone, H = HEAT / d² (d = distance to that bone, clamped), L = cotangent Laplacian, M = vertex areas. The weights fall off
+# smoothly over about a limb's thickness at every joint (elbows, knees, shoulders, spine), instead of the sharp steps that
+# folded into creases when the joints turned.
+HEAT, DMIN, DMAX = 1.0, 0.006, 0.05
+a_, b_, c_ = tri.T
+def cot(p0, p1, p2):
+    u = g[p1] - g[p0]; w = g[p2] - g[p0]
+    return np.clip((u * w).sum(1) / np.maximum(np.linalg.norm(np.cross(u, w), axis=1), 1e-12), 0, None)
+ca, cb, cc = cot(a_, b_, c_), cot(b_, c_, a_), cot(c_, a_, b_)
+Wl = sp.coo_matrix((0.5 * np.concatenate([ca, ca, cb, cb, cc, cc]),
+                    (np.concatenate([b_, c_, c_, a_, a_, b_]), np.concatenate([c_, b_, a_, c_, b_, a_]))), shape=(n, n)).tocsr()
+Lap = sp.diags(np.asarray(Wl.sum(1)).ravel()) - Wl
+area = np.linalg.norm(np.cross(g[b_] - g[a_], g[c_] - g[a_]), axis=1) / 2
+Mass = np.bincount(tri.ravel(), np.repeat(area, 3), n) / 3
+H = Mass * HEAT / np.clip(dist, DMIN, DMAX) ** 2
+Pn = np.zeros((n, NB)); Pn[np.arange(n), nearest] = 1
 arm_bones = [BI[b] for b in BONES if ('Arm' in b or 'Hand' in b or 'Thumb' in b or 'Index' in b or 'Middle' in b or 'Ring' in b or 'Little' in b)]
-fade = np.where(torso, np.clip((y - 1.50) / 0.10, 0, 1) ** 2, 1.0)
-moved = W[:, arm_bones].sum(1) * (1 - fade)
-W[:, arm_bones] *= fade[:, None]
-chest_side = np.where(y > 1.47, BI['UpperChest'], BI['Chest'])
-W[np.arange(n), chest_side] += moved
+body_cols = [i for i in range(NB) if i not in arm_bones]
+W = np.zeros((n, NB))
+W[:, body_cols] = spl.splu((Lap + sp.diags(H)).tocsc()).solve(H[:, None] * Pn[:, body_cols])
+# no arm weight on the ribs and lats below the armpit (else they bulge when the arm moves) or on the trapezius next to the
+# neck (else raised arms pull the base of the neck up): those are pinned to 0 for the arm bones, the pin fading in over
+# a few centimetres so the arm's weight still falls off smoothly between them and the shoulder
+pin = np.where(torso, np.maximum(smoothstep(1.53, 1.47, y), smoothstep(0.12, 0.07, ax)), 0)
+Hp = H + Mass * 1e5 * pin ** 2
+W[:, arm_bones] = spl.splu((Lap + sp.diags(Hp)).tocsc()).solve(H[:, None] * Pn[:, arm_bones])
+W = np.clip(W, 0, None); W /= W.sum(1, keepdims=True)
 
-# top of the neck turns partly with the head (it sits inside the Toon Head's collar, which is skinned to the head)
-hw = np.where(torso, np.clip((y - 1.79) / 0.07, 0, 1) * 0.7, 0)
+# neck: from the base of the neck up into the head the tube turns with the head, fully from just above the bottom of the
+# Toon Head's collar (its first neck row: 1.814 m at the front, 1.907 m at the back), so the part inside the head moves
+# with it whatever the pose
+collar_y = 1.814 + smoothstep(0, 1, (0.02 - g[:, 2]) / 0.11) * 0.093
+hw = np.where(torso & (ax < 0.12), smoothstep(collar_y - 0.035, collar_y + 0.005, y), 0)
 W *= (1 - hw)[:, None]
 W[:, BI['Head']] += hw
 
@@ -227,6 +283,10 @@ def top4(W):
 WI, WW = top4(W)
 
 # ---------------------------------------------------------------- re-pose the arms to the rig's 40° A-pose (rotation about the shoulder joint)
+# Inverse skinning: the bind-pose position B of each vertex is chosen so that the game's linear skinning, turning the arm
+# bones back down to the mesh's own 14.6°, lands exactly on the sculpt (B = c + M⁻¹ (g − c), M = (1 − w) I + w R_down,
+# w = the vertex's arm weight). Arms at the sides look as modelled; a plain rotation would lose the shoulder's volume
+# twice (once here, once in the game) and sink the shoulders.
 ARM_NATIVE = np.degrees(np.arctan2(0.346 - 0.213, 1.60 - 1.088))
 ROT = 40.0 - ARM_NATIVE
 def rotz(deg):
@@ -237,11 +297,15 @@ armset = {sd: [BI[b] for b in BONES if b.startswith(S) and ('Arm' in b or 'Hand'
 def repose(P, WI, WW):
     out = P.copy()
     for sd in (1, -1):
-        R = rotz(sd * ROT); c = J[armset[sd][0]]
+        c = J[armset[sd][0]]
         wa = np.zeros(len(P))
         for k in range(4): wa += np.where(np.isin(WI[:, k], armset[sd]), WW[:, k], 0)
-        rot = (P - c) @ R.T + c
-        out = out + wa[:, None] * (rot - P)
+        m = wa > 0
+        a = np.radians(-sd * ROT)                         # R_down: from the 40° bind back to the mesh's angle
+        A = (1 - wa[m]) + wa[m] * np.cos(a); Bs = wa[m] * np.sin(a)
+        d = P[m] - c; det = A * A + Bs * Bs
+        out[m, 0] = c[0] + (A * d[:, 0] + Bs * d[:, 1]) / det
+        out[m, 1] = c[1] + (-Bs * d[:, 0] + A * d[:, 1]) / det
     return out
 gb = repose(g, WI, WW)
 Jb = J.copy()
@@ -290,7 +354,6 @@ print('trunks', len(trunks[0]), len(trunks[3]), 'band', len(waist[0]), len(waist
 
 # ---------------------------------------------------------------- write  (Resources/Bodies/BaseBody.bytes)
 out = sys.argv[2] if len(sys.argv) > 2 else 'BaseBody.bytes'
-armDirR = Jb[BI['RightHand']] - Jb[BI['RightUpperArm']]; armDirR /= np.linalg.norm(armDirR)
 with open(out, 'wb') as f:
     f.write(b'LBB1'); f.write(struct.pack('<i', NB))
     f.write(struct.pack('<4f', CHIN, zc, TOP, BOT))

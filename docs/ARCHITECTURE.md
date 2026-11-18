@@ -541,6 +541,29 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     `ToonHead.MeshData.CollarTriangleCount`). `FitHeadNeckToBody` sizes that collar to the body's neck measured at
     `BaseBody.CollarY` (1.815 m; +3 %), times the player's neck-width slider; `FitNeck` (1.795 → 1.815 m) fits the
     neck's top just inside the collar either way.
+  - Rig rework after the owner's screenshots (front: shoulders looked dropped with dark crease lines; a dark ring / hole
+    under the jaw; side: a line over the shoulder; chest-side lines in the idle pose). Causes found by exporting the posed
+    fighter from Unity (batch mode) and rendering it offline with the game's inverted-hull outline:
+    (1) arm weights stepped from 1 to 0 within ~1 cm over the shoulder (14 smoothing rounds only reach 2-3 edges of this
+    1 cm mesh) and the elbow blend was a 1 cm zig-zag, so joints folded into creases that the outline drew as lines;
+    (2) the bake raised the arms 14.6° → 40° by plain linear skinning, which sank the shoulder tops (and the game's skinning
+    back down sank them again); (3) the mesh's neck is a separate piece only a few mm into the shoulders, skinned apart
+    from the body; (4) the collar was 3 % wider than the body's neck (front: a 2 mm gap showing the collar's dark inner
+    hull) and the body's neck stopped 1.5 cm under the collar at the sides (a see-through gap).
+    Now: weights by heat diffusion (bone heat: (L + M H) w = M H p, cotangent Laplacian, H = 1 / d² with d clamped to
+    6-50 mm, p = nearest allowed bone / the hand rules), so every joint blends over about a limb's thickness; arm weight is
+    pinned off the ribs / lats below the armpit (1.53 → 1.47 m) and off the trapezius next to the neck (|x| 0.12 → 0.07 m)
+    with a ramped pin. The repose is inverse skinning: bind positions B = c + M⁻¹(g − c), M = (1 − w) I + w R_down, so
+    the game's skinning lands exactly on the sculpt with the arms at 14.6° (rest pose 11°, menu ~30°). The mesh's head +
+    neck piece is dropped and the body's neck opening (50-vertex loop, 1.79 m front / 1.81 m back) is extruded into a
+    clean tube up to 2.03 m (24 rows, rounding into an ellipse over the first 3 cm), fully on the Head bone from just
+    above the collar's bottom row (1.814 m front → 1.907 m back). In the builder the collar matches the body's neck
+    (no +3 %), `FitNeck` puts the tube 3 % outside it (`NeckOverCollar`) and tapers it to 60 % from 1.2 cm above the
+    head's neck top (`ToonHead.NeckTopHeight`, so a narrow jaw + wide neck can't push it out), and the collar's bottom
+    row is tucked to 85 % (`CollarRimTuck`, `ToonHead.MeshData.CollarRimStart`), so both edges stay hidden.
+    Checked offline (menu, idle, arms down / up, guard, punch, head turned ±40° / tilted, neck slider 0.75 / 1.35 with a
+    narrow jaw): no neck gap or ring, no shoulder creases. Arms raised to horizontal still lift the trapezius a little
+    (linear skinning; an automatic clavicle lift would be the next step).
   - `Characters/BaseBody.cs`: loads/parses `Resources/Bodies/BaseBody.bytes` ("LBB1": chin, neck z, trunks range, joints,
     body / trunks / band parts). `EnsureLoaded` runs on the main thread wherever `ToonEyeLayers.EnsureLoaded` does.
   - `CharacterRecipe.body` (`BodyModel.Procedural` = the old SDF body + outfits, still used by the test recipes;

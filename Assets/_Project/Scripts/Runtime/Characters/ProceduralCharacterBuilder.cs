@@ -588,7 +588,11 @@ namespace LightMMORPG.Characters
                 for (int i = 0; i < mesh.Positions.Count; i++)
                 {
                     Vector3 hp = mesh.Positions[i], n = mesh.Normals[i], fc = mesh.FaceCoords[i];
-                    _buf.Positions.Add(HeadToModel(hp));
+                    // base mesh body: the collar's bottom edge tucks inside the body's neck tube (FitHeadNeckToBody)
+                    Vector3 mp = hp;
+                    if (_mesh && i >= mesh.CollarRimStart && i < mesh.CollarRimStart + ToonHead.Cols)
+                        mp = new Vector3(hp.x * CollarRimTuck, hp.y, _toon.NeckZ + (hp.z - _toon.NeckZ) * CollarRimTuck);
+                    _buf.Positions.Add(HeadToModel(mp));
                     _buf.Normals.Add(n);
                     _buf.Uvs.Add(ToonFacePainter.Uv(hp));
                     float nb = mesh.NeckBlend[i];

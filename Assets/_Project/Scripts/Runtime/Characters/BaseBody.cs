@@ -7,9 +7,10 @@ namespace LightMMORPG.Characters
     /// <summary>
     /// The fighter's body: the owner's anime base mesh (used with the author's permission), baked into
     /// <c>Resources/Bodies/BaseBody.bytes</c> by <c>tools/bake_base_body.py</c>. Game coordinates (metres, +Y up, +Z forward,
-    /// chin at <see cref="Data.ChinY"/>), its own head removed under the jaw (the Toon Head goes on the neck), arms re-posed
-    /// to the rig's 40° A-pose, skin weights for every <see cref="CharacterBone"/> (fingers included), plus trunks and a
-    /// waistband copied from the body surface with matching weights.
+    /// chin at <see cref="Data.ChinY"/>), its own head and neck replaced by a clean neck tube that reaches up inside the Toon
+    /// Head (its top turns with the head), arms re-posed to the rig's 40° A-pose so that the game's skinning gives back the
+    /// sculpt with the arms down, smooth (heat-diffused) skin weights for every <see cref="CharacterBone"/> (fingers
+    /// included), plus trunks and a waistband copied from the body surface with matching weights.
     /// </summary>
     public static class BaseBody
     {

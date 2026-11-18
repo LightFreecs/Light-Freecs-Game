@@ -20,17 +20,23 @@ namespace LightMMORPG.Characters
             private float _shoulderDx;
 
             private const float ShoulderShift = 0.22f, NeckFitStart = 1.795f, NeckFitFull = 1.815f;
+            /// <summary>The body's neck tube sits this much outside the head's collar, so it hides the collar's bottom edge.</summary>
+            private const float NeckOverCollar = 1.03f;
+            /// <summary>The collar's bottom edge is pulled in to this much of the neck, well inside the body's neck tube.</summary>
+            private const float CollarRimTuck = 0.85f;
             // the Toon Head's neck at neckWidth 1 (ToonHead.Apply), to keep the player's neck-width slider as a ratio
             private const float ToonNeckW = 0.148f, ToonNeckF = 0.155f, ToonNeckB = 0.160f;
 
             /// <summary>
             /// The body's own neck is what shows; the head keeps only a short collar of its neck. Size that collar to the
-            /// body's neck just under the chin (3 % bigger so it overlaps), scaled by the player's neck-width slider.
+            /// body's neck just under the chin, scaled by the player's neck-width slider. <see cref="FitNeck"/> then puts
+            /// the body's neck tube just outside it (it carries on up inside the head), and the collar's bottom edge is
+            /// tucked inside the tube (<see cref="CollarRimTuck"/>), so neither edge can show as a gap.
             /// </summary>
             private void FitHeadNeckToBody()
             {
                 var bb = BaseBody.Get();
-                float u = HeadUnit * _hs / 1.03f;
+                float u = HeadUnit * _hs;
                 _toon.NeckW = bb.NeckHalfWidth / u * (_toon.NeckW / ToonNeckW);
                 _toon.NeckF = bb.NeckFront / u * (_toon.NeckF / ToonNeckF);
                 _toon.NeckB = bb.NeckBack / u * (_toon.NeckB / ToonNeckB);
@@ -144,18 +150,24 @@ namespace LightMMORPG.Characters
             }
 
             /// <summary>
-            /// Fits the top of the body's neck just inside the head's collar (grows or shrinks it), so the two meet whatever
-            /// the neck-width slider says; below <see cref="NeckFitStart"/> the neck keeps the base mesh's shape.
+            /// Fits the body's neck tube just outside the head's collar (<see cref="NeckOverCollar"/>; grows or shrinks it),
+            /// so the two meet whatever the neck-width slider says. The tube carries on up inside the head and turns with it
+            /// (baked weights); below <see cref="NeckFitStart"/> the neck keeps the base mesh's shape.
             /// </summary>
             private Vector3 FitNeck(Vector3 p)
             {
                 if (p.y <= NeckFitStart) return p;
                 float t = Smooth01(NeckFitStart, NeckFitFull, p.y);
-                float s = HeadUnit * _hs * 0.97f, dz = p.z - _bb.NeckZ;
+                float s = HeadUnit * _hs * NeckOverCollar, dz = p.z - _bb.NeckZ;
                 float ex = p.x / (_toon.NeckW * s), ez = dz / ((dz >= 0f ? _toon.NeckF : _toon.NeckB) * s);
                 float e = Mathf.Sqrt(ex * ex + ez * ez);
                 if (e < 1e-4f) return p;
                 float k = Mathf.Lerp(1f, 1f / e, t);
+                // past the head's neck top the tube is inside the head: taper it, so no head slider (narrow jaw, wide
+                // neck) can push it out through the jaw
+                float a = Mathf.Abs(Mathf.Atan2(ex, ez)) / Mathf.PI;
+                float neckTop = P(B.Head).y + (ChinHL + ToonHead.NeckTopHeight(_toon, a) * HeadUnit) * _hs;
+                k *= Mathf.Lerp(1f, 0.6f, Smooth01(neckTop + 0.012f, neckTop + 0.05f, p.y));
                 return new Vector3(p.x * k, p.y, _bb.NeckZ + dz * k);
             }
 

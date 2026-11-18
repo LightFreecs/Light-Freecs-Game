@@ -177,11 +177,13 @@ namespace LightMMORPG.Tests
         {
             var bb = BaseBody.Get();
             var body = bb.Body;
-            int hand = 0, foot = 0;
+            int hand = 0, foot = 0, neckTop = 0;
             for (int v = 0; v < body.VertexCount; v++)
             {
                 Vector3 p = body.Positions[v];
                 int b = body.BoneIndex[v * 4];
+                // the neck tube carries on up inside the Toon Head and turns with it there
+                if (p.y > 1.95f) { Assert.AreEqual((int)CharacterBone.Head, b, "neck top on the head at " + v); neckTop++; }
                 // the lowest points are feet / toes; the right hand hangs out at +X in the A-pose
                 if (p.y < 0.03f)
                 {
@@ -193,6 +195,7 @@ namespace LightMMORPG.Tests
             }
             Assert.Greater(foot, 20);
             Assert.Greater(hand, 20);
+            Assert.Greater(neckTop, 20, "the neck reaches up inside the head");
         }
 
         [Test]

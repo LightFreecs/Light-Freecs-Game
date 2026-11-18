@@ -205,6 +205,9 @@ namespace LightMMORPG.Characters
         }
 
         private static float NeckTopY(ToonHeadShape H, float a) => Lerp(H.NeckTop, H.NeckNape, Smooth(a));
+
+        /// <summary>Height (head units) where the neck meets the jaw / nape, a = 0 at the front to 1 at the back.</summary>
+        public static float NeckTopHeight(ToonHeadShape H, float a) => NeckTopY(H, a);
         private static float NeckBotY(ToonHeadShape H, float a) => Lerp(H.NeckBottom, H.NeckBottomBack, Smooth(a));
 
         private static Vector3 NeckPoint(ToonHeadShape H, float theta, float y)
@@ -242,6 +245,8 @@ namespace LightMMORPG.Characters
             public int HeadTriangleCount, EarTriangleCount;
             /// <summary>Triangles of the head down to the first neck row only (a short collar): bodies with their own neck use these.</summary>
             public int CollarTriangleCount;
+            /// <summary>First vertex of the collar's bottom edge (the first neck row below the neck top, <see cref="Cols"/> vertices).</summary>
+            public int CollarRimStart;
         }
 
         public static MeshData BuildMesh(ToonHeadShape H)
@@ -303,6 +308,7 @@ namespace LightMMORPG.Characters
             {
                 float t = i / (float)NeckRows;
                 var row = new int[N];
+                if (i == 1) m.CollarRimStart = m.Positions.Count;
                 for (int j = 0; j < N; j++)
                 {
                     float a = Mathf.Abs(thetas[j]) / Mathf.PI;
