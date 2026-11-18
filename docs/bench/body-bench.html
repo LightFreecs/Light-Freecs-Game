@@ -1,0 +1,1253 @@
+<title>Body Bench</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: a sticky 3D stage on top (the body is the page), one compact control panel under it. Same look as the other LightMMORPG benches. */
+:root{
+  --bg:#eef1f6; --panel:#ffffff; --ink:#1b2130; --muted:#5d6678; --line:#d8dde7; --chip:#f3f5f9;
+  --accent:#f26b1d; --accent-ink:#ffffff; --accent-soft:#fde3d2;
+  --stage-a:#cfe2f4; --stage-b:#f4e8dc;
+  --f-display:"M PLUS Rounded 1c","Segoe UI",system-ui,sans-serif;
+  --f-body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11141b; --panel:#191e29; --ink:#e7ebf3; --muted:#9aa3b6; --line:#2b3242; --chip:#222838;
+  --accent:#ff8a3d; --accent-ink:#1a1006; --accent-soft:#3a2416;
+  --stage-a:#1d2a40; --stage-b:#33283a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11141b; --panel:#191e29; --ink:#e7ebf3; --muted:#9aa3b6; --line:#2b3242; --chip:#222838;
+  --accent:#ff8a3d; --accent-ink:#1a1006; --accent-soft:#3a2416;
+  --stage-a:#1d2a40; --stage-b:#33283a; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.stage{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;height:clamp(380px,66svh,760px);overflow:hidden;border-bottom:1px solid var(--line);
+  background:radial-gradient(120% 90% at 50% 20%,var(--stage-b),var(--stage-a))}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--stage-a)}
+.stage canvas{display:block;width:100%;height:100%;touch-action:none}
+.hud{position:absolute;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.hud.tl{top:10px;left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px))}
+.hud.bl{bottom:10px;left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px))}
+.pill{border:1px solid color-mix(in srgb,var(--ink) 14%,transparent);background:color-mix(in srgb,var(--panel) 85%,transparent);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:600;white-space:nowrap}
+.pill.num{font-family:var(--f-mono);font-weight:500;font-variant-numeric:tabular-nums}
+.views{display:flex;gap:6px;flex-wrap:wrap}
+.views button{border:1px solid color-mix(in srgb,var(--ink) 14%,transparent);background:color-mix(in srgb,var(--panel) 85%,transparent);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border-radius:999px;padding:7px 14px;font-weight:600;font-size:13px}
+.views button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.panel{padding-block:18px 44px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:22px;max-width:880px;margin:0 auto}
+h1{font-family:var(--f-display);font-weight:800;font-size:26px;margin:0;text-wrap:balance;letter-spacing:.01em}
+h2{font-family:var(--f-display);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+p{margin:0;max-width:65ch}
+.lede{color:var(--muted)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.chip{border:1px solid var(--line);background:var(--chip);border-radius:12px;padding:9px 14px;font-weight:600}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+.sliders{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px 22px}
+.sl{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;min-width:0}
+.sl label{font-weight:600}
+.sl output{font-family:var(--f-mono);font-variant-numeric:tabular-nums;color:var(--muted);font-size:12.5px}
+.sl input{grid-column:1 / -1;width:100%;accent-color:var(--accent)}
+.sl small{grid-column:1 / -1;color:var(--muted);font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px;min-width:0}
+.card dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0}
+.card dt{color:var(--muted)}
+.card dd{margin:0;font-family:var(--f-mono);font-variant-numeric:tabular-nums;text-align:right}
+ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:5px}
+.status{color:var(--muted);font-size:13px}
+.ghost{border:0;background:none;color:var(--accent);font-weight:600;padding:4px 0}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+
+<div class="stage" id="stage">
+  <canvas id="c" aria-label="3D view of the body. Drag to turn it, pinch or scroll to zoom."></canvas>
+  <div class="hud tl">
+    <span class="pill num" id="counts">Building…</span>
+    <span class="pill" id="drag-hint">Drag to turn · pinch to zoom</span>
+  </div>
+  <div class="hud bl">
+    <div class="views" role="group" aria-label="Camera view">
+      <button id="v-front" aria-pressed="true">Front</button>
+      <button id="v-three">¾</button>
+      <button id="v-side">Side</button>
+      <button id="v-back">Back</button>
+      <button id="v-torso">Torso</button>
+    </div>
+  </div>
+</div>
+
+<main class="panel">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <h1>Body Bench</h1>
+    <p class="lede">The fighter's body rebuilt from your reference picture: a lean, long-legged young build with a full chest, stomach, arms and legs, so it holds up shirtless. Trunks are the one layer that never comes off. Clothes come next, on top of this body.</p>
+  </div>
+
+  <section>
+    <h2>Check against the reference</h2>
+    <div class="row">
+      <button class="chip" id="t-ref" aria-pressed="true">Show my picture over the body</button>
+      <input type="range" id="ref-op" min="0" max="100" value="45" aria-label="Picture opacity" style="flex:1;min-width:140px;accent-color:var(--accent)">
+      <span class="pill num" id="ref-op-val">45%</span>
+    </div>
+    <p class="status" style="margin-top:8px">The picture is placed at the game's scale (chin at 1.83 m, feet on the floor) in a flat front view. Drag the slider to fade between the picture and the body. The picture is cut off above the neck, so the head is the game's Toon Head.</p>
+  </section>
+
+  <section>
+    <h2>Pose</h2>
+    <div class="row" role="group" aria-label="Pose">
+      <button class="chip" id="p-ref" aria-pressed="true">Reference pose (arms down)</button>
+      <button class="chip" id="p-game" aria-pressed="false">Game rest pose (arms out 40°)</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Body</h2>
+    <div class="sliders" id="sliders"></div>
+    <div class="row" style="margin-top:6px"><button class="ghost" id="reset">Reset to the reference body</button></div>
+  </section>
+
+  <section>
+    <h2>Light and lines</h2>
+    <div class="row">
+      <input type="range" id="light" min="-180" max="180" step="1" value="35" aria-label="Light direction (degrees around the body)" style="flex:1;min-width:180px;accent-color:var(--accent)">
+      <span class="pill num" id="light-val" style="min-width:64px;text-align:center">35°</span>
+      <button class="chip" id="t-outline" aria-pressed="true">Outlines</button>
+      <button class="chip" id="t-wire" aria-pressed="false">Polygons</button>
+    </div>
+  </section>
+
+  <section class="grid">
+    <div class="card">
+      <h2>What changed</h2>
+      <ul>
+        <li><b>Shape from your picture.</b> The torso, arms and legs are smooth chains whose widths were measured row by row from the reference: narrow waist (0.29 m across), V-taper up to the armpits, mid-thigh trunks, long legs.</li>
+        <li><b>Nothing hidden under clothes.</b> The old body skipped the chest, stomach and arms wherever clothes covered them. This one is always whole.</li>
+        <li><b>Lean details.</b> Collarbones, a soft chest edge, a faint six-pack and navel, kneecaps, calves, ankle bones, toes. The muscle slider fades them in and out.</li>
+        <li><b>Same building blocks as the game.</b> Same shapes and blending as the game's body code, so this ports over number for number.</li>
+      </ul>
+    </div>
+    <div class="card"><h2>Mesh</h2><dl id="mesh-stats"></dl></div>
+  </section>
+</main>
+
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+
+// ================================================================== head shape (head height crown→chin = 1)
+// The rounded Youth shape, softened: smooth cheeks, small soft chin. Rows: y, half width, front depth, back depth, front squareness.
+const H = {
+  // measured from your sketches: front view (width at each height) + side view (front and back at each height)
+  cranium: { y: 0.50, r: 0.50, w: 0.395, f: 0.450, b: 0.440, p: 2.6 },   // p > 2: flatter, boxier top
+  face: [
+    [0.50, 0.393, 0.470, 0.440, 2.20],
+    [0.40, 0.380, 0.500, 0.425, 2.60],
+    [0.33, 0.362, 0.505, 0.400, 2.80],
+    [0.26, 0.338, 0.500, 0.355, 2.80],
+    [0.19, 0.300, 0.488, 0.330, 2.70],
+    [0.135, 0.245, 0.474, 0.300, 2.50],
+    [0.07, 0.205, 0.456, 0.280, 2.40],
+    [0.00, 0.150, 0.430, 0.270, 2.30],
+  ],
+  jawCorner: { a: 0.50, y: 0.17 }, chinRound: 0.90, napeY: 0.26,
+  neck: { top: 0.00, nape: 0.22, bottom: -0.17, w: 0.160, f: 0.190, b: 0.190, z: -0.03 },
+  cheek: { y: 0.27, h: 0.07, a: 0.24, spread: 0.11, amount: 0.004 },
+  nose: { y: 0.40, h: 0.022, w: 0.018, len: 0.045 },
+  eye: { x: 0.170, y: 0.500, w: 0.235, h: 0.146 },
+  brow: { y: 0.615, w: 0.200, h: 0.052 },
+  mouth: { y: 0.200, w: 0.095, h: 0.034 },
+  ear: { y: 0.352, z: -0.06, su: 1.22, sv: 1.28, flare: 36 },
+};
+// Front-view outline measured from your front drawing: half width at each height (head height = 1).
+// Domed top, widest at the temples, sides tapering fairly straight to a low jaw corner, short straight lines to the chin.
+const FRONT_SIL = [[0.00, 0.015], [0.171, 0.288], [0.288, 0.318], [0.418, 0.344], [0.559, 0.371], [0.724, 0.376], [0.80, 0.360], [0.876, 0.330], [0.93, 0.300], [0.97, 0.250], [0.995, 0.140]];
+const LAYOUT = { cols: 72, craniumRows: 16, faceRows: 40, neckRows: 4, frontBias: 1.35 };
+
+const lerp = (a, b, t) => a + (b - a) * t;
+const clamp01 = t => Math.min(1, Math.max(0, t));
+const smooth = t => { t = clamp01(t); return t * t * (3 - 2 * t); };
+
+function faceAt(y) {
+  const cr = H.cranium;
+  if (y > cr.y) { const q = Math.pow(Math.max(0, 1 - Math.pow(Math.abs((y - cr.y) / cr.r), cr.p || 2)), 1 / (cr.p || 2)); return [cr.w * q, cr.f * q, cr.b * q, 2]; }
+  const T = H.face;
+  if (y <= T[T.length - 1][0]) return T[T.length - 1].slice(1);
+  let i = 0;
+  while (i < T.length - 2 && y < T[i + 1][0]) i++;
+  const p0 = T[Math.max(0, i - 1)], p1 = T[i], p2 = T[i + 1], p3 = T[Math.min(T.length - 1, i + 2)];
+  const t = (p1[0] - y) / (p1[0] - p2[0]), out = [];
+  for (let k = 1; k < 5; k++) { const a = p0[k], b = p1[k], c = p2[k], d = p3[k]; out.push(0.5 * ((2 * b) + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (-a + 3 * b - 3 * c + d) * t * t * t)); }
+  return out;
+}
+function section(theta, w, f, b, k) {
+  const s = Math.sin(theta), c = Math.cos(theta);
+  if (c >= 0) { const e = 2 / k; return [w * Math.sign(s) * Math.pow(Math.abs(s), e), f * Math.pow(c, e)]; }
+  return [w * s, b * c];
+}
+function jawY(a) {
+  const { a: ca, y: cy } = H.jawCorner;
+  if (a <= ca) { const t = a / ca, r = H.chinRound; return cy * (Math.sqrt(t * t + r * r) - r) / (Math.sqrt(1 + r * r) - r); }
+  return lerp(cy, H.napeY, smooth((a - ca) / (1 - ca)));
+}
+const neckTopY = a => lerp(H.neck.top, H.neck.nape, smooth(a));
+const neckPoint = (theta, y) => { const n = H.neck, s = Math.sin(theta), c = Math.cos(theta); return [n.w * s, y, n.z + (c >= 0 ? n.f * c : n.b * c)]; };
+function surface(theta, y) {
+  const [w, f, b, k] = faceAt(y);
+  let [x, z] = section(theta, w, f, b, k);
+  const ch = H.cheek, a = Math.abs(theta) / Math.PI;
+  const bulge = ch.amount * Math.exp(-(((y - ch.y) / ch.h) ** 2)) * Math.exp(-(((a - ch.a) / ch.spread) ** 2));
+  const len = Math.hypot(x, z) || 1;
+  x += x / len * bulge; z += z / len * bulge;
+  // the nose is only a soft bump: the painted shadow does the rest
+  const n = H.nose;
+  if (z > 0) z += n.h * Math.exp(-((x / n.w) ** 2)) * Math.exp(-(((y - n.y) / n.len) ** 2)) * (y < n.y ? 0.7 : 1);
+  return [x, y, z];
+}
+
+// ================================================================== mesh (head + neck + ears) with face mapping
+function buildHead() {
+  const pos = [], uvF = [], mask = [], idx = [];
+  const add = (p, theta) => {
+    pos.push(...p);
+    // face coordinates for the painted shadow map: u = across the face (-1 far edge … 1), v = height
+    const a = Math.abs(theta || 0);
+    const m = (1 - smooth((a - 0.75) / 0.45)) * smooth((p[1] + 0.02) / 0.08) * (1 - smooth((p[1] - 0.66) / 0.10));
+    uvF.push(Math.sin(theta || 0), p[1]); mask.push(theta === undefined ? 0 : m);
+    return pos.length / 3 - 1;
+  };
+  const N = LAYOUT.cols, thetas = [];
+  for (let j = 0; j < N; j++) { const u = -1 + 2 * j / N; thetas.push(Math.PI * Math.sign(u) * Math.pow(Math.abs(u), LAYOUT.frontBias)); }
+  const rows = [], cr = H.cranium;
+  const crown = add([0, cr.y + cr.r, 0]);
+  for (let i = 1; i <= LAYOUT.craniumRows; i++) {
+    const y = cr.y + cr.r * Math.cos((i / LAYOUT.craniumRows) * Math.PI / 2);
+    rows.push(thetas.map(t => add(surface(t, y), t)));
+  }
+  for (let i = 1; i <= LAYOUT.faceRows; i++) {
+    const s = i / LAYOUT.faceRows;
+    rows.push(thetas.map(t => add(surface(t, lerp(cr.y, jawY(Math.abs(t) / Math.PI), s)), t)));
+  }
+  const jaw = rows[rows.length - 1].map(i => pos.slice(i * 3, i * 3 + 3));
+  for (const t of [0.25, 0.5, 0.75])
+    rows.push(thetas.map((th, j) => {
+      const n = neckPoint(th, neckTopY(Math.abs(th) / Math.PI)), J = jaw[j];
+      return add([lerp(J[0], n[0], t), lerp(J[1], n[1], t) - 0.010 * Math.sin(Math.PI * t), lerp(J[2], n[2], t)]);
+    }));
+  const neckStart = pos.length / 3;
+  for (let i = 0; i <= LAYOUT.neckRows; i++) {
+    const t = i / LAYOUT.neckRows;
+    rows.push(thetas.map(th => add(neckPoint(th, lerp(neckTopY(Math.abs(th) / Math.PI), H.neck.bottom, t)))));
+  }
+  const bottom = add([0, H.neck.bottom, H.neck.z]);
+  for (let j = 0; j < N; j++) idx.push(crown, rows[0][j], rows[0][(j + 1) % N]);
+  for (let r = 0; r < rows.length - 1; r++)
+    for (let j = 0; j < N; j++) {
+      const a = rows[r][j], b = rows[r][(j + 1) % N], c = rows[r + 1][(j + 1) % N], d = rows[r + 1][j];
+      idx.push(a, d, c, a, c, b);
+    }
+  const last = rows[rows.length - 1];
+  for (let j = 0; j < N; j++) idx.push(bottom, last[(j + 1) % N], last[j]);
+  // Front-view shape (blended in by the shader as the camera faces the face): seen from the front, the lower face
+  // follows straight lines from the cheek (y = FRONT_JAW.y) down to the chin, the way the face is drawn from the
+  // front. From the side the base shape (jaw running back to a corner under the ear) shows instead.
+  const count = pos.length / 3, morph = new Array(count * 3).fill(0);
+  const bin = y => Math.round(y * 200), S = new Map();
+  for (let i = 0; i < neckStart; i++) {
+    const x = Math.abs(pos[i * 3]), y = pos[i * 3 + 1];
+    S.set(bin(y), Math.max(S.get(bin(y)) || 0, x));
+  }
+  const target = y => {
+    const T = FRONT_SIL;
+    if (y <= T[0][0]) return T[0][1];
+    for (let k = 1; k < T.length; k++) if (y <= T[k][0]) return lerp(T[k - 1][1], T[k][1], (y - T[k - 1][0]) / (T[k][0] - T[k - 1][0]));
+    return T[T.length - 1][1];
+  };
+  const silhouette = y => Math.max(S.get(bin(y) - 1) || 0, S.get(bin(y)) || 0, S.get(bin(y) + 1) || 0);
+  for (let i = 0; i < neckStart; i++) {
+    const x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2];
+    if (y > 0.995) continue;
+    const cur = silhouette(y);
+    if (cur < 1e-3) continue;
+    const scale = Math.min(1.45, Math.max(0.10, target(y) / cur));
+    // lower face: only the front and sides move (the back of the jaw stays put); skull: everything moves together
+    const wz = lerp(smooth((z + 0.3) / 0.3), 1, smooth((y - 0.25) / 0.15));
+    morph[i * 3] = x * (scale - 1) * wz;
+  }
+  return { pos, uvF, mask, idx, morph };
+}
+
+// smooth ears: a lofted, rounded shell on each side
+function buildEars() {
+  const pos = [], idx = [];
+  const outline = [[0.085,0.000],[0.104,0.030],[0.100,0.064],[0.076,0.091],[0.036,0.103],[-0.008,0.096],[-0.048,0.074],
+                   [-0.078,0.046],[-0.094,0.018],[-0.086,-0.003],[-0.046,-0.009],[0.000,-0.011],[0.046,-0.009]];
+  const dense = [];
+  for (let i = 0; i < outline.length; i++) {               // Catmull-Rom for a smooth rim
+    const p0 = outline[(i - 1 + outline.length) % outline.length], p1 = outline[i], p2 = outline[(i + 1) % outline.length], p3 = outline[(i + 2) % outline.length];
+    for (let k = 0; k < 3; k++) { const t = k / 3; dense.push([0, 1].map(j => 0.5 * ((2 * p1[j]) + (-p0[j] + p2[j]) * t + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * t * t + (-p0[j] + 3 * p1[j] - 3 * p2[j] + p3[j]) * t * t * t))); }
+  }
+  const rings = [[1.0, -0.015], [1.0, 0.035], [0.96, 0.048], [0.80, 0.044], [0.62, 0.032], [0.40, 0.020]];
+  const SU = H.ear.su, SV = H.ear.sv, cU = 0.004 * SU, cV = 0.046 * SV, tau = -12 * Math.PI / 180, flare = Math.tan(H.ear.flare * Math.PI / 180);
+  const up = [0, Math.cos(tau), Math.sin(tau)], back = [0, Math.sin(tau), -Math.cos(tau)];
+  for (const side of [-1, 1]) {
+    const base = pos.length / 3;
+    const place = (u, v, d) => {
+      const y = H.ear.y + u * up[1] + v * back[1], z = H.ear.z + u * up[2] + v * back[2];
+      const [w, , b] = faceAt(y), hx = w * Math.sqrt(Math.max(0, 1 - (Math.min(0, z) / b) ** 2));
+      const lift = 0.3 + 0.7 * smooth((v + 0.01) / (0.07 * SV));
+      return [side * (hx - 0.004 + d * lift * 1.4 + Math.max(0, v) * flare), y, z];
+    };
+    for (const [sc, d] of rings) for (const [u, v] of dense) pos.push(...place(cU + (u * SU - cU) * sc, cV + (v * SV - cV) * sc, d));
+    pos.push(...place(cU, cV, 0.014));
+    const M = dense.length, centre = base + rings.length * M;
+    for (let r = 0; r < rings.length - 1; r++)
+      for (let m = 0; m < M; m++) {
+        const n = (m + 1) % M, a = base + r * M + m, b = base + r * M + n, c = base + (r + 1) * M + n, d = base + (r + 1) * M + m;
+        if (side > 0) idx.push(a, c, b, a, d, c); else idx.push(a, b, c, a, c, d);
+      }
+    for (let m = 0; m < M; m++) { const a = base + (rings.length - 1) * M + m, b = base + (rings.length - 1) * M + (m + 1) % M; if (side > 0) idx.push(a, centre, b); else idx.push(a, b, centre); }
+  }
+  return { pos, idx };
+}
+
+// ================================================================== painted face shadow map
+// Value t at each face point = how far the light must swing to the far side before this point goes dark.
+// u: 0 = far edge of the face … 1 = near edge (mirrored by the shader to follow the light), v: face height.
+function faceShadowMap() {
+  const S = 256, data = new Uint8Array(S * S * 4);
+  // v covers -0.05 … 0.75 of the head height
+  for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
+    const u = i / (S - 1), v = j / (S - 1) * 0.8 - 0.05;
+    let t = u;
+    // the shadow edge wraps the cheek: it bows towards the lit side under the eye and back again at the jaw
+    t -= 0.10 * Math.exp(-(((v - 0.30) / 0.10) ** 2)) * Math.sin(Math.PI * u);
+    // forehead and eye line stay lit a little longer (they face the light more)
+    t += 0.06 * Math.exp(-(((v - (H.eye.y + 0.06)) / 0.08) ** 2)) * Math.sin(Math.PI * u);
+    // nose shadow: a small wedge just on the far side of the nose that darkens first
+    const nu = (u - 0.47) / (0.010 + 0.012 * clamp01((v - (H.nose.y - 0.065)) / 0.06)), nv = (v - (H.nose.y - 0.025)) / 0.035;
+    if (u < 0.5) t -= 0.22 * Math.exp(-(nu * nu) - (nv * nv)) * (v < H.nose.y - 0.005 ? 1 : Math.exp(-(((v - (H.nose.y - 0.005)) / 0.03) ** 2)));
+    // under the chin and the jaw edge tip into shadow early
+    t -= 0.12 * (1 - smooth((v + 0.01) / 0.08));
+    const val = Math.round(clamp01(t) * 255), k = (j * S + i) * 4;
+    data[k] = data[k + 1] = data[k + 2] = val; data[k + 3] = 255;
+  }
+  const tex = new THREE.DataTexture(data, S, S, THREE.RGBAFormat);
+  tex.minFilter = tex.magFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+// ================================================================== painted eye / brow / mouth textures (canvas)
+const EYE_COLORS = {
+  amber: { label: "Amber", top: "#5a2c10", mid: "#c8741e", glow: "#ffd27a" },
+  violet: { label: "Violet", top: "#2e1d4f", mid: "#7b5cc4", glow: "#d9c6ff" },
+  teal: { label: "Teal", top: "#0f3c40", mid: "#2f9a95", glow: "#a8f0e2" },
+  blue: { label: "Blue", top: "#14264f", mid: "#3f74c9", glow: "#b8dcff" },
+  green: { label: "Green", top: "#173a1f", mid: "#4f9a4f", glow: "#d0f2a6" },
+  red: { label: "Red", top: "#4a0f14", mid: "#c23a3a", glow: "#ffb59a" },
+  grey: { label: "Grey", top: "#26292f", mid: "#7b8390", glow: "#e3e8ee" },
+};
+let eyeColor = "amber";
+
+function eyeTexture(col) {
+  const W = 512, Hh = 256, cv = document.createElement("canvas");
+  cv.width = W; cv.height = Hh;
+  const g = cv.getContext("2d");
+  g.lineCap = "round"; g.lineJoin = "round";
+  // eye opening (almond, taller at the outer side): x inner 40 → outer 470
+  const open = () => { g.beginPath(); g.moveTo(48, 140); g.bezierCurveTo(110, 52, 330, 34, 462, 104); g.bezierCurveTo(440, 196, 300, 226, 180, 214); g.bezierCurveTo(110, 206, 70, 176, 48, 140); g.closePath(); };
+  g.save(); open(); g.clip();
+  g.fillStyle = "#fbf6f2"; g.fillRect(0, 0, W, Hh);
+  // soft lid shadow on the white
+  let sh = g.createLinearGradient(0, 40, 0, 130); sh.addColorStop(0, "rgba(120,110,140,0.55)"); sh.addColorStop(1, "rgba(120,110,140,0)");
+  g.fillStyle = sh; g.fillRect(0, 0, W, Hh);
+  // iris: dark top, colour, glowing bottom
+  const cx = 262, cy = 138, rx = 92, ry = 104;
+  let ir = g.createLinearGradient(0, cy - ry, 0, cy + ry);
+  ir.addColorStop(0, col.top); ir.addColorStop(0.42, col.mid); ir.addColorStop(0.86, col.glow); ir.addColorStop(1, col.mid);
+  g.fillStyle = ir; g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); g.fill();
+  g.lineWidth = 7; g.strokeStyle = col.top; g.stroke();
+  // pupil
+  g.fillStyle = col.top; g.beginPath(); g.ellipse(cx, cy - 6, 34, 52, 0, 0, Math.PI * 2); g.fill();
+  // lid shadow over the iris top
+  sh = g.createLinearGradient(0, 30, 0, 120); sh.addColorStop(0, "rgba(20,10,20,0.65)"); sh.addColorStop(1, "rgba(20,10,20,0)");
+  g.fillStyle = sh; g.fillRect(0, 0, W, Hh);
+  // highlights
+  g.fillStyle = "#ffffff"; g.beginPath(); g.ellipse(cx - 36, cy - 44, 24, 20, -0.3, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.ellipse(cx + 40, cy + 56, 10, 8, 0, 0, Math.PI * 2); g.fill();
+  g.restore();
+  // upper lid line: heavy, with a lash flick at the outer corner
+  g.strokeStyle = "#2a1712"; g.fillStyle = "#2a1712";
+  g.lineWidth = 16; g.beginPath(); g.moveTo(52, 138); g.bezierCurveTo(112, 50, 330, 30, 462, 104); g.stroke();
+  g.beginPath(); g.moveTo(420, 78); g.quadraticCurveTo(470, 86, 500, 70); g.quadraticCurveTo(486, 100, 468, 116); g.closePath(); g.fill();
+  g.lineWidth = 7; g.beginPath(); g.moveTo(380, 58); g.quadraticCurveTo(440, 48, 478, 30); g.stroke();
+  // lower lid: a short, soft line on the outer half
+  g.strokeStyle = "rgba(90,40,30,0.85)"; g.lineWidth = 5;
+  g.beginPath(); g.moveTo(240, 214); g.bezierCurveTo(320, 214, 400, 196, 446, 150); g.stroke();
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  return t;
+}
+
+function strokeTexture(draw, W, Hh) {
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = Hh;
+  const g = cv.getContext("2d"); g.lineCap = "round"; g.lineJoin = "round"; draw(g);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const browTex = strokeTexture(g => {
+  g.fillStyle = "#3a2218";
+  g.beginPath(); g.moveTo(20, 74); g.bezierCurveTo(120, 38, 300, 30, 492, 62); g.bezierCurveTo(300, 52, 130, 60, 20, 88); g.closePath(); g.fill();
+}, 512, 128);
+const mouthTex = strokeTexture(g => {
+  g.strokeStyle = "#8a3a30"; g.lineWidth = 9;
+  g.beginPath(); g.moveTo(70, 70); g.quadraticCurveTo(128, 84, 186, 66); g.stroke();
+}, 256, 128);
+
+// ================================================================== body generator (port of SdfMesher.cs + ProceduralCharacterBuilder.Body)
+// Model space = the game's: metres, +Y up, +Z forward (the way the fighter faces), +X = the fighter's right.
+// Same primitives, numbers and blend rules as the game, so whatever is tuned here ports back one to one.
+const D2R = Math.PI / 180;
+const v3 = (x, y, z) => ({ x, y, z });
+const add = (a, b) => v3(a.x + b.x, a.y + b.y, a.z + b.z);
+const sub = (a, b) => v3(a.x - b.x, a.y - b.y, a.z - b.z);
+const mul = (a, s) => v3(a.x * s, a.y * s, a.z * s);
+const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
+const cross = (a, b) => v3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+const len = a => Math.sqrt(dot(a, a));
+const norm = a => { const l = len(a) || 1; return mul(a, 1 / l); };
+const lerp3 = (a, b, t) => v3(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t);
+const vmin = (a, b) => v3(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.min(a.z, b.z));
+const vmax = (a, b) => v3(Math.max(a.x, b.x), Math.max(a.y, b.y), Math.max(a.z, b.z));
+const UP = v3(0, 1, 0), DOWN = v3(0, -1, 0), RIGHT = v3(1, 0, 0), FWD = v3(0, 0, 1);
+const invLerp = (a, b, x) => (a === b ? 0 : Math.min(1, Math.max(0, (x - a) / (b - a))));
+const smooth01 = (a, b, x) => { const t = invLerp(a, b, x); return t * t * (3 - 2 * t); };
+
+// quaternions {x,y,z,w} (Unity's maths: same formulas, same Euler order Z→X→Y)
+const qId = () => ({ x: 0, y: 0, z: 0, w: 1 });
+const qMul = (a, b) => ({
+  x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y, y: a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+  z: a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w, w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z });
+const qAxis = (ax, deg) => { const h = deg * D2R / 2, s = Math.sin(h), n = norm(ax); return { x: n.x * s, y: n.y * s, z: n.z * s, w: Math.cos(h) }; };
+const qEuler = (x, y, z) => qMul(qAxis(UP, y), qMul(qAxis(RIGHT, x), qAxis(FWD, z)));
+const rotZ = deg => qAxis(FWD, deg);
+const qInv = q => ({ x: -q.x, y: -q.y, z: -q.z, w: q.w });
+function qRot(q, v) {
+  const tx = 2 * (q.y * v.z - q.z * v.y), ty = 2 * (q.z * v.x - q.x * v.z), tz = 2 * (q.x * v.y - q.y * v.x);
+  return v3(v.x + q.w * tx + (q.y * tz - q.z * ty), v.y + q.w * ty + (q.z * tx - q.x * tz), v.z + q.w * tz + (q.x * ty - q.y * tx));
+}
+function qFromTo(a, b) {
+  a = norm(a); b = norm(b);
+  const d = dot(a, b);
+  if (d < -0.999999) { let ax = cross(RIGHT, a); if (len(ax) < 1e-6) ax = cross(UP, a); return qAxis(ax, 180); }
+  const c = cross(a, b), q = { x: c.x, y: c.y, z: c.z, w: 1 + d }, l = Math.hypot(q.x, q.y, q.z, q.w);
+  return { x: q.x / l, y: q.y / l, z: q.z / l, w: q.w / l };
+}
+function qLook(fwd, up) {
+  const z = norm(fwd), x = norm(cross(up, z)), y = cross(z, x);
+  const m00 = x.x, m01 = y.x, m02 = z.x, m10 = x.y, m11 = y.y, m12 = z.y, m20 = x.z, m21 = y.z, m22 = z.z, tr = m00 + m11 + m22;
+  if (tr > 0) { const s = 0.5 / Math.sqrt(tr + 1); return { w: 0.25 / s, x: (m21 - m12) * s, y: (m02 - m20) * s, z: (m10 - m01) * s }; }
+  if (m00 > m11 && m00 > m22) { const s = 2 * Math.sqrt(1 + m00 - m11 - m22); return { w: (m21 - m12) / s, x: 0.25 * s, y: (m01 + m10) / s, z: (m02 + m20) / s }; }
+  if (m11 > m22) { const s = 2 * Math.sqrt(1 + m11 - m00 - m22); return { w: (m02 - m20) / s, x: (m01 + m10) / s, y: 0.25 * s, z: (m12 + m21) / s }; }
+  const s = 2 * Math.sqrt(1 + m22 - m00 - m11); return { w: (m10 - m01) / s, x: (m02 + m20) / s, y: (m12 + m21) / s, z: 0.25 * s };
+}
+
+// ---------------------------------------------------------------- primitives
+const LIMB = 0, ELL = 1, CYL = 2, BOX = 3, PLANE = 4, CUSTOM = 5;
+const UNION = 0, SUBTRACT = 1, INTERSECT = 2;
+const BIG = 1e9;
+
+function prepare(p) {
+  p.infinite = false;
+  let pad;
+  if (p.shape === LIMB) {
+    const axis = sub(p.B, p.A), l = len(axis), dir = l > 1e-6 ? mul(axis, 1 / l) : UP;
+    const hx = p.hint && dot(p.hint, p.hint) > 1e-6 ? p.hint : (Math.abs(dot(dir, RIGHT)) > 0.9 ? UP : RIGHT);
+    let x = sub(hx, mul(dir, dot(hx, dir)));
+    if (dot(x, x) < 1e-8) x = cross(dir, FWD);
+    x = norm(x);
+    const z = cross(x, dir);
+    p.inv = qInv(qLook(z, dir));
+    p.o = p.A; p.lb = l;
+    const sx = p.sx || 1, sz = p.sz || 1;
+    p.is = v3(1 / sx, 1, 1 / sz); p.ms = Math.min(1, sx, sz); p.ra = p.size[0]; p.rb = p.size[1];
+    pad = Math.max(p.ra, p.rb) * Math.max(1, sx, sz) + p.k;
+    p.bmin = sub(vmin(p.A, p.B), v3(pad, pad, pad)); p.bmax = add(vmax(p.A, p.B), v3(pad, pad, pad));
+  } else if (p.shape === ELL) {
+    p.inv = qInv(p.rot); p.o = p.A; p.lb = 0;
+    p.is = v3(1 / p.size.x, 1 / p.size.y, 1 / p.size.z); p.ms = Math.min(p.size.x, p.size.y, p.size.z); p.ra = p.rb = 1;
+    pad = Math.max(p.size.x, p.size.y, p.size.z) + p.k;
+    p.bmin = sub(p.A, v3(pad, pad, pad)); p.bmax = add(p.A, v3(pad, pad, pad));
+  } else if (p.shape === CYL) {
+    p.inv = qInv(qFromTo(UP, p.B)); p.o = p.A; p.ra = p.size[0]; p.rb = p.size[1];
+    pad = Math.hypot(p.ra, p.rb) + p.k;
+    p.bmin = sub(p.A, v3(pad, pad, pad)); p.bmax = add(p.A, v3(pad, pad, pad));
+  } else if (p.shape === BOX) {
+    p.inv = qInv(p.rot); p.o = p.A; p.round = p.sx;
+    pad = len(p.size) + p.k;
+    p.bmin = sub(p.A, v3(pad, pad, pad)); p.bmax = add(p.A, v3(pad, pad, pad));
+  } else { p.infinite = true; p.o = p.A || v3(0, 0, 0); }
+  return p;
+}
+const mk = o => prepare(Object.assign({ op: UNION, tag: 0, k: 0, group: -1, sx: 1, sz: 1 }, o));
+const Limb = (a, b, ra, rb, k, group, tag = 0, sx = 1, sz = 1, hint = null) => mk({ shape: LIMB, A: a, B: b, size: [ra, rb], k, group, tag, sx, sz, hint });
+const Ell = (c, r, rot, k, group, tag = 0) => mk({ shape: ELL, A: c, size: r, rot: rot || qId(), k, group, tag });
+const Cyl = (c, axis, r, hh, op, k, group = -1) => mk({ shape: CYL, A: c, B: norm(axis), size: [r, hh], op, k, group });
+const Box = (c, rot, half, round, op, k, group = -1) => mk({ shape: BOX, A: c, rot, size: half, sx: round, op, k, group });
+const Keep = (point, n, k = 0) => mk({ shape: PLANE, A: point, B: norm(n), op: INTERSECT, k, group: -1 });
+const Custom = (fn, op, k = 0) => mk({ shape: CUSTOM, fn, op, k, group: -1 });
+function inflated(p, off, kAdd) {
+  const c = Object.assign({}, p);
+  c.k += kAdd;
+  if (p.shape === LIMB || p.shape === CYL) c.size = [p.size[0] + off, p.size[1] + off];
+  else if (p.shape === ELL || p.shape === BOX) c.size = v3(p.size.x + off, p.size.y + off, p.size.z + off);
+  return prepare(c);
+}
+
+function roundCone(px, py, pz, l, r1, r2) {
+  const l2 = l * l;
+  if (l2 < 1e-10) return Math.sqrt(px * px + py * py + pz * pz) - r1;
+  const rr = r1 - r2, a2 = l2 - rr * rr;
+  if (a2 <= 1e-9) return r1 >= r2 ? Math.sqrt(px * px + py * py + pz * pz) - r1 : Math.sqrt(px * px + (py - l) * (py - l) + pz * pz) - r2;
+  const il2 = 1 / l2, y = py * l, z = y - l2;
+  const xx = px * l2, xy = py * l2 - l * y, xz = pz * l2;
+  const x2 = xx * xx + xy * xy + xz * xz, y2 = y * y * l2, z2 = z * z * l2;
+  const k = (rr >= 0 ? 1 : -1) * rr * rr * x2;
+  if ((z >= 0 ? 1 : -1) * a2 * z2 > k) return Math.sqrt(x2 + z2) * il2 - r2;
+  if ((y >= 0 ? 1 : -1) * a2 * y2 < k) return Math.sqrt(x2 + y2) * il2 - r1;
+  return (Math.sqrt(x2 * a2 * il2) + y * rr) * il2 - r1;
+}
+function dist(p, x, y, z) {
+  if (p.shape === CUSTOM) return p.fn(x, y, z);
+  if (p.shape === PLANE) return (x - p.o.x) * p.B.x + (y - p.o.y) * p.B.y + (z - p.o.z) * p.B.z;
+  const q = p.inv, vx = x - p.o.x, vy = y - p.o.y, vz = z - p.o.z;
+  const tx = 2 * (q.y * vz - q.z * vy), ty = 2 * (q.z * vx - q.x * vz), tz = 2 * (q.x * vy - q.y * vx);
+  const rx = vx + q.w * tx + (q.y * tz - q.z * ty), ry = vy + q.w * ty + (q.z * tx - q.x * tz), rz = vz + q.w * tz + (q.x * ty - q.y * tx);
+  if (p.shape === LIMB || p.shape === ELL) return roundCone(rx * p.is.x, ry * p.is.y, rz * p.is.z, p.lb, p.ra, p.rb) * p.ms;
+  if (p.shape === CYL) {
+    const dx = Math.hypot(rx, rz) - p.ra, dy = Math.abs(ry) - p.rb;
+    return Math.min(Math.max(dx, dy), 0) + Math.hypot(Math.max(dx, 0), Math.max(dy, 0));
+  }
+  const R = p.round, qx = Math.abs(rx) - p.size.x + R, qy = Math.abs(ry) - p.size.y + R, qz = Math.abs(rz) - p.size.z + R;
+  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qy, qz), 0) - R;
+}
+function smin(a, b, k) { if (k <= 0) return a < b ? a : b; const h = Math.max(k - Math.abs(a - b), 0) / k; return (a < b ? a : b) - h * h * k * 0.25; }
+const smax = (a, b, k) => -smin(-a, -b, k);
+const sortPrims = prims => prims.map((p, i) => [p, i]).sort((a, b) => {
+  const ga = a[0].group < 0 ? 1e9 : a[0].group, gb = b[0].group < 0 ? 1e9 : b[0].group;
+  return ga !== gb ? ga - gb : a[1] - b[1];
+}).map(a => a[0]);
+// smooth union inside each group (prim k), groups joined with groupK, then global prims (cuts, clip planes) last
+function evalList(list, x, y, z, groupK) {
+  let total = BIG, g = BIG, cur = null, global = false;
+  for (let i = 0; i < list.length; i++) {
+    const pr = list[i];
+    if (pr.group < 0) {
+      if (!global) { if (cur !== null) total = smin(total, g, groupK); global = true; }
+      const d = dist(pr, x, y, z);
+      total = pr.op === UNION ? smin(total, d, pr.k) : pr.op === SUBTRACT ? smax(total, -d, pr.k) : smax(total, d, pr.k);
+      continue;
+    }
+    if (pr.group !== cur) { if (cur !== null) total = smin(total, g, groupK); g = BIG; cur = pr.group; }
+    const d = dist(pr, x, y, z);
+    g = pr.op === UNION ? smin(g, d, pr.k) : pr.op === SUBTRACT ? smax(g, -d, pr.k) : smax(g, d, pr.k);
+  }
+  if (!global && cur !== null) total = smin(total, g, groupK);
+  return total;
+}
+
+// ---------------------------------------------------------------- naive surface nets (block-culled)
+function polygonize(part) {
+  const prims = sortPrims(part.prims), h = part.cell, gk = part.groupK, disp = part.displace, dmax = part.displaceMax || 0;
+  let bmin = v3(Infinity, Infinity, Infinity), bmax = v3(-Infinity, -Infinity, -Infinity), any = false;
+  for (const p of prims) if (p.op === UNION && !p.infinite) { bmin = vmin(bmin, p.bmin); bmax = vmax(bmax, p.bmax); any = true; }
+  if (!any) return { pos: [], idx: [] };
+  for (const p of prims) {
+    if (p.op !== INTERSECT) continue;
+    if (!p.infinite) { bmin = vmax(bmin, p.bmin); bmax = vmin(bmax, p.bmax); continue; }
+    if (p.shape === PLANE) {           // axis-aligned clip planes shrink the box
+      if (p.B.y > 0.999) bmax.y = Math.min(bmax.y, p.o.y + p.k); else if (p.B.y < -0.999) bmin.y = Math.max(bmin.y, p.o.y - p.k);
+    }
+  }
+  if (part.clip) { bmin = vmax(bmin, part.clip[0]); bmax = vmin(bmax, part.clip[1]); }
+  const padv = 2 * h + dmax;
+  bmin = sub(bmin, v3(padv, padv, padv)); bmax = add(bmax, v3(padv, padv, padv));
+  const nx = Math.max(2, Math.ceil((bmax.x - bmin.x) / h) + 1), ny = Math.max(2, Math.ceil((bmax.y - bmin.y) / h) + 1), nz = Math.max(2, Math.ceil((bmax.z - bmin.z) / h) + 1);
+  const f = new Float32Array(nx * ny * nz), BS = 8, margin = 2.5 * h + dmax;
+  for (let bk = 0; bk < nz; bk += BS) for (let bj = 0; bj < ny; bj += BS) for (let bi = 0; bi < nx; bi += BS) {
+    const i1 = Math.min(nx, bi + BS), j1 = Math.min(ny, bj + BS), k1 = Math.min(nz, bk + BS);
+    const lo = v3(bmin.x + bi * h - margin, bmin.y + bj * h - margin, bmin.z + bk * h - margin);
+    const hi = v3(bmin.x + (i1 - 1) * h + margin, bmin.y + (j1 - 1) * h + margin, bmin.z + (k1 - 1) * h + margin);
+    const list = [];
+    let unions = 0;
+    for (const p of prims) {
+      if (!p.infinite && (p.bmax.x < lo.x || p.bmin.x > hi.x || p.bmax.y < lo.y || p.bmin.y > hi.y || p.bmax.z < lo.z || p.bmin.z > hi.z)) continue;
+      list.push(p); if (p.op === UNION && !p.infinite) unions++;
+    }
+    for (let k = bk; k < k1; k++) for (let j = bj; j < j1; j++) for (let i = bi; i < i1; i++) {
+      const id = i + nx * (j + ny * k);
+      if (!unions) { f[id] = BIG; continue; }
+      const x = bmin.x + i * h, y = bmin.y + j * h, z = bmin.z + k * h;
+      let d = evalList(list, x, y, z, gk);
+      if (disp && Math.abs(d) < dmax + 3 * h) d -= disp(x, y, z);
+      f[id] = d;
+    }
+  }
+  const pos = [], idx = [], cnx = nx - 1, cny = ny - 1, cnz = nz - 1, vid = new Int32Array(cnx * cny * cnz).fill(-1);
+  const E = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
+  const c = new Float32Array(8);
+  for (let k = 0; k < cnz; k++) for (let j = 0; j < cny; j++) for (let i = 0; i < cnx; i++) {
+    let mask = 0;
+    for (let q = 0; q < 8; q++) { const v = f[(i + (q & 1)) + nx * ((j + ((q >> 1) & 1)) + ny * (k + (q >> 2)))]; c[q] = v; if (v < 0) mask |= 1 << q; }
+    if (mask === 0 || mask === 255) continue;
+    let sx = 0, sy = 0, sz = 0, n = 0;
+    for (const [a, b] of E) {
+      const fa = c[a], fb = c[b];
+      if ((fa < 0) === (fb < 0)) continue;
+      const t = fa / (fa - fb);
+      sx += (a & 1) + ((b & 1) - (a & 1)) * t; sy += ((a >> 1) & 1) + (((b >> 1) & 1) - ((a >> 1) & 1)) * t; sz += (a >> 2) + ((b >> 2) - (a >> 2)) * t; n++;
+    }
+    vid[i + cnx * (j + cny * k)] = pos.length / 3;
+    pos.push(bmin.x + (i + sx / n) * h, bmin.y + (j + sy / n) * h, bmin.z + (k + sz / n) * h);
+  }
+  const C = (i, j, k) => vid[i + cnx * (j + cny * k)];
+  const quad = (a, b, cc, d, flip) => { if (a < 0 || b < 0 || cc < 0 || d < 0) return; if (flip) idx.push(a, cc, b, a, d, cc); else idx.push(a, b, cc, a, cc, d); };
+  for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const f0 = f[i + nx * (j + ny * k)], in0 = f0 < 0;
+    if (i < nx - 1 && j > 0 && k > 0 && j < ny - 1 && k < nz - 1 && in0 !== (f[i + 1 + nx * (j + ny * k)] < 0))
+      quad(C(i, j - 1, k - 1), C(i, j, k - 1), C(i, j, k), C(i, j - 1, k), !in0);
+    if (j < ny - 1 && i > 0 && k > 0 && i < nx - 1 && k < nz - 1 && in0 !== (f[i + nx * (j + 1 + ny * k)] < 0))
+      quad(C(i - 1, j, k - 1), C(i - 1, j, k), C(i, j, k), C(i, j, k - 1), !in0);
+    if (k < nz - 1 && i > 0 && j > 0 && i < nx - 1 && j < ny - 1 && in0 !== (f[i + nx * (j + ny * (k + 1))] < 0))
+      quad(C(i - 1, j - 1, k), C(i, j - 1, k), C(i, j, k), C(i - 1, j, k), !in0);
+  }
+  return { pos, idx };
+}
+
+
+// ---------------------------------------------------------------- body, rebuilt from the reference picture
+// Front outline measured from the reference (scale: chin at 1.83 m, floor at 0, 1 px = 2.061 mm); side depths are a
+// lean young male's. Torso, arms and legs are chains of short round cones whose ends follow those measurements, so
+// the outline is matched directly instead of being built up from muscle blobs.
+const T = { Pelvis: 1 << 0, Abdomen: 1 << 1, Chest: 1 << 2, Neck: 1 << 3, Trap: 1 << 4, Deltoid: 1 << 5, UpperArm: 1 << 6, Elbow: 1 << 7,
+  Forearm: 1 << 8, Thigh: 1 << 9, Knee: 1 << 10, Shin: 1 << 11, Ankle: 1 << 12, Foot: 1 << 13, Glute: 1 << 14, Back: 1 << 15, Abs: 1 << 16,
+  Pec: 1 << 17, Lat: 1 << 18, Collar: 1 << 19 };
+T.Torso = T.Pelvis | T.Abdomen | T.Chest | T.Trap | T.Back | T.Pec | T.Lat | T.Glute | T.Collar;
+const GTorso = 0, GArm = s => (s < 0 ? 1 : 2), GLeg = s => (s < 0 ? 3 : 4), BodyGroupK = 0.03;
+// Toon Head placement (same constants as the game): head units (chin 0, crown 1) → model metres
+const HeadUnit = 0.287, ChinHL = -0.027, AxisZ = -0.019;
+
+// Torso sections: [y, half width, front z, back z]  (half widths = the reference outline between the arms)
+const TORSO = [
+  [0.95, 0.125, 0.045, -0.085],
+  [0.99, 0.163, 0.064, -0.118],
+  [1.04, 0.184, 0.072, -0.130],
+  [1.08, 0.188, 0.076, -0.126],
+  [1.12, 0.182, 0.079, -0.110],
+  [1.16, 0.172, 0.080, -0.093],
+  [1.20, 0.163, 0.080, -0.082],
+  [1.24, 0.154, 0.079, -0.075],
+  [1.28, 0.146, 0.079, -0.072],
+  [1.32, 0.139, 0.082, -0.074],
+  [1.36, 0.140, 0.088, -0.081],
+  [1.40, 0.150, 0.097, -0.090],
+  [1.44, 0.163, 0.106, -0.099],
+  [1.48, 0.170, 0.112, -0.105],
+  [1.53, 0.173, 0.113, -0.109],
+  [1.58, 0.172, 0.108, -0.111],
+  [1.63, 0.166, 0.096, -0.108],
+  [1.67, 0.152, 0.079, -0.100],
+  [1.70, 0.128, 0.058, -0.088],
+];
+// Leg: [y, x, z, radius, depth/width]  (centre line and width from the reference; x = outward)
+const LEG = [
+  [0.99, 0.100, 0.000, 0.104, 1.00],
+  [0.93, 0.107, 0.004, 0.100, 1.00],
+  [0.83, 0.117, 0.010, 0.093, 1.02],
+  [0.77, 0.119, 0.012, 0.083, 1.04],
+  [0.70, 0.118, 0.013, 0.071, 1.06],
+  [0.64, 0.119, 0.012, 0.066, 1.04],
+  [0.60, 0.122, 0.010, 0.063, 1.02],
+  [0.555, 0.130, 0.000, 0.061, 1.06],
+  [0.50, 0.139, -0.008, 0.066, 1.10],
+  [0.46, 0.143, -0.011, 0.069, 1.12],
+  [0.40, 0.147, -0.010, 0.066, 1.10],
+  [0.35, 0.151, -0.007, 0.058, 1.08],
+  [0.30, 0.155, -0.005, 0.049, 1.10],
+  [0.25, 0.159, -0.005, 0.042, 1.14],
+  [0.20, 0.161, -0.007, 0.039, 1.18],
+  [0.15, 0.162, -0.012, 0.041, 1.15],
+];
+// Arm: [distance from the shoulder joint, radius, depth/width]
+const ARM = [
+  [0.00, 0.062, 1.00],
+  [0.09, 0.061, 1.00],
+  [0.19, 0.057, 1.00],
+  [0.235, 0.053, 1.00],
+  [0.275, 0.050, 1.02],
+  [0.32, 0.056, 0.92],
+  [0.36, 0.059, 0.88],
+  [0.40, 0.057, 0.86],
+  [0.445, 0.051, 0.84],
+  [0.49, 0.043, 0.84],
+  [0.53, 0.037, 0.82],
+  [0.575, 0.034, 0.80],
+];
+const UPPER_ARM = 0.285, FOREARM = 0.29;
+
+function skeleton(r) {
+  const w = r.bulk, sw = r.shoulders;
+  const S = { hips: v3(0, 1.08, 0), spine: v3(0, 1.22, 0), chest: v3(0, 1.38, -0.01), upperChest: v3(0, 1.55, -0.015),
+    neck: v3(0, 1.74, -0.025), head: v3(0, 1.865, -0.005), side: {} };
+  const a = r.armAngle * D2R;
+  const knee = LEG.find(l => l[0] === 0.60), ankle = LEG[LEG.length - 1];
+  for (const side of [-1, 1]) {
+    const dir = v3(side * Math.sin(a), -Math.cos(a), 0);
+    // the hand hangs a little closer to the thigh than the forearm points (relaxed wrist, like the reference)
+    const ha = a - r.wristBend * D2R, hdir = v3(side * Math.sin(ha), -Math.cos(ha), 0), palm = v3(-side * Math.cos(ha), -Math.sin(ha), 0);
+    const ua = v3(side * 0.207 * sw, 1.635, -0.02), wrist = add(ua, mul(dir, UPPER_ARM + FOREARM));
+    const ft = v3(side * ankle[1] * w, 0.135, -0.02), splay = r.footSplay * D2R;
+    const footDir = v3(side * Math.sin(splay), 0, Math.cos(splay));
+    const s = { dir, hdir, palm, ua, la: add(ua, mul(dir, UPPER_ARM)), wrist, footDir,
+      ul: v3(side * LEG[0][1] * w, LEG[0][0], LEG[0][2]), ll: v3(side * knee[1] * w, knee[0], knee[2]), ft,
+      toe: v3(ft.x + footDir.x * 0.155, 0.05, ft.z + footDir.z * 0.155), fingers: [], thumb: null };
+    const off = [0.0255, 0.0085, -0.0085, -0.0255], along = [0.087, 0.09, 0.087, 0.079], prox = [0.041, 0.045, 0.043, 0.034];
+    for (let f = 0; f < 4; f++) { const b = add(add(wrist, mul(hdir, along[f])), mul(FWD, off[f])); s.fingers.push([b, add(b, mul(fingerDir(hdir, f), prox[f]))]); }
+    const tb = add(add(add(wrist, mul(hdir, 0.022)), mul(FWD, 0.026)), mul(palm, 0.012));
+    s.thumb = [tb, add(tb, mul(thumbDir(hdir, palm), 0.036))];
+    S.side[side] = s;
+  }
+  return S;
+}
+const fingerDir = (dir, f) => norm(add(dir, mul(FWD, 0.06 - 0.04 * f)));
+const thumbDir = (dir, palm) => norm(add(add(mul(dir, 0.72), mul(FWD, 0.58)), mul(palm, 0.3)));
+const headToModel = (S, hs, h) => add(S.head, mul(v3(h.x * HeadUnit, ChinHL + h.y * HeadUnit, AxisZ + h.z * HeadUnit), hs));
+
+function frontZ(body, x, y) {
+  const list = sortPrims(body);
+  let z = 0.35;
+  for (let i = 0; i < 90; i++) { const d = evalList(list, x, y, z, BodyGroupK); if (d < 0.0004) break; z -= Math.max(d, 0.001); }
+  return z;
+}
+const torsoBone = y => (y < 1.15 ? "Hips" : y < 1.30 ? "Spine" : y < 1.47 ? "Chest" : "UpperChest");
+const torsoTag = y => (y < 1.12 ? T.Pelvis : y < 1.40 ? T.Abdomen : T.Chest);
+
+// r: { muscle, bulk, shoulders, waist, headSize, armAngle, footSplay, neck: {w, f, z} (toon head neck, head units) }
+function buildBody(r, S) {
+  const m = r.muscle, w = r.bulk, sw = r.shoulders, wa = r.waist, B = [];
+  const A = (p, bone) => { p.bone = bone; B.push(p); return p; };
+  // waist slider pinches the middle of the torso, shoulders slider widens the upper chest
+  const widthAt = (y, hw) => hw * w * (1 + (wa - 1) * Math.exp(-(((y - 1.30) / 0.11) ** 2)) + (sw - 1) * 0.6 * smooth01(1.42, 1.62, y));
+
+  // ---- torso: elliptical sections, front and back depth separate (chest forward, small of the back, seat)
+  for (let i = 0; i < TORSO.length - 1; i++) {
+    const [y0, h0, f0, b0] = TORSO[i], [y1, h1, f1, b1] = TORSO[i + 1];
+    const w0 = widthAt(y0, h0), w1 = widthAt(y1, h1), d0 = (f0 - b0) / 2, d1 = (f1 - b1) / 2;
+    const sz = (d0 / w0 + d1 / w1) / 2;
+    A(Limb(v3(0, y0, (f0 + b0) / 2), v3(0, y1, (f1 + b1) / 2), w0, w1, 0.03, GTorso, torsoTag((y0 + y1) / 2), 1, sz, RIGHT), torsoBone((y0 + y1) / 2));
+  }
+  // shoulder blades + back of the ribs, a flat pad so the upper back reads broad from behind
+  for (const side of [-1, 1])
+    A(Ell(v3(side * 0.085 * sw, 1.56, -0.085), v3(0.075, 0.1, 0.03), qEuler(0, -side * 18, 0), 0.03, GTorso, T.Back), "UpperChest");
+  // traps: neck to the top of the shoulder
+  for (const side of [-1, 1])
+    A(Limb(v3(side * 0.035, 1.785, -0.045), v3(side * 0.2 * sw, 1.695, -0.03), 0.05, 0.04, 0.05, GTorso, T.Trap), "UpperChest");
+  // deltoids: cap the shoulder (reference outline 0.274–0.278 m out at 1.59–1.63 m)
+  for (const side of [-1, 1]) {
+    const s = S.side[side];
+    A(Ell(add(s.ua, v3(side * 0.014, 0.004, 0)), v3(0.072 * Math.sqrt(m), 0.095, 0.072), rotZ(side * (8 + r.armAngle * 0.6)), 0.04, GTorso, T.Deltoid), side < 0 ? "LeftUpperArm" : "RightUpperArm");
+  }
+  // pecs: a soft lower edge, flat on top (lean, not bulky)
+  for (const side of [-1, 1]) {
+    const x = side * 0.083 * w, y = 1.505, z = frontZ(B, x, y);
+    A(Ell(v3(x, y, z - 0.032), v3(0.088 * w, 0.058, 0.04 * (0.6 + 0.4 * m)), qEuler(-8, side * 18, side * -6), 0.035, GTorso, T.Pec), "UpperChest");
+  }
+  // collarbones
+  for (const side of [-1, 1]) {
+    const a = v3(side * 0.028, 1.695, 0), b = v3(side * 0.16 * sw, 1.705, 0);
+    a.z = frontZ(B, a.x, a.y) - 0.011; b.z = frontZ(B, b.x, b.y) - 0.014;
+    A(Limb(a, b, 0.0105, 0.0095, 0.022, GTorso, T.Collar), "UpperChest");
+  }
+  // abs: two faint rows above the navel + one below (lean six-pack, fades with the muscle slider)
+  const absT = smooth01(0.45, 1.1, m);
+  if (absT > 0) for (const [y, hy] of [[1.425, 0.026], [1.37, 0.027], [1.315, 0.027]]) for (const side of [-1, 1]) {
+    const x = side * 0.036, z = frontZ(B, x, y);
+    A(Ell(v3(x, y, z - 0.012), v3(0.03, hy, 0.016 * absT), null, 0.016, GTorso, T.Abs), y > 1.4 ? "Chest" : "Spine");
+  }
+  // neck: from the collar up inside the Toon Head's neck
+  const neckTop = headToModel(S, r.headSize, v3(0, 0.08, r.neck.z));
+  const neckTopR = Math.min(r.neck.w, r.neck.f) * HeadUnit * r.headSize * 0.95;
+  A(Limb(v3(0, 1.67, -0.022), neckTop, 0.062, neckTopR, 0.035, GTorso, T.Neck), "Neck");
+
+  // ---- arms
+  for (const side of [-1, 1]) {
+    const s = S.side[side], g = GArm(side), dir = s.dir, perp = norm(cross(dir, FWD));
+    for (let i = 0; i < ARM.length - 1; i++) {
+      const [t0, r0, d0] = ARM[i], [t1, r1, d1] = ARM[i + 1], mid = (t0 + t1) / 2;
+      const tag = mid < 0.25 ? T.UpperArm : mid < 0.31 ? T.Elbow : T.Forearm;
+      const bone = mid < UPPER_ARM ? (side < 0 ? "LeftUpperArm" : "RightUpperArm") : (side < 0 ? "LeftLowerArm" : "RightLowerArm");
+      A(Limb(add(s.ua, mul(dir, t0)), add(s.ua, mul(dir, t1)), r0 * w, r1 * w, 0.02, g, tag, 1, (d0 + d1) / 2, perp), bone);
+    }
+    // biceps (front) and triceps (back) keep the upper arm from looking like a tube
+    A(Ell(add(add(s.ua, mul(dir, 0.15)), v3(0, 0, 0.018)), v3(0.042 * m, 0.085, 0.04 * m), rotZ(side * r.armAngle), 0.025, g, T.UpperArm), side < 0 ? "LeftUpperArm" : "RightUpperArm");
+    A(Ell(add(add(s.ua, mul(dir, 0.13)), v3(0, 0, -0.02)), v3(0.045 * m, 0.1, 0.04 * m), rotZ(side * r.armAngle), 0.025, g, T.UpperArm), side < 0 ? "LeftUpperArm" : "RightUpperArm");
+    // elbow point at the back
+    A(Ell(add(s.la, v3(0, 0, -0.03)), v3(0.022, 0.03, 0.02), null, 0.02, g, T.Elbow), side < 0 ? "LeftLowerArm" : "RightLowerArm");
+  }
+
+  // ---- legs
+  for (const side of [-1, 1]) {
+    const s = S.side[side], gl = GLeg(side);
+    const pt = l => v3(side * l[1] * w, l[0], l[2]);
+    for (let i = 0; i < LEG.length - 1; i++) {
+      const a = LEG[i], b = LEG[i + 1], y = (a[0] + b[0]) / 2;
+      const tag = y > 0.66 ? T.Thigh : y > 0.54 ? T.Knee : y > 0.2 ? T.Shin : T.Ankle;
+      const bone = y > 0.60 ? (side < 0 ? "LeftUpperLeg" : "RightUpperLeg") : (side < 0 ? "LeftLowerLeg" : "RightLowerLeg");
+      A(Limb(pt(a), pt(b), a[3] * w, b[3] * w, 0.02, gl, tag, 1, (a[4] + b[4]) / 2, RIGHT), bone);
+    }
+    const UL = side < 0 ? "LeftUpperLeg" : "RightUpperLeg", LL = side < 0 ? "LeftLowerLeg" : "RightLowerLeg", FT = side < 0 ? "LeftFoot" : "RightFoot", TO = side < 0 ? "LeftToes" : "RightToes";
+    // front of the thigh (quads) and the inner-thigh swell above the knee
+    A(Ell(v3(side * 0.118 * w, 0.80, 0.04), v3(0.06 * m, 0.13, 0.05 * m), null, 0.03, gl, T.Thigh), UL);
+    A(Ell(v3(side * 0.095 * w, 0.68, 0.02), v3(0.04 * m, 0.06, 0.04 * m), null, 0.025, gl, T.Thigh), UL);
+    // kneecap
+    A(Ell(v3(side * 0.123 * w, 0.605, 0.052), v3(0.032, 0.038, 0.018), null, 0.02, gl, T.Knee), LL);
+    // calf at the back
+    A(Ell(v3(side * 0.142 * w, 0.46, -0.035), v3(0.052 * m, 0.105, 0.045 * m), null, 0.03, gl, T.Shin), LL);
+    // ankle bones
+    A(Ell(v3(side * 0.162 * w + side * 0.024, 0.15, -0.012), v3(0.014, 0.017, 0.016), null, 0.01, gl, T.Ankle), LL);
+    A(Ell(v3(side * 0.162 * w - side * 0.023, 0.158, -0.008), v3(0.014, 0.017, 0.016), null, 0.01, gl, T.Ankle), LL);
+    // foot: heel → ball → toes, turned out like the reference
+    const fd = s.footDir, ft = s.ft;
+    const heel = v3(ft.x - fd.x * 0.045, 0.055, ft.z - fd.z * 0.045 - 0.01);
+    const ball = v3(ft.x + fd.x * 0.155, 0.04, ft.z + fd.z * 0.155);
+    const side2 = norm(cross(UP, fd));
+    A(Limb(v3(ft.x, 0.12, ft.z), heel, 0.042, 0.042, 0.03, gl, T.Foot, 1, 1, side2), FT);
+    A(Limb(heel, ball, 0.046, 0.04, 0.03, gl, T.Foot, 1.05, 0.78, side2), FT);
+    A(Limb(v3(ft.x + fd.x * 0.03, 0.085, ft.z + fd.z * 0.03), ball, 0.034, 0.028, 0.03, gl, T.Foot, 1.1, 0.8, side2), FT);
+    A(Limb(ball, v3(ball.x + fd.x * 0.04, 0.032, ball.z + fd.z * 0.04), 0.036, 0.026, 0.02, gl, T.Foot, 1.15, 0.75, side2), TO);
+  }
+  // navel (cut out; added after every torso piece)
+  const navY = 1.298, navZ = frontZ(B, 0, navY);
+  const nav = A(Ell(v3(0, navY, navZ + 0.002), v3(0.007, 0.011, 0.012), null, 0.006, GTorso, 0), "Spine");
+  nav.op = SUBTRACT;
+  return B;
+}
+
+// toes for bare feet: five small nubs on the end of the foot, own part like the hands
+function buildToes(S, side) {
+  const s = S.side[side], fd = s.footDir, sd = norm(cross(UP, fd)), P = [];
+  const ball = v3(s.ft.x + fd.x * 0.155, 0.04, s.ft.z + fd.z * 0.155);
+  const across = [-0.03, -0.012, 0.005, 0.02, 0.033], r = [0.0135, 0.0105, 0.0098, 0.009, 0.0082], fwd = [0.058, 0.056, 0.05, 0.043, 0.035];
+  for (let i = 0; i < 5; i++) {
+    const c = add(ball, mul(sd, -side * across[i] * -1));
+    const tip = add(c, mul(fd, fwd[i]));
+    P.push(Limb(v3(c.x, 0.032, c.z), v3(tip.x, 0.018 + r[i] * 0.55, tip.z), r[i] * 1.1, r[i], 0.006, i, 0, 1.0, 0.9));
+  }
+  return P;
+}
+
+function buildHand(S, side) {
+  const s = S.side[side], dir = s.hdir, palm = s.palm, across = FWD, w = s.wrist, P = [];
+  const frame = qLook(palm, dir);
+  P.push(Box(add(add(w, mul(dir, 0.048)), mul(palm, 0.002)), frame, v3(0.038, 0.046, 0.0165), 0.012, UNION, 0.012, 0));
+  P.push(Limb(sub(w, mul(dir, 0.05)), add(w, mul(dir, 0.02)), 0.034, 0.031, 0.015, 0, 0, 0.78, 1.15, palm));
+  P.push(Ell(add(add(add(w, mul(dir, 0.035)), mul(across, 0.021)), mul(palm, 0.009)), v3(0.017, 0.028, 0.014), frame, 0.014, 0));
+  const inter = [0.036, 0.04, 0.037, 0.029];
+  for (let f = 0; f < 4; f++) {
+    const [a, b] = s.fingers[f], tip = add(b, mul(fingerDir(dir, f), inter[f]));
+    P.push(Limb(sub(a, mul(dir, 0.01)), b, 0.0098, 0.0088, 0.004, 1 + f));
+    P.push(Limb(b, tip, 0.0088, 0.0074, 0.004, 1 + f));
+  }
+  const td = thumbDir(dir, palm), [t0, t1] = s.thumb;
+  P.push(Limb(sub(t0, mul(td, 0.01)), t1, 0.0118, 0.0104, 0.005, 5));
+  P.push(Limb(t1, add(t1, mul(norm(add(td, mul(palm, 0.25))), 0.031)), 0.0104, 0.0086, 0.005, 5));
+  // the reference hands are a bit bigger than the game's: scale the whole hand about the wrist
+  const k = HAND_SCALE, sc = p => add(w, mul(sub(p, w), k));
+  return P.map(p => {
+    const c = Object.assign({}, p, { A: sc(p.A), k: p.k * k });
+    if (p.shape === LIMB) { c.B = sc(p.B); c.size = [p.size[0] * k, p.size[1] * k]; }
+    else { c.size = mul(p.size, k); if (p.shape === BOX) c.sx = p.sx * k; }
+    return prepare(c);
+  });
+}
+const HAND_SCALE = 1.15;
+
+function shell(body, tags, off, kAdd, exclude = 0, onlyGroup = null) {
+  const out = [];
+  for (const p of body) {
+    if (!(p.tag & tags) || (p.tag & exclude) || p.op !== UNION) continue;
+    if (onlyGroup !== null && p.group !== onlyGroup) continue;
+    out.push(inflated(p, off, kAdd));
+  }
+  return out;
+}
+
+// Trunks: the layer that never comes off. Waistband at 1.20 m, legs end at mid thigh (0.905 m), like the reference.
+function buildTrunks(r, body) {
+  const tr = shell(body, T.Pelvis | T.Abdomen | T.Thigh | T.Glute, 0.007, 0.006, T.Abs);
+  tr.push(Keep(v3(0, 1.198, 0), UP), Keep(v3(0, 0.905, 0), DOWN));
+  const band = shell(body, T.Pelvis | T.Abdomen | T.Thigh, 0.011, 0.006, T.Abs);
+  band.push(Keep(v3(0, 1.2, 0), UP, 0.002), Keep(v3(0, 1.172, 0), DOWN, 0.002));
+  return [
+    { prims: tr, cell: 0.011, groupK: BodyGroupK + 0.006, color: r.colors.trunks },
+    { prims: band, cell: 0.008, groupK: BodyGroupK + 0.006, color: r.colors.band },
+  ];
+}
+
+const BodyGen = { skeleton, buildBody, buildHand, buildToes, buildTrunks, polygonize, headToModel, BodyGroupK, HeadUnit, ChinHL, AxisZ };
+
+
+// ================================================================== scene
+const canvas = document.getElementById("c");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+const scene = new THREE.Scene();
+const persp = new THREE.PerspectiveCamera(28, 1, 0.05, 60);
+const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.05, 60);
+const world = new THREE.Group(); scene.add(world);
+const root = new THREE.Group(); world.add(root);          // the Toon Head (head units), placed on the neck by rebuild()
+const light = { dir: new THREE.Vector3() };
+// how squarely the camera faces the face (0 side … 1 front); shared by the skin and outline shaders
+const front = { value: 1 };
+const shadowMap = faceShadowMap();
+const skinUniforms = {
+  uLight: { value: light.dir }, uShadowMap: { value: shadowMap },
+  uLit: { value: new THREE.Color("#ffe8dc") }, uShade: { value: new THREE.Color("#f2b3a6") },
+  uRim: { value: new THREE.Color("#fff3ea") }, uShowMap: { value: 0 }, uFront: front,
+};
+const skinMat = new THREE.ShaderMaterial({
+  uniforms: skinUniforms,
+  vertexShader: `
+    attribute vec2 faceUV; attribute float faceMask; attribute vec3 morph; uniform float uFront;
+    varying vec3 vN; varying vec3 vView; varying vec2 vF; varying float vM; varying vec3 vRight; varying vec3 vFwd;
+    void main(){
+      vN = normalize(mat3(modelMatrix) * normal);
+      vec4 wp = modelMatrix * vec4(position + morph * uFront, 1.0);
+      vView = normalize(cameraPosition - wp.xyz);
+      vF = faceUV; vM = faceMask;
+      vRight = normalize(mat3(modelMatrix) * vec3(1.0, 0.0, 0.0));
+      vFwd = normalize(mat3(modelMatrix) * vec3(0.0, 0.0, 1.0));
+      gl_Position = projectionMatrix * viewMatrix * wp;
+    }`,
+  fragmentShader: `
+    uniform vec3 uLight; uniform sampler2D uShadowMap; uniform vec3 uLit; uniform vec3 uShade; uniform vec3 uRim; uniform float uShowMap;
+    varying vec3 vN; varying vec3 vView; varying vec2 vF; varying float vM; varying vec3 vRight; varying vec3 vFwd;
+    void main(){
+      vec3 n = normalize(vN);
+      float body = smoothstep(-0.03, 0.05, dot(n, uLight));
+      // face: light angle around the head decides the threshold, the painted map decides the shape
+      float lx = dot(uLight, vRight), lz = dot(uLight, vFwd);
+      float th = (1.0 - lz / max(length(vec2(lx, lz)), 1e-4)) * 0.5;
+      float uNear = vF.x * (lx >= 0.0 ? 1.0 : -1.0);
+      float t = texture2D(uShadowMap, vec2(uNear * 0.5 + 0.5, (vF.y + 0.05) / 0.8)).r;
+      float faceLit = smoothstep(th - 0.012, th + 0.012, t);
+      float lit = mix(body, faceLit, vM);
+      vec3 col = mix(uShade, uLit, lit);
+      float rim = pow(1.0 - max(dot(n, normalize(vView)), 0.0), 4.0) * (0.35 + 0.65 * lit);
+      col = mix(col, uRim, rim * 0.35);
+      if (uShowMap > 0.5) col = mix(col, vec3(t), vM);
+      gl_FragColor = vec4(col, 1.0);
+      #include <colorspace_fragment>
+    }`,
+});
+const outlineMat = (color, scale) => new THREE.ShaderMaterial({
+  side: THREE.BackSide,
+  uniforms: { uColor: { value: new THREE.Color(color) }, uW: { value: scale }, uFront: front },
+  vertexShader: `attribute float faceMask; attribute vec3 morph; uniform float uW; uniform float uFront;
+    void main(){ float w = uW * (1.0 - 0.55 * faceMask); gl_Position = projectionMatrix * modelViewMatrix * vec4(position + morph * uFront + normal * w, 1.0); }`,
+  fragmentShader: `uniform vec3 uColor;
+    void main(){
+      gl_FragColor = vec4(uColor, 1.0);
+      #include <colorspace_fragment>
+    }`,
+});
+
+// head geometry
+const head = buildHead();
+const headGeo = new THREE.BufferGeometry();
+headGeo.setAttribute("position", new THREE.Float32BufferAttribute(head.pos, 3));
+headGeo.setAttribute("faceUV", new THREE.Float32BufferAttribute(head.uvF, 2));
+headGeo.setAttribute("faceMask", new THREE.Float32BufferAttribute(head.mask, 1));
+headGeo.setAttribute("morph", new THREE.Float32BufferAttribute(head.morph, 3));
+headGeo.setIndex(head.idx);
+headGeo.computeVertexNormals();
+const ears = buildEars();
+const earGeo = new THREE.BufferGeometry();
+earGeo.setAttribute("position", new THREE.Float32BufferAttribute(ears.pos, 3));
+earGeo.setAttribute("faceUV", new THREE.Float32BufferAttribute(new Array(ears.pos.length / 3 * 2).fill(0), 2));
+earGeo.setAttribute("faceMask", new THREE.Float32BufferAttribute(new Array(ears.pos.length / 3).fill(0), 1));
+earGeo.setAttribute("morph", new THREE.Float32BufferAttribute(new Array(ears.pos.length).fill(0), 3));
+earGeo.setIndex(ears.idx);
+earGeo.computeVertexNormals();
+
+const headMesh = new THREE.Mesh(headGeo, skinMat), earMesh = new THREE.Mesh(earGeo, skinMat);
+const skinOutline = outlineMat("#9c5446", 0.0065);
+const outlines = new THREE.Group();
+outlines.add(new THREE.Mesh(headGeo, skinOutline), new THREE.Mesh(earGeo, outlineMat("#9c5446", 0.004)));
+root.add(headMesh, earMesh, outlines);
+
+// face features: patches that follow the head surface (sampled from the actual mesh), textured and slightly in front
+const headTris = [];
+for (let i = 0; i < head.idx.length; i += 3) {
+  const P = [0, 1, 2].map(k => head.pos.slice(head.idx[i + k] * 3, head.idx[i + k] * 3 + 3));
+  if (P.some(p => p[2] > 0.15)) headTris.push(P);
+}
+function surfZ(x, y) {
+  let best = -Infinity;
+  for (const [A, B, C] of headTris) {
+    const d = (B[1] - C[1]) * (A[0] - C[0]) + (C[0] - B[0]) * (A[1] - C[1]);
+    if (Math.abs(d) < 1e-12) continue;
+    const l1 = ((B[1] - C[1]) * (x - C[0]) + (C[0] - B[0]) * (y - C[1])) / d, l2 = ((C[1] - A[1]) * (x - C[0]) + (A[0] - C[0]) * (y - C[1])) / d, l3 = 1 - l1 - l2;
+    if (l1 < -1e-6 || l2 < -1e-6 || l3 < -1e-6) continue;
+    best = Math.max(best, l1 * A[2] + l2 * B[2] + l3 * C[2]);
+  }
+  return best;
+}
+function featurePatch(cx, cy, w, h, lift, flipU, cols = 16, rows = 8) {
+  const pos = [], uv = [], idx = [];
+  for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
+    const u = c / cols, v = r / rows, x = cx + (u - 0.5) * w, y = cy + (v - 0.5) * h;
+    pos.push(x, y, surfZ(x, y) + lift); uv.push(flipU ? 1 - u : u, v);
+  }
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const a = r * (cols + 1) + c, b = a + 1, d = a + cols + 1, e = d + 1;
+    if (flipU) idx.push(a, e, b, a, d, e); else idx.push(a, b, e, a, e, d);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  return g;
+}
+const featureMat = map => new THREE.MeshBasicMaterial({ map, transparent: true, alphaTest: 0.35, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 });
+const eyeMat = featureMat(eyeTexture(EYE_COLORS[eyeColor]));
+for (const side of [-1, 1]) {
+  // texture is drawn as the right-hand eye (inner corner on the left); mirror it for the other side
+  root.add(new THREE.Mesh(featurePatch(side * H.eye.x, H.eye.y, H.eye.w, H.eye.h, 0.003, side < 0), eyeMat));
+  root.add(new THREE.Mesh(featurePatch(side * (H.eye.x + 0.01), H.brow.y, H.brow.w, H.brow.h, 0.003, side < 0, 14, 4), featureMat(browTex)));
+}
+root.add(new THREE.Mesh(featurePatch(0, H.mouth.y, H.mouth.w, H.mouth.h, 0.003, false, 8, 4), featureMat(mouthTex)));
+
+// ================================================================== body materials (same two-tone skin as the head, so the neck joins)
+const bodyMat = (lit, shade, rimAmt = 0.3) => new THREE.ShaderMaterial({
+  uniforms: { uLight: { value: light.dir }, uLit: { value: new THREE.Color(lit) }, uShade: { value: new THREE.Color(shade) }, uRim: { value: new THREE.Color("#fff3ea") }, uRimAmt: { value: rimAmt } },
+  vertexShader: `varying vec3 vN; varying vec3 vView;
+    void main(){ vN = normalize(mat3(modelMatrix) * normal); vec4 wp = modelMatrix * vec4(position, 1.0); vView = normalize(cameraPosition - wp.xyz); gl_Position = projectionMatrix * viewMatrix * wp; }`,
+  fragmentShader: `uniform vec3 uLight; uniform vec3 uLit; uniform vec3 uShade; uniform vec3 uRim; uniform float uRimAmt; varying vec3 vN; varying vec3 vView;
+    void main(){
+      vec3 n = normalize(vN);
+      float lit = smoothstep(-0.03, 0.05, dot(n, uLight));
+      vec3 col = mix(uShade, uLit, lit);
+      float rim = pow(1.0 - max(dot(n, normalize(vView)), 0.0), 4.0) * (0.35 + 0.65 * lit);
+      col = mix(col, uRim, rim * uRimAmt);
+      gl_FragColor = vec4(col, 1.0);
+      #include <colorspace_fragment>
+    }`,
+});
+const lineMat = (color, w) => new THREE.ShaderMaterial({
+  side: THREE.BackSide, uniforms: { uColor: { value: new THREE.Color(color) }, uW: { value: w } },
+  vertexShader: `uniform float uW; void main(){ gl_Position = projectionMatrix * modelViewMatrix * vec4(position + normal * uW, 1.0); }`,
+  fragmentShader: `uniform vec3 uColor;
+    void main(){
+      gl_FragColor = vec4(uColor, 1.0);
+      #include <colorspace_fragment>
+    }`,
+});
+const MATS = {
+  skin: bodyMat("#ffe8dc", "#f2b3a6"), skinLine: lineMat("#9c5446", 0.0036),
+  trunks: bodyMat("#363a55", "#24263a", 0.15), trunksLine: lineMat("#11121c", 0.0034),
+  band: bodyMat("#24263a", "#17182a", 0.15),
+};
+const wireMat = new THREE.MeshBasicMaterial({ color: "#1b2130", wireframe: true, transparent: true, opacity: 0.18 });
+
+// ================================================================== reference picture (front, at the game's scale)
+const REF = { url: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBAUEBAYFBQUGBgYHCQ4JCQgICRINDQoOFRIWFhUSFBQXGiEcFxgfGRQUHScdHyIjJSUlFhwpLCgkKyEkJST/2wBDAQYGBgkICREJCREkGBQYJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCT/wAARCAKfA4QDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD32ig0CmMKKKDSAKKKKACiiigAooooAKKKKACiiigAopKWgBaSiigBKKWigAFHFFFABSUtFACUUUUALRSUUALRSUUALRRRQAUUUUAFL1pKWgBaKKKAClpO1LQAUUUUgCiiigBcUUZxQOeKYATSZpkkkcX+skRMf3jiqU2vadCSDcqxH9wg1LkluylFvZGhmjDN0I/GsCfxXG2Ra2ruezOMCqrXV7qI2z3i2yHqqNWE8VCOzN4YWpI273WLPTuJpgX/ALorKn1DVNVO21AtoD/GwyadaWGmWvzCSN5O7Mc5q8s8PQSpj2NcdTFyeiOuGFjHXcz4tEijfzJMzy93fmrAgER4HWriyRkcOD+NRsQehFcUnc643IJII7iMo6g/Wuf1PwsGJaD8hXSopJNPUDNJq5cajicVa+E7h3/e8LXSWGkQWKjaoJ9a02FNUZFJRsN1ZSGEZqs1pFOGWVFdT2IqynOc1IqqOTVEaoyf7NubNvM02coD/A/K/lVuHxL5ZEeoRGJ+m8Dg1cMsKjl1H41BNNaOpWRoyD6muiGKlHQ5p4eM9WjQt7uG4QNC4kB7g4qXNcrLZWsL+bZXRgf0Q5Bp8Wv3lmoE8JuVH8a8k13wxcWtTjnhJp3jqdPmisiHxPYOoMiyRH0IxVtNWsJsGO7i+hYV0KpF9TnlTkt0W6KEYSjchDD1HNJVEC0UmKWmAuaKSnUAFFFFABRRiigApDS0lACUUtJQAnNGaWkoAKKKKACiiigAooooAKKKKAFFFFFABRRRQAUUUUAFFFFABRRRQAUtJS0ALRRRQAUUUUAFFFFABQKKUUAFFFFABRRRQAygUUUwCg0UGkACigUUAFFFFABRRRQAUUdKSgBaSiigAooooAKWiigAooooAKKKKACkpaTigAooooAKKKKACiiigAFLQKKACiiigApaSloABS0lLQAUtJS0AFFFFABRRmjrQAjMqqSzBVHUntWBca1c6g7Q6aoWJeGmPT8BSa3eNe3iaXbsQo+aZh6elXba0jt4VijXaqiuDFYlx0id1CgmuaRnx6KJPnuZ5ZX7/McVai0y1j6QIfqKvqoAoxivNc5SfvHcrLREIt4gMCJAPpTHtLdusS/lVnFNYe9S0NMqf2fa/wDPOk/s227Kw/Gre3NGylYfMyodOh/hdx+NRvpmfuXDD860PLFKIl9KfKP2ljNhsLmEkpcb/Y0+KeZXKTJhuxrQ27TxTGi3tkgUWDmuRyyokZJ59qqRtcXRIQbF9TV824bqMinLHtXaOBRZhzJLQoDTpM83Bpw05B96Zj+NXfKpTGMUWDnKf2GAd2P40v2O2HVM1Z8umlKLC5mRC2tR/wAs1pwhiAwqKB9KkCinYxRYG+xVe0gb70CN9RVd9ItHz+4C5/u8Vp7QaMU1oTzdzDOl3Nq2+xuZEx/C5JBq7pmu/apDa3aeRdDjB6N9KusncVlatYedGJowFnj5VhXVRxUouzMamHjPY3x/Liis7Q9S/tGzJcnzozscH1FaOa9dSUldHlSVm0LRSZ4paYhaWk7UZoAWg9KM0E0AIaSlJpM0AFJRRQAGkoooAKKKKACiiigAooooAKXvSUvegAoo70UAFFFFABRRRmgAoozRmgAooooAKWkpaAFopKWgAooooAKKSloAKKKKAFpKKKADNFFFADTQKKKYBQaKDSASlpKWgAooozQAUUUmaAFpKKKACiiigAoooFAC0UUUAFFFFABRRRQAUlLmkzQAUUUUAFFFLigAxSUtGKACiiigAooooAWiigUAH40tFFABS0gpaACjFApaAGmoru4W2tJpnONinH1qU9awPGVy0OmpChwZnA/DNRN8sWy6ceaaiir4djaRJL2XmSdt3PYVurVGyiEMEaDoAKuivBlLmd2e3y20H5ozTc0uaRNhc0nWilFCQgApwFJThTsK4AUuKTOKUHNFhBtzRtpc0ZoGJijFLmkzRYLiUGlNJRYBppDTsUmKLDG0macRTTxQCFzS5pmaUGkFhxqJxnipKaetBSMGxb+y/EnlE4huhjHv1rqsYNch4pBiSG6Q4aFgQRXWQy+dBHKDkMoNerg580bdjz8bT95S7j8UUA0ZrtOIWkz7UZozQAuaM0maM0AKaQ0ZpDQAUUc0UAFJS0UAJRRRQAUUUtACUUtGKAE5paMUUAFFFFABRRRQAUUUZoAKO1JmlzQAUUUUAFLSUooAKWkpaACiikoAWiiigApaSigBaSlooATFFLRQAyiiimAUGig0gEpaSloASgUUUAFFFFABRRRQAUUUUAFFLRQAGiiigAopKKAF5o5pKKAF5pKKKACloooAKKKKACiloxQAlLiiloATHFGKWigBMUtFFABRRRigAApaKKQCiigUtMBuOa5fxafM1LT4O2WJ/Sup71yPidv+KhsfTDfyFc+Kf7pnThF+9ia0XCgelThuKqxNUxfFeHc9hoeXIqNpcHrVe8u1giYselZen6st9O6qw+Q4ouOMHudDG24VMBUELDAqypzVoxnuGKUClpQKozGEUCnEUbaAGE0ZpSKSgBaKBSikgDGaMU4UoFOwDdtIRUmKQiiwERFMfgVK1Ruwxiky0VnfaaVJM1V1GXy4SwOKo6fqSTkqHyV4PNZ3N1BtXNwNSE1DFJuHWnluKZFjJ8QR+dYSKfrWr4dn8/Q7Rj/dx+tZmrt/osv0NWfBZLeHLYk54P8AOu/AOzaOTHr3UzcHSijFLXqHmCc0lGaTNAheaKbzRmgB2aOabmlFAC80UlFAC0UUUAFFFFABRRRQAUUUUAFFFFAB3pKWkoAM0ZoooAM0UUUALzSc0UUALRRRQAUtFFABS0lFAC0UUlAC0UlLQAUCiigBaKKSgBaKM0UAMoooFMApDS0lIAooooAKKKKACiiigAooooAMUUtFAAKKO9FABRRSdqACiiigAooooAKKKKAFoFFFABRRS0AFH40UUAFLRRQAUUUUAFFFFABRRRQAUopOKKTAWlzSZooAK43xg3l69px9d38hXZKM1w/i5zc+JbSJORCCW/EVzYp/umdeEX7xG1AcgVIwY9KhtVJxWgkeBmvESuevJ2Mq7097mJge4rz7TZ5dA8VS2Vwx2zncv4V6s54ryn4l5stUsryPh9wX8zScTWjLm0Z6baTLMgINXkYetcf4d1kTWy7j8w6iumhkDcg1aZjVg76F4Gniqgu4c7dwzU4f3rS5g4tbklJSBqM0EiGmmnHpUdAxwNOBplANAWJRThTAaXNO4mPJFMJFGarz3McI+dgKLjSbHsw9ahlkA70zzkkG5GBFU7u5WMEk8Cs5M2hTMTxhq6WGnyyMcbQazPAdjcXlqbp2bDnIzXPfETU2urZ0XoxxXong+H7PpFvGP7gP6VLhrc6W3GOhoxwPEMdaXJANXduagmTGadrHOp3Zga9L5djMc44rV8Gps8O2o9v61l63bm6tnjA6itLwbL5ugxDvH8pruwO7OXHr3Ym5S02jNeoeSFJRRmi4CUUUUXAKBRQKAFooopgKKKBRQAUUUvFACUtFFABRRRQAlFFFACUUUUAFFFFABRRRQAUYope9ABRRRQAoooFLQAmKKWigApKKKACjNFFAC0UUUAFFFLQAlFLRQAzNAoxRTAKDRRSASiiigAooooAKWiigAooooAKKKKACiiigApKWkoAKKKKACiiigAooooAWiiigApaSloAKWkpaACiiigAooooAKKKSgBaKKKAClzSUUgDNHFFFACg4P0Ga4qwAvtTvrtxn5gqn6E11Or3Qs9Lup+hWM4+tc5oUJj05Xb70jFj+NcGOlaNjvwMLtyNe3THarYORUMI4qdRgV5iO+YyQDaTXmPxSClLMnqJV/nXp0jcEV5Z8WH229uf7sqn9aUjfD7lvSYpFhEsXXvXU2F+SvlknNYfhWRJrJM8h0Bral01g2+OoZtJrqTLYytcebvGM5xmtqN8ADNY1u0q/K2eKvRytmqjoYVNTRD8UbxVdHJqRQT61dzDlHls0qjNIEqVFxTJbQwrimng1Ow4qJlNAkwDUF6YykVGxIouVa493PY1jaxbyXYUIxGKvySmqNxO/YZqWzaEbMitR9ht9kjZNZuoXbXTGNM1PLFNcHvSxWItlMj9etQzZLU888Zw+TaoG6769T8OkDTrYj/nmv8q8o+It2riIKesuK9T8Nt/xLbb/AK5r/IVb0sOr8JurTZBkU4dKD0pnCjNnjDEjFVvCzfZLq7sCeCdy1flGGNZLSfY/EVpKOFkUofqTW+FlaYYmPNTZ1VLQ33jSZr2keIJSUppKACiigUAFApaKYBQKKWgAooooAWikpc0AFHeiigApKKKACjNFFACdqKKKACiiigAoooxQAUtFFABRRRQAopaSigBaKSigApKWkoAKUUlKKAFooooAX86KSloAKKKKAGUUUUAFBooNACUtAooAKKKKACiiigAooooAKKKKACig0maACiiigAooooAKKKKACiilxQAUUUUALRRRzQAUtJS0AFFFFABRRRQAUlLSUALRRRQAlFFJQA6koFFAGF41lKaGUH/LR9v6VHYKBawL0wg/lTPHD/6NZw/351/rU1qMKi+gFeTjZXnY9fBq1K6L8XAqXPGKiSn5rjRuyKc7RmvLPiwzS6cwQZfI2j1Nen3TfKfpXneuxDU9f0+zYblaZWYewNOK5pJGsZKEHIZ4AmabR7dX4dFCMPQgV3trISoU1x9laf2L4ovbADajyF0HsTxXXxrtwaVSPK7Fc6nFSRcESv2xT1gUGmRP8tToakybsOWMCpVUU0GjfVIybbJeKTdURc0m6ncVibePWlyKr5NO3GgLEjYNRsoNG6lzQCuQtCtQtboOetWmNRueKlo1jJlVo1UZwBWLq90yAqgByMVrXEhIIFY97HiOSR+wyKnrY2j3Z5P49jlNzaxx5YI4lkP91a9g8LzCTToCP7g/lXH2ugjWtJ12/dcny2ij9uhre8CXIl0uME8p8v5VvVjaKZEaim5LsdorZFKaiQ1JWZiQTLwTWBrp8o2846xyqa6GboawPEKbtPkP93mqg7STNN4tM6uN/Mhjk/vKDS5qppMnm6XbMf8AnmB+lXMV7yeh4DVmJRRS0xDaMUtFABRRSimAUUUUAFLSUtABn2ozSUUALmikooAKKKKACiijtQAlFFFABRRRQAUUUtABRRRQAUUUtABS0lH40AFFFFABSUtFACUtFLQAUopKWgAooooAKKKKAGUUUUAFBoooABRQKKACiiigAooooAKKKKACkNLSUAFFFFABRRRQAUUUUAFAopaADFFFFABRRRQAtHNFLQAlLRRQAUlLRQAlFLSUAFAoxRQAtFFFACUYpaXFACUUtAHNAHKeNCWv9OjHTzAcVethzVDxP+81+zTrhN361oW/XFeJjHeqz28Iv3KLa9KcTxSL0pGrBFsqXziONj7Vx/h6D+0fGrS4ylspB+p5rpNal8uGQ56LVH4cWe6C81Bh808gwfYcVvg1zVCMXLkosh8dW5s9XstVUYBIViK2oJllRWHQipvGOnDUtBuUAy6Dcnr1rE0C68+wiYnkcVePjaegsFLmp27G+q+lTK1V4pMr1p+6uI3auWd/FOXmq6Nk1OlUjNqw/bSYp2aaaogMUuKbmnA0ANIpuae1QscUmXEcWqGYkjigvSZBFJstIrlccmsDxXd/Z7Bwp5YYrcu5MKea5LVkbUtVs7BMsHcM30BzRBXlY0b5VzHTeFtL+zeGYIJBzcJvbPvXNeD0axvLyxY4MUhIH1Oa9IWJYkjRBhUUKBXB6xD/AGT4v85RiO6HP4DFepiqf7pWPMwVW9Vp9TrIGJFWAeKp2zggc1aU5FeWjukhsnIrH1qPzNOuFHXYa2JOlZ98oe3kX1U0WKiT+FZDLocG45KkrWvWB4KffpDL3WZhXQV79J3gmeFVVptCUUUVZmIaUUhpaYAaBRRQAUUUUALSUUtABRRRQAlFFFABRRRQACkoooAKKKKACiiigApaSloAKKKKACiiigBaKKKACiiigAopaKACiiigApRSUtABRRRQAUUUUANpKKKACg0UGgAooFFABRRRQAUUUUAH40lLSUAFFFFABRRRQAUUUUAFFGKXmgAooooAKKKKAClpKWgAooooAWiikoAKWkpaAENFFFABS0lLQAUUUUAKKKKKAAUo5NIKRnCKzE4ABNAbnJXx+0+LGA5EURB/OtGL5XrP0Nftup3t9jKM5Cn2rRm/dzY9a8HEO8mz3qC5YKBaV/emyPgGolkFRXNwIoyx7VkilDqc74pvSsZiXl5PlArr9A08aZpFvbAcquT+PNcRYRHXfFEcfWOH94wNej4wB6AYr08DS5YtnFj56qA14xLG6N0YEVwOjxtZ3t3YsMeW/Fd/iuO1qH7J4l8wcLOpNVjo3hczwMrTt3NGNuKk3morfvUpjI5rxz1mrEkbcirKPVVBU6A1SIkkTh6QyU3acUhWqM7IXfSh+Ki2nNOCmgHFDi9QyPTyDUMimkyopEZbmh5NozTCDmh4zjmpRpYo3kpdSegFUPBdt/aGu3F6w+WAYU/WrGrP5NpK3bbWn4Fsfsui+aR88zEn867MFDmnfsc2Ony07dzfJLcnrXLePbFpLCK8iH7yBwT9M811WKgv7VbyzngYZDoR+OK9WouaNjyaU+SSkjn9Gu1uLaNweCoNa6PkVxnh25NtNNYyHBgcoPoK6uKQEZzXgy92TTPea5kpdywxBFU2Qyh1FSyzhVzRZYdXb3pX1FayuUPB7iKa+tMYKNv/ADNdMTXJwn+y/FKMR+7uhtJ+grq69vDSvTR42Kjy1GxRQaKStzmCiiimAUUUUAFFFFAC0lFFABRRS0AJRRRQAUlLSUAFFFFABRRRQAUUtHNACYpcGjmjmgA5xRRRQAUUUUAFFLRQAlLRRQAUtJS0AFFFFABS0lLQAUUUUAFFFFADKBRQKACg0UGgAooooAKKKKACiiigApKWigBKKKKACiijFABS4oxRigAoxRRQAUUUUAFFFFABRRS0AFGaKM0ALSUUUAFGaSloAO1FFAoAWiiigBe1FJS0mAoopKM0AFZXie8NnpjCM/vJflXFavXiuX1BjqfiFIc5ht+T9azrT5YM2oQ5pouaJY/YbCKL+LHzUan8rBq0V5PAqC9gEy9cEV4Urs9iDXNcy1uAvJrN1K8JUgGrk9rIGwBxWff2bR2ssrdlPH4VmlqdcbEnw7gEtxf3jDnJQH8a7jsK5P4dRbdIlfu0pNdWK+goLlgj57FTcqrYvSuY8Xx7bqxmHXcF/M1056Vzvi/n7D/11X+dTif4TDDO1WI6FMVYZeKZGORUzDivCZ7bdxkS81ZRarIcNVuPoKqJEx+OKaacTxUbtVGa1Exk0/bxUatUinigbGkVDKvFWDUEp4NJlRKpHNPcfLSDlqkcYXFRY0uc74kVjp8m3uMV12kRiHS7aNRj5Af0rmPEI22f1NdZZgC0gx08tf5V6mBSSZ52PfwktOUZI9KQigV6Fzzkea62h0/xrKqcJLGGx75rds7o4w1ZXjdfL8U2bj+NQP51pw2haNWU9a8LFr94z6DCyvRVyeabOQOlaVhH+4z61QitMgButa8KbIgo7VjFDqtWsjI8TWbPaC4i/wBbCwYH8ea2rC8W+s4bhT99c/Sop4hJCyN0YYrK8LSmCa709+sb7o8/3a78FUfPys8/GQvBS7HRUUvFJXqnmhRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABSUtFACUUYoxQAUuKTFLigAo5oxRigAooooAKKKKACiiloAKKO9FABRRRQAtFFFABRRRQAUtIKBQAtFFFABRRRQAygUUUAFBooNABRQKKACiiigAooooAKKKKACiiigA4o4oooAKKKKACiiigAooooAKKKKACiiigApaSigAooooAKKKWgBKUUUtABRRRSAKKKKADNFFIaAEmlFvBJM3RFLVzXh6NnE93Jy00jYPtmtHxTcGDR3RThpTsH40mlQiGxgTHIUZ+uK8/GTekT0MFHRyZeQcU2UU8U1+a886yEopHIFY3iLC6bPgY+U/wAq3DwK5/xUSNNlGcZ4pGsNzQ8DweT4dgPdzu/St3vWf4ei8jQ7JMY/dLWgK96HwpHhVHeTHda5vxSfMvrKH0O78jXRg81y2oP9s8TbAciBSDWOKlamzbCRvVRpItSEcUKMU4jivF3PXb1K/RqmSTAqJh81OUZpIp2sT7+Kid6diquoStb2skqgkqM4qrijFN2J1epVfisHw9qNxfQE3Mexwf0rdUcDihMJxsKXqCQ5qUrUbLzSCIyNeakYZFLGlPZaEgb1MLxJHnTJG/uDdXS6bJ5mn27f7A/lWPqkP2iynhx1Q1Z8KXP2jRosnLIzKfwr0sC90cGPWiZsCikNLXoI865xHjyDGsaZMehfb+hrctUAQYAxis/4gRf6HZ3GOY5sk+gxWlYkPCrdio/lXlY1Wnc9bByvS9CUID2qynC1EAKmXpXIjeWojdK569Y6br1rdLwsxELfia6JsYrnvFcTGxE6/egbzAfTFaUpOMkyJLmi4nUcdRS9qr2M4ubKCUc7o1JPvipq91O+p4rVnYXNFJSimIKKKKACiiigAooooAKKKKACiiigAooooAOKMUUUAFFFFABRRRQAUUUUAFFFFAC0UlLQAUUUUAFLSUtABRRRQAUUUUAFFFGaAFopM0ZoAWikzRQA2iigUAFFFBoAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACnUgpaACiijFABRilxRQAlFLSYoAKQ0tGKQHN+LW8y7sLYHq4cj6GtWHAUAduKxtd+fxLagfwxn+dbEXSvIxbvUPXw6tSRODSMaKaxrmNEI3SuY8VP5sUUAPLyoP1rpHcYINcxORfeJrS1xkJlz+HNXRjzSSHJ8sWzsrWIQWsMX9xAtS0meaM17iVjw9xdwXLE8AE1yWk/6Te3d8Okj8Vv6xdC00u5mJxtWsPw8gXTISOrZJrgx0rRSO7BR1bNhOlP7U0dKdXlo9BkJHNSItNanIapDvoTqo9KSWBZVKkDBpUbipAwpkbFWKzjt+EQD6CrAXjpTs0E07CbZEyioXAqWRqgJyaTNIj04NK3SmrSmkge5DIm5T7iqPhVvIvL2x6bSGX8ea0G4rFhmFn4ttsHidWDfgOK6sI+WZjiY81NnXGl7Unel7V7B4xieMrb7T4fuAByg3D8xUOhzCbToWz/Dg1tXcAubSaE/xLXJ+FpikEto33oXIOfc15uPjZKR6eBldOJ0YqZelV0OanWuA6pCmszWoRNp08f95SK0z0zVO7G+Jh7VQo7kXhSbztGjyc7WK/lxWvXOeCD/AMS2eI9Vlb/0Kujr3KTvFHj1I2kwpRSUtaGYUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFAC0UUUAFFHeigBaKSloAKKKKACiiigAooooAKKKKACiiigBtAo6UUAFFFBoAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKWkpRQAUtFFABRRQKAFooooAKKWigBDSUrdKB1FLqByt+d/ipR/djP8624h8tYc/wA3iyT2Q/0rdj+7XjYn+Kz2KP8ADQ+mOafUbnmudmiRUuZQilielY/g2A32qXmpP91TsQ/pSeJr8wW7LEcu52qB610GgacNL0qGDHzkb2/HmuzB0m3zMyxlRRp8vcv0h608dKaRmvUueSjB8cyGPw5OAcM3H61S8PuRYRIT90dKp/EjW7O0msNLnuER52zgntipbA+XHmNiR2wa83Gptqx6mBXuu50i8qKdiqltMdvPpVpXBArzkjqkrCMKavFSHkU08UxIerYp3mVCDTs1SCxIWpC3vUeaQmlcdhWOaYFOacDmnDigbdhVGKKQnA5qN5wgzRsJasJmCqSeK43WrryNcs7oE7EcKSPciugvL0OhVQWNcn4injt7Np7iRYljYNkn0Nb0bXTKlD3WepBg/wAw6GlrL8O6kmq6LZ3kTblljDA1qLXtLY+fY0jJ9q428U6V4oftFcjcD7jiu0zzXOeNdPabT0vYh+8tmDcdcdTWGJp88LHRhZ8tRMvQtuFWVNZOkXi3dpHKp+8oJ+tacZzXjtW0PVkiU9KgmX5T9KmqKbpQJGN4PO06hH6Pn9a6Wua8JcXmor7j+ddLXt4d3ppnk4jSpJBSikpRWxgFFFFABRRR3oAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACijNGaACiiigBRRSUooAKKKKAClpKKAFooooAKKKKACiiigAooooAMUUUUANoFBoFMAoNFBpAFFFFABRRRQAUUd6KACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKWigAooooAKWkzS0AFAoooAWiiigBaKBRQAGkHUUtHcUAcrjd4puPZT/StyPpWJF83ia8Ppx+lbiDArw6+tRns0/gQ41VnfaD7VYZsCsjW7wWlrLIfTA+tZehrBdzKtYBrPiRe8Ft8zehb0rtSOc/hWD4O042mmfaJB+9uW8w57ZrfNe1Qp8kEjysRV9pN+QdqQcsB60oqC9uBZ2dxcscCKJn/ACrdI5z5i+POsnU/HXlRswW0QKCD3GRXM6V418QaUFFtqD4HZuapeJdROs+JNRvWfd5kzEfTNUArjoa29nGSs0EZyjsz03TPjfrloFFxbx3HqS2K6ez/AGgbQkC600xjuUJNeHB3H8Oad5gH3lNZSwNJ9DZYup1Z9F2vx28LygCQ3MZ/651ow/F3wncYxeyr/vJj+tfMqyRsen507MR7CsXltJlrGz7H1NF8RfC8oyNUQf7xA/rU6+OfDj9NWt/xcV8pr5WOi/lTh5X+zUPK4dGV9en2Pqs+N/Dq9dWtv++xTG8eeGR11aD8GFfK2Ij2WgiL0Wj+zIdx/XZ9j6gl+JnhSH72pA/7uD/WqU/xn8IW6k/ap3x2WPP9a+aCIvRfypC0fYD8qpZZT7kvGzfQ99vv2gPDsWRb21zKf9pCK5+//aDeQEWekL9WcivITKo6LTDI7Dha0WAordEfXJ9Dt9V+MPiPUcpDstlP905/pXHavr2p6tuF9eySnB4zgVX2St6AVG8eDknOK6IYenDZGU605bs+n/2f9c/tXwNHbsfmtH8rr2A/+vXpgNfPP7M+sfZ9R1DSXbiVfMUH1yBX0MBjj0rGejIQGmTRCeJ4nAZXGCKfRU76DvbU4fRmOmajc6bISCGLxj/ZJ4rp4GyAaw/GVq1peWusRjAQ7ZMemK1rGVZIVKnIxXjYiLjNns0p89NMu5qOXpTgcikcZFYFGJ4Y+XVNRX/drpc1zmgDZrl8vqFrou9e1hf4SPLxX8Vi0opKUV0HOFBoooYBRRRQgCiiigAooooAOaOaKOaADmjmjmjmgAoopM0ALRmkzRQAuaTNFFABRRRQAuaKSloAKKKKAFopKKAFzRSUUALRRRQAtFJS0AFFFFABRRRQAUUUUANNAooFMAoNFBpAFFFFABRRRQAdaKKKACgUUCgAooooAKKKKACiiigAooooAKKKKACiiloAKSlooAKBRS0AJRRRQAlLRiigBaKSgUALS0lKKAFFFIKWkAUdxSnpSN0P0oQHLWfza9fP/tY/St1RxWFpXz6jft/00/pW8nSvDrfxGe1H4Y+hHKcCuT17dqOp2mnISd77mA9BzXT3MgRGOelYXhS3Oo61d6k/Ii+VM/lTw8OaaHUnyU3I6yOIQxrEowEGAKkxSkc5pM17aPGEIrkvinq40TwRqE27a0iGJfxBrrW+7Xi/7S2smHR7DTI2+aZt7AH0NaRWomfPkGWQM33m5NWFFRqAAMdqkWulLQhi0ZzSkUlMVxRSgCm04VIxcL3FG1fSiimAYX0o2r6UUUBcTaKQ0E00mgBc/SkNJmigBccVG9SnpUT0AdR8I9Y/sTx/p8pfakriNvpX2AOeexGfzr4UtrhrG9t7pDhoXDg19teHtQGqaFY3gOfMiX+QrmrLW40aFFFFYjKWr2K6lp09qRnevH4c1z3hm6MlsYWPzxHaQa66uLlQ6V4qlhHCXGXH1rkxdO8bnfgqlm4nTqeKVqjhbctSGvMO16MxdI+TxJcL/eUfyrou9c7afJ4oUdNyn+VdGetetg/4SPNxf8VhSikpQK6zlCiiigAooooAKKKKACiiigA5pKKKACiiigAzRRRQAUUUUAFFFFABRS8UYoAQUtGKKAClpKWgBKKWkoAKKKKACiiigApRSUooAWiiigAooooAKKKKAGfjS0YopsAooopAFFFFACUtGKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAWiiloAKSjNGaAFpMUUZoAMUYo4o4oAMUYpaTNAC0UmaWgAxS0maXNABSMcRufRTS5qG+lEVlM5OAFNJjWrsc54cy5u5D/ABSVvL0rF8NRldODkcuc1tDhSa8CbvJs9t6GN4huPsunTSZ5CmrPhC0NrosbEfNKSxrH8WSeZBFb55llCYrrLOMQ2kMY4CoB+lduAjuzlxs/dUSeijNJmvSPOF618vfH/WBqHjf7IjZS0Xb+YBr6eeURxvI3RVJP5V8YeMNR/tXxZqd5ncHlwD9OK1p7iZlRjipgKjReamFdBI3FBApxFMLYoACMUA0jMMU0GgB5NGabnNBNADs0ZpmaM0gFJpKQmkB5oAcKWm7sUAk0wFJpjU/FIwoArSpuUivqr4E6ydX8BWwYjdbkoRn3r5Ycdq9z/Zl1M51LSieOHUZ9Bmsqiuho94opAcilrmQwrl/GduYZLO/A+5IqMfYmuoFZfim3NzolwMZKKXH4VNWPNBo0oy5ZpjbKUPGrDoeauEVieH5fNsocnJCgGts9K8FHtVPiMKc+R4lsnPRgw/SulbG81y/iE+Td2U/Ta+Cfqa6jqQw6EV6uCfuHm41e8mFLijNGa7TjEoopaAEopcUYoASiilxQAlFLg0lACUUtJQAUUUUAFFFFABRRiloASlxRRQAUUUUAFFFFABS/lRRQAGkpaOtACUUUUAFLRRQACloooAKKKKACiiigAooooAbRRRTAKKKKQBRRRQAUUUUAFFFHegAooooAKKKKACijNGaACijNFABRRRQAUUUUAFLSUUALRmiigAzRmikoAXNHFGaM0AHFH4UZozQAUcUZozQAUUZooAKWkzmjNAC1l+J5Gi0W4Zfb+daeayvFEgTQrnIznA/WoqfCzSl8aItGULpsIHpWi33MVmaICunwg88VpHkV4KPYnucrrymTWdNiP3TMpNdpjbgdgBXPa/prXEcdxF/rIG3j3xWtp18uoWccq8EDaw9CK9HCNWscWM1tJbFz6UYzSZpQa7rnAY/i+/GmeGdSuicbITivi/eZpZZT1eRj+tfVXxw1A2Hw/vAvWUbev0r5TRuBxW9La4mToKmUVAhqUGthDm4prYIoJpr80wI2pAaa8m0c0wyAcg0ATZpM00Nu5pc8UALmjNJmkLUAKTSdaaZADg04kAjnJNFgHBfWnikRSetSAYoEJimsM1IaY1MCBxzXoHwI1Y6X49hjLYS5RlP1xiuAYVqeD7trDxZplypIxOq/mwqJbDR9qsAHYCimxP5qLJ2dQwp1chYVW1MBtNuge8TVZrI8QXbiJbOEZlm4OOy9zUTkktS4RcnZGT4RBNm2ezkV0pHFU9NsI7G2WNOTjJPvVxuleI9z12znfF2BZK4+8HXH/fQrorNi9nCx6lRmuc8WoWtF9A6n9a6Ky5s4SOm0V6GBejRx43aJNS0Utd5wCGilpO1ABzRRijFABRRijFABSUuKTFABQaKMCgBKKKKACgUUtABRRRQAUUUUAFFFFABRRRQAUopKWgAopKKAClpKWgAooooAWiiigAooooAKKKKACiiigBtFFFABRRRQAUUUUAFFFFABQaKSgBaSiigAooooAKKKKAClpKKAFpMUUUAKKKKKACiiigBaKSloASiiigAooooAKKKKACiiigAopaKACkpcUYpAJWJ4wbboxTvIwH6itvFc/wCM3JitIh/FIeKzqu0JG1BXmi3pybLaNfQCr2OKrWYwgHsKt9RkdK8RHrT3GMo2HPQ1jxMdG1eNB/x7XWfopH/662jgjFZeuxb7Peo+eNgVPpzW1GbizGUVJcptZzzS9KrWU/2i0hmzkOgqx2xXrHlNWPJf2kb3yPCttAD/AK2Qj9K+b17fSvdv2nrr/R9JtgefM3H8jXhKmuql8JLJ0NSA1EpyKkFaIkdnNNJpRSGmhkbIH61SnjeI5XJFXyMioyABTAox3WMhuKkN0vrVW+i2ncg5NVBPsHzg0mwNYXK+uaR7lSOuKhutN1DToUuLqxuoIZOUkkjKqfxNVFcyt60uYLFxJJZjiIZHrV63iVBljlqjto/LUADFWlQCqEOHtThg0A0cUMYEU1qdTGNAET0W0xgvrWXONkqt+tI3Wo5OASOo5qWB9t+HLr7boOnXGfv26n9K0q5X4Y3Ru/AmlSFskRKufwrqhyK5JblIZcXCWsLTP91RmsXS4nunlvpx88p+UH+EVJ4mmJjgs1P+vbB9xV+JAiKijCgcCvPxVT7KO/DQsuYVRjinGlxQRXCjqMLxPHvsXPpg1qaNJ5uk2r+qCqWtp5lnMv8Asmn+FJfN0OAHqg2124J+9I58YrwizXpaQUteiecFFFFMAooooAKKKKAENFFJQAUcUUUAHFHFJRQAtHekpe9ABxRRRQAUUUUAHNHNFFABzRRRzQAUUUUAFFFFABRRRQAUUUUALS0lLQAUUUUAFFFFABRRRQA2iiigAooooAKKKKACiiigApKU0lABRRRQAUUUUAFFFFABRRRQAUtFFABiiiigApaSloASilpKACiiigApKWg0AJS0lLQAUtJS0AApaKKACk5paKQCCua8VHfqmnw9gxP6V0tcrqj/AGzxLGvaJQa58TK1NnThFeqjbtxgYqznauKrRNknHapWIEZ5GR615L0R6MtyoNQjN21vuy45xSan81hP/un+VcXJqlzH4oaWFJHt1bZI4HArtZyJbV8dGjJ/SizS1NZKN1YXw4S2hWmTyFFaY61leGW3aSid4ztxWsPvD617UPgR4tVe+z50/aXnLa9p0BPCoG/nXkC16p+0m+7xnaqD0gX+teVJXZT+ExZMnSpBUaGpRVkhSEUvSkpjGmmNTzUbCmBFMgZeazbe236nbIRuVpQMVpSdDRoMH2nxJp0QGd0wqZDR9FfH/Soh8JbFo4kUxeT25FfNNjAuxWHcV9dfGi0+1fCyaEDJjSM/TAr5IsOIF+lZ09RsvoalBqFKkrYkeDS0wU7NAgPSkPSlpjUBcjaoXzh/pUrdaic8EUmM+r/gfcG4+Hlrk52Sbf0r0AdK8t/Z6n8zwI6Z5W4b+Qr1BckVxy3LRia0c6zYr6HP6VorJ8uaz9VBbW7cL/AoJ/Ki/vlsbCaU53AHaB3NeVil+8PTw2sEX47lXcqDkips5rifB2sXF7PMl1DJDIWJCyDBx2rs8jt0rmV+pvUjbYqagu6KRfVT/KqXglydOnQ/wSkfpV+6IbcB97FZfhMtFeX8B6Fy9dWEfvmGJX7o6aim0teqeWLRRRQAUUUUAFFFJ+NABiiikoAKKKKACiiigAxRRRQAUUUUAFFFFACUvNJRQAvNFJS0AFFFFABRRRQAUUUUAFFFFAC0tIKWgAooooAKKKKACiiigBtFFFABRRRQAUUUUAFFFFAAaSlNJQAUUUUAFFFFABRRRQAUUUooAKKKKACiiigAooooAKKKKACiiigApKWg0AJS0YooAKWjFLigAopQKKACkNLRQAgHIridamfRvEAuZhiKf5Vb3rt6zPEOkRatps0ZH71RlD6GuevT54WR0Yar7OabKGl6klxcSQEjcOQfUVZ1TeLCdkOGC9a4bRb2e3uRFLkTQvsfPcV3s6Ge2fHKsnH5V4yunY9ipZNNGZYWEA8NJtAZpY95YDkmrlk3m2qBj221z2ieJ7S0jfSL6QRvC3lqSeorQ0O4+0W7SJllSRgG7da6quyOenCUXJSLnhuXZeX1rn7jkgVvjqPrXNaJldfuwTkshOB9a6WvQpO8EefiI2qM+Y/2idx8cwEhtvkjnHHU15gik9K+rPFvh7TfEPiRYNStkmQRAjPY5rmb/wCAfh+8ctaXM1uT2AGKpYyEJckilhZSjzI8ARG9KlCkDpXr13+zxqMZJsdUjcdg7Y/pWTc/A/xXATt+zyAd1YnP6VusVTfUxeHmuh5qaQmu0ufhV4sgJ/4lxf8A3QTWdL4B8Txj5tGuf++DWirwezJdKa6HMswqMtmt2Xwj4gj4bRrv/vioD4U18/8AMGu/++Kr2se4vZT7GI54Navw+tzc+O9GQDObgcVMPBfiObITRrr8Urs/g94A1W38eafeX8IhihIfa3U1Eq0HonqV7Gdr2Pe/iNAs3gfVIyM7bYnH0WvjCz+WMA8V9y69aLfaJqNsoLNLCygEexr5CuPAHiGK4nEWnSSqJWA2KTWcaih8QezlL4DDRqkzWovgzxKP+YNef9+6mTwZ4lP/ADBrz/v3W/tYdxeyl2MYHNOroIfAPieXpo1z+KGr8Hwu8XzYC6Wy/wC8DSeIpL7Qexm+hyGD6UhR+tei2vwS8W3P30tov95iP6VrWn7PWtS4a61G3iB6iNs/0rKWLpLqUsNN9DyBlI6momXuOfpzX0DZfs8abEA19qM8vqABit+z+FfhbSFzHp8crgffcc1jPMKa+HU2hgpvdlD9nAOPB90HVlzcMQCMccV60nUVyvgKBII72OFBHEkhCqB0rq4/vD61UJKa5jCpBwk4s525uA+vTc52RiklIuryCAgEZD4PtVcKTrt+MEtjjH1p8Mgh1XzZWCxohyT2rypXlVPVppKlYj12IafrNrcRcNNlCB2AFdBB/qVJ645rlD4gtfEPiRLONNyW4yG9TXQ6pcfZNOlZDh9p2ioxFvaXWw6cWoKMtzIu9dhEk8ocBI+M+9P8FCa6a61J1ISViqe4rkTbS6lqNvp0eSrtvlI/OvUrWzh0+BLSBdsaKK3wVO75jPHTUY+zRJSiikr0jyhaWkopgFHFFFABxRxRSUALxRSUZoAKKKOKACjijijigA4o4o4ozQAUUCigAooooAKKKOaAEpeaOaOaACiiigAooooAKKKKACiiloAKWiigAooooAKKKKACiiigBtFFFABRRRQAUUUUAFFFFAAaSlpKACiiigAooooAKKKMUAFLRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRzRRQAUoopcUAFFFLigAoopRQAYooooAQ0hIxzTjTcZ59KQzgfGun/wBl6nFqMSny5uJAo71taBqsN5YY8zkZX3FdDLbw3SeXOitG394Vy+oeDXs5Hn0efyznPl54NcOIw6cueO56FDErl5ZnIeKdKa31BhwDO+RLtpNK1K60WQQlykbkDn5gT61vT3q3CvZatbmGbojMMc1hz6fqMDfZUjF4h5UAZKiuR3dRRex6LlGUNTvfD+nvA8l9LIJJLgZBA4C1t1i+E4LyHSgt4pQhsRqey1tV6tOKjFJHhVZNyuzkdYHl+Koyf4ohWxbAGsjxN+78RWTf3lArXtugrycX/EPVw/8ACTLqj0p4JHGT+dMQ0/qawQSA81Gyg9QD9akzxTTTBFWSKPvHGfqtQGNM8RR/98irclV2oNUileALESFUduBisPwlGZvF0hycRJ/WtzUDiBqzPAkZe/1K69MoD+NdOFvzmeJsqLO3kAeGReMlSK870Bit/dxHnZcN1r0UDpmvPYE+yeJr6HpuYyD8TXVj/hOTLn77R08aKedi/lU6IvZV/KoYj8oqdDzXlJs9CSJUT2A+gqUZHc0xaeDVGTFyfWmt706mtQIhkGKoXh2xsfar8hrO1E4gkP8Asmi5rBEHgRi1tfMe8zV0/YEVzfgRcaXcP/enaulHpXt0NII8fEv97IwL7TnttQfUPtCxwuuHyOmK5S/3al5hSVliJxknGa6Pxtb3E0duYxI0KtmRF/irm7ewnvboPdsILdRkxHgiuHE+7NcvU78KlKHNJ3GeDdJ8u/mvsNtHyA9M4rZ8S6pHGiRhvmQcjOd1M+2y3AFno0GccbwOPrV/TPBiRyC61OU3E+c7TyBULCzqyNamKhT1ZW8A6bKI5NVnXDyMQoYdBXX5yc96RUWMBUAVR0A6Clr06dNQjyo8irN1JOTCiiitDMWj8KSigBaKSjNAC0lGaM0AFFJmjNAC9KM0maXPtQAZpKKKAFz7UUUUAFFFFABRRRQAUUUUAFGKKKACiiigAooooAKKKWgBKWjFFAC0UUUAFFFFABRRRQAUUUUANooooAKKKKACiiigAooooAKO9FFABSUtJigAoopaADFGKKWgBKKKKACjmijmgA5o5pM0vNABRSc0UALRRRQAUUUUAFFFFACilpAKWgAFLSYpaAAUtAooAWkpaSgAoxRRQAhGaXvmiilYZU1DTbbUY2SeJW3DG7HIrO0jw0NJvJJ/OMisAFUjpW3QTU8kb3sPndrXEHTHpRigUtUiTlfGaCO+02cDnftJ/Cr9q2VFVPHC/wCgW0uOY5M/pU9i2Y1+grx8av3h7GDd6SNJDUgqFKkBrmNGtRxNNNBNITQJEcvSqpPNWpOlU5ODQzWBQ1aTZaSHPRSad8PLf/iTzzkcyzE/gazfEk5SycA/e4rpvCluLTw/aIB95Ax/Ku3BLU5sfK0EjU6cVxHiOIWXiqGUDAnQL+PJruD1rk/H8W2OyvB1ikOT+FduKhzU2cODny1kXoXyBVmI81m2cu+JTnqK0IDzXhI9uRbSnUxKfVnOLmmml7U00xIikrJ1aTbaS/7prVkrn/EMpjspT68Ul8SNoI1fBUWzQge7yFv0rdHWs3w9F5OiWijjKBv0rSr34q0UeDUd5tiMoY8gEe9YVz4UgvdUmu7mdjG5yI14re70hFJ01LcUZOOzIra1t7KIRW8KxqB+P50/HNKaSrTa2E3fcWkpaSmIKKKKACiiigApKKKACiiigAozSZooAWigUUAFFFLQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUtACUtGKKAFopKWgAooooAKKKKACiiigAooooAbRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUYoooAKSloNACUUUUAFFFFABRRRQAUtIKWgAooooAKWijFABS0gpaAClpKM0ALSikooAWikFLmgAoozRmgAooooAQ0lLSUmAUUUUAY3jCHzdAuWA5QZ/WqWkzCW1icd1FbeqQ/adLuosZ3R1y/hqXdpyLnlWYH868vMFqmerl/wALR0SGpVNV4jmpwa4EdUkONJmjNNJqiLDX6VnXT4zg1fY1l3zBck0mzamjndcZri5tbZTkvIuR7Zr0eGFbeBIV6IAteeaTGNS8WQoeVhBJ/KvRidzE+tetgY2hc8zMZ3ml2ENY3i60N3oNwoGSoyK2sU2eFZ4JIm+6ykGuuSurHFGXK0zh9BuPPsI3B7YretmyBXJeH3NtJdWTdYpMD+ddXaNlRXz01yycT6JawUu5eU8VJUSnipM00YNCk01qUmmN0oYJEUx4Nc14kO6FE/vyoMfjXRXBwp+lc5qI+06tYW45y4Y/gaumrzRbfLFs7OyTyrSGP+6gFTZoIAOB0FFe8tjwGFIaWkNMQdaMUCikAUGikoAKKKKACg0UGmAlFFFABRRRQAUYoooAKMUUtABijFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRS0UAFFFFABS0lLQAUUUUAFFFFAC4ooooAKKKKAGUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABzSUtHNACUUUUAFFFFABRRRQAUvNFFABRRS80AFFFFABS0lFAC0UUUAFFFFAC5opKM0ALRRRQAcUcUUUAFIaWigBKKMUUgEKh0ZfVSK4TQs219e2jcCN+B9ea7wVxGpobDxbKowEuF3Dj0ArjxsW6dzvwE7Tt3OggbirAaqVs3yCrSnNeQmelJEmaaTS5ppNUiLDHPFY2qvtQk1ryGuf12XZbSH2qWb0xvw8h+0ahqF6w+6Qqmu5Fct8OYBHoLS4+aVzn8DXVZr36MeWCR4GIlzVGwozj8aKDWhied6nD/Z3i+ZFGEm+YflXRWTfIKyfHcPk6zp90OA6kH860bBvkFeJio8tRs93Cz5qKNRDTyaijbinlqwTKY8GmuaM0x24oBIrXLfKfpWPpEf2vxQD1WBT+orSuZMIxPpVXwRH5019eH+JgAf0rpwkeaaIxcuWizq85Ymikpa9k8PqFJS0lABRRRQAGkpaMUAJRS0lABQaKKEAlFFFMAooooAKKKKAClpKWgAooooAKKKKACiiigAooooAKKKKACiiigAooooAKWkooAWiiigAoozRnigBaKKKACigUtABRRRQAUUUUAMooooAKKKKACiiigAooooAKKKKACiiigAooooAKOKKKACiiigApKWkoAKKXFGKAEoopaACiiigBaKSloAMUUUUALSUtJQAUtJRQAtFJRQAtFJRQAtApKUUAKKKBRQAUUUCgAopaKAAda4/xzH5F5YXoHQ7Cfqa68isLxtbfaNAkYDJiYP+VZVo3g0a0Z8s0yC1lyBg8HpV1W5rA0S8E9lDJnkqK24zkZrwNmfQSRPupC1NLUwv70zNISRuDXL+JZttpKfauhnkwp5rlfE8m61kHtS3ZrFWO18IwC38P2ygdcn8618VS0ZPK0i1Uf8APMH9BV3NfQx2R85N3kwoNFBpkHJfESPNhaT90kAz+NJpcvmQo3tVvx7F5nh8n+7IDWTokv8AosYzxtFeTjl7x7OAd6bR0Mb8VJmqkT5FThq4kdUokm6opXwKdnIqvO+BzTYoozdZuhb2Ur56LWn4Mtvs+hRsRhpCWP51y3iS48y38lesjba72whFvYW8Q42oP5V6OAjuzizCVkolijNIOlGa9I8oXNFJRQAtFGKWgBKKKKYBSUUUAFFFFAAaSiigAooooAKKKKAClpKKAFooopAFFFFMAooooAKKKKACiiigAooooAKKKKACiiigAooooAWjNJRQAtLSUtABSikoFAC0UUUAFFFFADKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigA/GiiigAo/OiigAooooAKKKKACiiigApaSlFAC0UnFFAC0UlFABRRS0AJR2paTtQAlFFFAC0tJS0AKKKQUtAC4opKWgBQKDSUUrgBqhrkXnaLeIf+eTfyq/VTViF0q7J6eUw/SlL4WVD4kedeF7gm1VM/dbbXZw/dFcP4XiK5B7uTXcIeBXzstz6RiuSKrvJirD4xWbcsUJpBFDbibg1y+tyGRNvPLYrYuJieB3rP1G3+W245aQCqpq8kVP3Uek2S7LK3X0iX+QqXNNiG2KIekaj9KfX0Mdj5h73Cikop2EY3jBN/h65HXAz+lcno8hSzh91Fdn4jTfoV4P9gn9K4rTkJ0yIjsBXl45anr5c/daN+CbIqwshNY8FzhcGtK0bcN1ecj0ZIvKflqpesViY1YUjFV70ZjYU2yIrU5K7bz9WsoT0Mor04DAUeij+VeYyLt12xY9BKK9OJzg+oFetl/wM8vMvjQdqSlHSiu884KUUlLQAtJRRQAGiiigBKKKKACg0UUAJRS0lABRRRQAUUUUAFFFFACjNFJS0AFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUtJS0AFLRRQAUopKWgAoopKAFopKKAG0UUUAFFLRQAlFLiigBKKU0lABRRRQAUUUUAFFFFABRRRQAUcUUUAFFFFABRRRQAUUUUAFFFFABRRRQAtFJS0AFFFLQAUUUlABRRSUALRRRQAUtIKWgBRRQKKACiiikAtBpKXNABWd4hfy9FuT/skfpWjWX4o/5ANzSl8LLh8SOM0BApi6ZKg106sMVymky+XNDnvGK6WGUFRzXzjd2z6VrQnZqz77G0+tXGkUDrWNqF1ufAqWxwQWluZpMkcCq+qpnUrCFRwZRWpZDZD9apIReeKLWIciIbz+db4eN5IyrytFs7zgBR6KP5UUEc0V76R84FGKXFGKYinq6eZpd2oGf3TfyrjPDyLLYGM4ypII9K714xLG6HoykV59ojG3vLy3bjbM2B7ZrzcctEz1MulvEluojFMAOlatpgRCqGqcJvFO027DxjJ6V5WzPXautDWB96iuWHltmkE6461UvrgCI4NUQo2MG8IF7buP4Zc16UpyiY/uj+VeVyyF2L9lkr1KHmGL3jX+Verl791o8rMo2kmPFGaPWkr0DzBaWkpaACiig0AFFFFABSUtFACUUtJQAUYoooASiiigAoopaAEooooAKUUlKKADNFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRS0AFJS4paAEpaKKAClpKWgBKKWigBMUUtFADKKKKAFopKWgAooooACKKKKACig0lABRRRQAUUUUAFFFGaADNGaM0ZoAKM0maKAFzRmkzS5oAKKM0UAFFFFABRRRQAUtJS0AGaWkooAKSiigAooooAWikpaADpS0lLQAUuaSjNAC0UlFIBaKSloAXNZHi2QR6FNn+IgVq5rnPHM23T4YAeZJF4/Gs6srQbNaCvNI5OIGN4D6IK2IrkqoFULyLypouMAIBUwxXzi6n06tYtvdEqazATNdAHnmpZHx3qO05m3ihDsbLOIofoKr+Crc3eqXd+wyq5jX61n6xqJggKrnLfKPx4rsPC2njTdGhjI/eOA7n3r0MFT5pX7Hm4+fLDl7muDS0mKUV654gUUUUwAda8+1+I6X4o8wcRXAGPr1r0HpXKfESyMukpeRj95bNuJ9jxXPiYKVNnVhJ8lVeZQuD51uwrOs5GiJX3qezuPtFojZzuHNQECKU5r59o+iRfE5IqG6kLRkUiOCOKjmPynPehFGfLHs06aTvuzXptjIJbO3dehjX+VcKtn5ukyrjk11HhG7+1aJDk/MmVPtzXqZfLVo8fMlombFFKKWvTPKEopaQ0xAaDQaDQAlLSUtABRQKWgBKMUUUAJRRRQAYooooAMUUUUAFJS0UAAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKWgBKWiigBaKKKACiiigApaQUtABRRRQAUUUUAMooooAWiiigApaKKACkoooAKSloNACUUUUAFFFFABSUUUAFGaKKADNFFFABRmijFAC5oFFFABRRRQAUUUUAFLSUUALmikooAKKKKACiiigApaBRQAlFFJ3oAcKWm06gAooopAFKKKKADHNcZ4okN7r8FqDlIRlsevUV2TuERnPRQTXC6OGv8AUb2/k5DvhfoOK48ZJxp6dTuwMbzv2JNWty0KuB0rPD8V00tuJbYoRmsR7IqxGK8Vo9yEtLGfKWbgVZt4fIh3HrVqOxyckUt2o2BVFK1mU2c/qZM17aRno0gJ/AivVYlCxIPRcV5pqFv5eo2B/wBsV6djgfSvZwC91s8XMX76ClFJRXcecLmjNNJozQIWs7xDEJ9EvIyMgpWjVPVzjSrr/cqJ/Cy4fEjznQZCLSNT7/zq/cW2/wCYDmqejw7rCN165P8AOtyCMMgBHNfP1FqfTx2MqPchINLIDIQBWnJYZPAqS307Egz2rNIbkS2ttts8EdRTPB0v2XUbvTWOATuQfrWlsCxhR6ViXL/2br1nfLwGyjfjxXXhp8lRHHio+0ptHa9zS0mc8+tLXuHgBSUtJQgCiiimAUUZooAKWkoFAC0lFFACUtFFABSUuKMUAFGKMUYoAKSlpKACiiigAooooAKKKM0AFGaSigBaKKKACiiigAoopaACiiigAoopaACiiigAooooAKWkpaACiiigAooooAZRRRQAtFJS0AFLRRQAlFLRQAlJS0lABRRRQAUUUUAJRRRQAUUUUAFFFFABSikpaACiiigAooooAKKKKACiiigBaKKKAEopaSgAooooAXFFFLQAmKMUtFACUUtFABRRRSYBRRQDQBQ8QXQs9DupM4O3ArnvD9uYdOjB6nLfmaveOZdmkLEDzK+3HrRYptgjGMYUV5eOfvWPVwKtBvuXUj4qKS3Gc7RVhDxQ44rzzsvqZ8qBRwMVVjh8yTJGQKvTikhj2qTikka82hzmtrt1Cy9pB/OvRByF+lcBr6/6Tat3Eg/mK71f9Wp9q9bAfA/U8rMHea9BxpKAaK7zzhpozStTaAHZqjrhxo91/uVcqlr3/IGu/wDcqZ/CyofEjjvDUedNi47H+dayR7Wqh4XXOmQ/Q/zrYdMGvnXuz6W5JGgParKRADpUMPara9KEYyZC6gVheIId1qWA+4wf8ua3pazdTj8y1lX1Uj9KcXaSHFXNrSLkXel282c7kGTVsVgeC5t+j+WTnypCn5VvivoYO8UzwKi5ZNC0naiirICig0GgBKWkooAXFFJS0AFGKSigBaDRRQAUUUUALRRRQAhpKU0lABRRRQAUUUUAJRRRQAUUUCgBaKKKACiiloABS0lLQAlFLRQAlLRRQAUUUUAFFFFABS0lLQAUUUUAFFFFADKKKWgBKUUUUALSUtFABRRRQAlJTqSgBKKKKACiiigBKKXvSGgAooooAKMUuKPzoAKKKKACiiigAooooAKKKKACiiigBaKKKACkpaKAEopcUUALRRRQAUUUUAFFGKOaACgUtFACUYpaOlJDOW8dHK2Cesv9Ks2n+rQewqp44P8ApGmf9df6VctRhF+leNjf4jPZwa/dIuoOKH+7QnSiTpXKbdSpLyacRtQUEZNK/SkjQ5zX8m4tR/00H8xXeR8RqPauG1dfN1KyjHVnz+RruiOmPSvVwC9xnl5h8a9A6UUUV6B54Gm4p1JxQAlUdcG7R7of7FXutVdWUtplyo6lKmezKh8SOT8LD/iWw/Q/zrdZc1heFmH2CP2yP1rfPIr517s+ifRiRDmrQ6VVThqtDpSRnIZIKo3Q3Kw9qvPVK4OM0yoFXwOf3V7Ef4ZmNdQK5XwQ37/UB/00P866rNe9Q/ho8TEr97IDR2o4orYwA0UlFABRmjNGaACijNFABRRRQAUtJRQAtFFFABS0UUAJQaDQaAEooooAKKKSgAooooAKKKWgAooooAWigUtABRRRQAUUUUAFFFFABRRRQAUUUUAFLSCloAKKKKACiiigBlFFFABS0lLQAtFFFABRRRQAhoNFFACUUUUAFFFFABRRRQAYooooAKKKKACiiigAooooAKKKKACiiigApaSloAKWkFLQAlFFFAC0UUUAFFFLQAmKWiigAooooAKKKKACkNLRSA5PxyMTaaf+mv8ASrtt9xfpVXx0uF09/Sb+lWLQ5jT6V42M+NntYP8AhIvJRJ0oSiU8Vy9DZblfPzUO3FAPzVFO+0Gki2jGjU3niqzjHIj3E/lXdZrj/CkRudaurwjiMAKf0rsMV7WDjameRjZJ1bLoJRRRXWcYUUUUANIpsqeZDIpHVSP0p9KBzj14qRp2OA8MkxG5gbrHJjFdKpyormyv9m+Kbu3bgTHetdBCxK14NeHLNn0FOXNBMkX7wq0v3aqqfmqyp+Ws0KY16o3fQ/SrslUb04Rj7UXKgrlTwOMy37f9NCP1rqq5jwKuYL2T1mYV04r3aCtTR4mJd6sgooNFbGAUUZpKACiiimAUtJQKAFooooAKKKKAFooooAWikpaAEoNFFACUUUUAFIetLRQAlFFKKAAUUUUAFLSUtAC0UlLQAUUUUAFFFFABRRRQAUUUUAFFFFAAKWkpaACiiigAooooAZRRRQAtFFFAC0UlLQAUUlLQAUlFFACUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUtJS0AFLSUtABRRRQAUUUUAHNLSUUALRSUUALzRRRQAUUUtACUUUCkBzXjsf8S62buJv6U6y/1afQfyqTxtHv0NmH8DZqDTTmBCf7o/lXkY5WnfuexgXenY006UkvShPu02Toa4+h0Lch7ms7Vbn7PbSSZ6DNX34BNYGshru5t7BCczSAHHpThHmdkaN8qbZ0Pg+yNppCu/35WLH6E5rdqKCMQQRQgY2KF/KpK+hhHlSR87OXNJsWig0lUSKaSlooASgdaWkPFKwHGeO7c21/Y6kgxz5bH6mtG1cPEpHQgGrniqy/tDQ54goLoN6n6VgaBdefYx5PKfIfqK8jGxalc9nAT5qfL2NpetWU6VVjPNWV6VxJnRMSSs3U2228jeimtF6yNcfbZTc/wn+VNblQLPgZMaNI/d5ia6AVkeEI/L0CHsWOf0rXr36StBHgVXecn5gaKKK0MxKKKKACiiihAFAopaYBRRRQAUtFFABRRS0AJS0lLQAlFFBoASiiigApKWigAooooAKWkpaACiiigBaKKKACiiigAooooAKKSloAKKKKACiiigApaSloAKKKKACiiigBlFFFAC0UlLQAUtJS0AFFFFACUUUUAJRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRR+NFABRRRQAUUUUALRSUtABS0UUAFFFFABRRRQAUUUUAFFFFABRRRQAUtHeigAoBopDSsBleK08zQLoAZOM/rWXo7brKJvatzW0MmjXY/2P61znh6TzNOjPoSP1ry8wWsWerlzvFo3U+6KbJ0NLH0pJOlcFjs6laQgKc1l6HGL/xM8pGUtlwPrV68fZC5z0FJ4GgAtLi7I+aaTg+1dGDp81Qyxk+Wi7dTpm+Zi3rSikor3EeGLSUUUAGaXNJRQAuaTqKKKVwEKB1ZD0YEGvP9HBs9TvLI8BZC4HsSa9ANcVr0H2HxZFIOFuEAP1ArkxsFKFzuwMuWpbua8ZyRVxOlUrflRVxegrxkepMbJWB4lfZYye5xW+9c54pbMCJ/elQfrTh8QRZ1GgReVotovT92KvVFYr5VnDH6IBU9fRRWiPn5O7uNopcUlMkQ0UtFACUtHeimAUUUUALR+FGaKAClpKWgAopKWgApKWkoAKKKKAEooooAKKKKACiiloABR+VFLQAlLRRQAUUUUAFFFFABRRSUAFLSUUALRRRQAUUUUAFLSUtABRRRQAUUUUAMooooAWikooAWiikoAdSfnRmigAopKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooFFABRRRQAtFJRQA6ikooAKWkooAWkoooAWikpaACiijFABiloxRQAUUUUAFBopKAIrxd9lOnqhrjfDBxYbf7rsP1Ndq43Rup7qa4jw22Bcxf3JD/OvOzDZM9LL3ZyR0kR+WklPFJHwopJeleXc9BGL4gmMVjIR1OBXQeHrX7JolrGRhtuTXLeJWMiwwL1kcfoa7iFdkKL6KK9LL47yODMJaKI+ikNGa9I8xC5ozSZpaAFopKWmAUUUUrABFcl49jKfYbwf8s3IP48V1o5Nc946g8/w/Iw+9Gyn9ayrxvBo2oO1SLEtW3Kpq8vSsrSZRNaQyDuua1V6CvASPdnuMlOBXNeIQZbqyiHVpVP5NXS3HSucvv33iGxi9Dn8jWtBXqJMibtTbR2+MBR6DFLQfvEUte+ux4DCm06kNMQlFFFABRRRQAUtJRQAvFHFFFABmijNFABmjNGaKADNLSZozQAUUUUAJRRRQAUUUUAFLRQKAFooooAKKKKACiiigAooooAKSlpO9ABRRRmgBaKKKACiiigApaSloAKKKKACiiigBlFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUmaUUAFLSUtABmikpaAClpBS0AFFFFABS4pMUtABRRS4oASiloNACUHpRQaAAAEEexrhNB+XUdQT0krugcflXC6R8ut6mvpIP5VwY9e4ehl/xM6JOlJKeKWPlRTZjivJPSRz94PtHiHT4T03En8q7onmuJs18/xhCDzsXP6V2p617GCVqZ5WPf723kKabS80ldhxBS0lApgOpRTRSikAtFFFMABrP16ATaNcqf7uav1DqADafcKe6H+VRLVMqDtJHJeFpfM0qA+i1vr0rmPCBI08If4TiunWvn3ufQyGz9K55B5ni61H91WNdBcHisLThv8Yxg9kb+Va4b+KjGvpRkdoR8xopT940le8eEFJS0UAIaSloNACUUUUAFFFFABS0lFABRS0UAFBoooAKKKKACiiigApKWigBKWiigAooooAWikpaACiiigAooooAKKKKAEooooBiUtJS0CClpKWgYUUUUAFLSUtABRSUUALRSUUANooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKWkpRQAtFFFABRRRQAtFFFABS0CigAooooAMUGigigBOBknoAa4PRD5uq6lKOjSDH5V2uozi2064nY42pXKeHrby7QyEfNIxJ/OvPx791I9HL1q2bUYwopkgzUqjpSOK8s71uYWkDHjA/7g/rXZd65C3X7P4qgc8CQYz+Fdf3Nezgv4R5eO/i/IUikpx6U2us4woxS0lAC0CigUAKKWkopABqC9/wCPObPTYf5VOaoa5P8AZ9Jnkz2x+dKWzKj8SOY8JR/6Exx3rolGBWV4dt/J02LIwSMmtdRXz0tz32RSjNYdgvl+MkJ4DI2PyrfkXNYGpH7Hrdlc9BnaT9TWuHdppmdVc1NxOzJ5IopM7mLDoaWvePCCkpaSgAoopKACkpaKAEooooAKKKKACiiloASilooAKKPagUAFFFFABRRS0AJS0mKMUAFLSUtABRRRQAUUUdKACiiigApKWigBDRRQaAEpaSloEFFHWigYtFFFABRRRQAGig0UAFFFFADc0UlKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigApaKBQAUUUtACUtFFABRRRQAUUUCgBaKKKAFopKWgAooooAKD0ozSHpQBleKSR4fuvp/UVn6Qv+gQn2qx4snDWY09DmW44x6CnWVt5FrHEf4RXk45rmSPVwStTuWFHFMepgMCq9w4jBY1xo6upj6gwOsaei/f3Nj8q689a4rRW/tTxM8jni2AKj65rtTzXq4Je4ebjvjQZooxRXacQUmKcKKAEpRSUCgBaKKKAENY3i7d/YUxXsy/zrZqrqVsLuxmgPO5SR+AqZr3Wi6T99GXpTq1hCVPBUVdU1zfha7JtWt5Cd8R2mujjGa+e5bOx7st7iuK5vxWf3MHr5q4/OunZeKwPE9m8tvG6jPluGP4HNXD4kTfRnUWhP2WHPXYM1LmoLCZJ7GGVCCCg6VNmvfTVkeE9xaKKKYgooooASilpKAEoopaAEoopaAEpcUUUAFFLRQAlLRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFACUUtJQAUUUCgQCiiloGFFFFABRRRQAUUYooAKKKKAG0CiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAoopaACiiloAKKKKACiiigAooooAKKKBQAtFFFAC0fhSZozQAtBpM0maACmTzpbQvNIcKgzTs5Nc7qV02tXf2OBiLeM/vGHc+lZVZ8kbmlKnzyshNPQ6ldyalOp5+WNT2HrWoi4GOtEESwoqIAABjFSbcdK8apJzd2evFcqshp4FUdQb5KuvwKzb6TkLWbNYGV4UU2/iGcP8A8tVGP1rte9cTAwtvENmwOAxIP5V23evXwTvTPLxq/eXFopM0tdZxi0YozS5oATFFFFABSGjNJkUALTJSEikdvuqhP6U7IrO8R3X2bRZ2B5OB+dTN2iy4K8kch4YLNPdXH8MshYV2EPIFc1osK29tGB6ZrorZ94GOlfPuV5XPelF2LBqG4gWZGRh8pGKsbeKCtOxlcxdDuDpd8+nTE+W/zREn9K6P1rC1nTmuYfMg4mjO5SKu6VqSXtoGJxIvysvcV6mFq80eV7nnYqlyvnWzNAUtNBpc12nILRRRmgApKWigBKWiigBKKWigBKWiigAooooAKKKKACiiigAooooAKKKKACiiigAopKPyoAWikpaACiiigBKWkpaACikpaACiiigAooooAKKKKACiiigAooooAKKKKAG0UUCgAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigApaSigB1FFFABRRRQAUUUUAFFFFABS0UUAFFIaKAFzSZpKbk0AKTzTSwAyTgUyWRY1LOcKOSawLvU5dRLRQuI7ZThpO5+lZ1aqpq7NKdOVR2iT6pq008hstP5kb70n90VY06wjsYAi/ePLH1NVrKOKzTbHghj949TWgZVXao+8a8itWdSR6lKkqcbIlAxTuKhaZUwpb5j1FOV8isjSwy5fbGTXP3V8nm7Sa0tau0tLR5HfaFGc15fJ4sgnmeSJ2kYngDtT9nKT0LjJQV2zrrmZX1G0Zeqsa7IXofpXmOiPdXdwLiVTsH3R3FdpaySE969XC03ThaR5eLqRnK6N5bjNP8+s6PeanUNXUchbEtKJKrqpp4BoAm8yk8yosGjBoAkMnvTTNgVGQaikVtpoAla6C96w/Fd4r6WyZ7j+dWrhXA71z+tpNNbMg71MtU0i4SUZJsu2s8YtUx6Vq6dKDGMV5i/iWTSP3F4j7egcV1XhDXor9giyht33a8GdGUHqj3o1Y1I3TO3zkCjpUatx1prS7Tg0XMrEjH0rEurWbT7v7bZDjrInYithpAmM8g1DczbcAKSrDrVQqcruS482jJNP1KHUIfNjOGzhlPUGrW+uamtmgkL2jBJepH96tLStSW8V1dgsyHBTvXqUcQqmh59fDuHvLY1Q1OzUamnA103OUeDS02lzTAWikpaACiiigAooooAKKKKACiiigAooooAKKKKACkoooAKM0UlAC5ozSUUALmlptLQAtFJS0AFFFFABRSUtABRRRQAUUUUAFFFFABS0lLQAlFFFABRRRQA00CkoFAC0UUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUtJS0ALRRRQAUUUUAFFFFABQKKKAClpKKAFNJilozQA00hp1JSuBkeJSw0tmQkAN859qx7Oa2mjWQDEKDAAPU11V3bJeWz20g+Rxg1y1z4LuIoiljdsqht2xjkVxYuhKfwnfhK8YaSLUTEkZXk9MdqdPO1n+7TLyv0PpWRLa+I7a5R/IEq4xtQYqgmoeILe/lmudOkaI8KAPu1wfV5rdHoKtTb0Z0tsjQfPckyO3cdqttdxxJuZguOxNc4PEdxsCJYymU9qpzeGfEHiG6D3Ur2lv2VTgmrjh5N2IlWglqyp4u1iTW5BpVlmTcfmZTwKm0fwKsaIzQgHvxXX6J4PsdHiGxQ8h5Z25JNbixIowqgAV6dGioRseVVrubMKy0BIEACgCtKLT0TtV3aKUCtzFu5XFuo6CnCEVNiigRGIxS7BT6KQDDGKPLFPopgR+X7U0xD0qag9KAKz2yuOlVLjSklQjArToFKwziNW8IpdIcxhvwrkjp83hbVY7rY/lLxgDjmvY2QN1FUtQ0e21GExTIDms501JWZpCq4u6M3T9UhvrZJY5FO4ZxmpLk+ajIrEN2xXL6j4H1HTJjcaTcylc/6stxinxa/d2a7L62kjccZx1ryquGnFnr0q0JLc2oLuezkEd0u9G4DelSlpEkaMNujccN6VyOq65qGpRG30+zmJ67xV03Wtz2sUEGnzJICMsxGKy9hUeyNPaQvuawzh4XJMo5BPequlzrca+phIbahDhT0NH/CP69fXMck0ywKo5wCM1u6J4YtdFeWWMlpZTlmJzXbh8PKLTZy4rEQcXFGqq8U7FKowKWvQR5IYopaQ0wAUtJS0wCikpaACiiigAooooAKKSigBaKSigAo/KiigAoNJRQAUUUUAFFFFABRRRQAtLSUtABRRRQAUUUUAFFFFABRRRQAUUUUAApaQUtABSUUUAFFFFADKUUYo6UAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFFFFABRRRQAUUUUAFLSUtAC0UlFAC0UUUAFFFFABRRRQAUUUUAFFFFABRijFLSsAmKMUtFMLBgUwpk8gflT6MUANWNV6Ko/AU7FFFKwBiiiihAFFFFMAoopaAEopaKVgEpaKKYCUUtJigBKUUUUABoFFFAAaY0Mb9UU/UU+igCMQoOiKPoopwjUdh+VOooCwhA7UnSlxRigAooooAKSlooASloooAKKKKACiiigAoopKAFpKKKACiiigAopKKACiiigAooooAKKKKACiiigBaKSloAWiiigAooooAKKKKACiiigAooooAKM0UUAFFFFABRRRQB//Z", pxW: 1170, pxH: 873, k: 0.002061, cx: 585.5, floor: 852 };
+const refTex = new THREE.TextureLoader().load(REF.url);
+refTex.colorSpace = THREE.SRGBColorSpace;
+const refMat = new THREE.MeshBasicMaterial({ map: refTex, transparent: true, opacity: 0.45, depthTest: false, depthWrite: false });
+const refPlane = new THREE.Mesh(new THREE.PlaneGeometry(REF.pxW * REF.k, REF.pxH * REF.k), refMat);
+refPlane.position.set((REF.pxW / 2 - REF.cx) * REF.k, REF.floor * REF.k - REF.pxH * REF.k / 2, 0.6);
+refPlane.renderOrder = 10;
+scene.add(refPlane);
+
+// ================================================================== build
+const DEFAULTS = { muscle: 0.8, bulk: 1, shoulders: 1, waist: 1, headSize: 1.3 };
+const params = { ...DEFAULTS };
+let pose = "ref";
+const bodyGroup = new THREE.Group(); world.add(bodyGroup);
+const lineGroup = new THREE.Group(); world.add(lineGroup);
+const wireGroup = new THREE.Group(); wireGroup.visible = false; world.add(wireGroup);
+let showLines = true;
+function meshOf(prims, cell, groupK, mat, line, extra = {}) {
+  const m = polygonize(Object.assign({ prims, cell, groupK }, extra));
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(m.pos, 3));
+  g.setIndex(m.idx);
+  g.computeVertexNormals();
+  bodyGroup.add(new THREE.Mesh(g, mat));
+  if (line) lineGroup.add(new THREE.Mesh(g, line));
+  wireGroup.add(new THREE.Mesh(g, wireMat));
+  return m.pos.length / 3;
+}
+function clearGroup(gr) { for (const c of [...gr.children]) { gr.remove(c); } }
+function rebuild() {
+  const t0 = performance.now();
+  for (const c of bodyGroup.children) c.geometry.dispose();
+  clearGroup(bodyGroup); clearGroup(lineGroup); clearGroup(wireGroup);
+  const r = { ...params, armAngle: pose === "ref" ? 12 : 40, wristBend: pose === "ref" ? 9 : 0, footSplay: pose === "ref" ? 20 : 8,
+    neck: { w: H.neck.w, f: H.neck.f, z: H.neck.z }, colors: {} };
+  const S = skeleton(r), body = buildBody(r, S);
+  const n = { body: meshOf(body, 0.011, BodyGroupK, MATS.skin, MATS.skinLine), hands: 0, toes: 0, trunks: 0 };
+  for (const side of [-1, 1]) {
+    n.hands += meshOf(buildHand(S, side), 0.005, 0.0045, MATS.skin, MATS.skinLine);
+    n.toes += meshOf(buildToes(S, side), 0.004, 0.004, MATS.skin, MATS.skinLine);
+  }
+  const [tr, band] = buildTrunks(r, body);
+  n.trunks += meshOf(tr.prims, tr.cell, tr.groupK, MATS.trunks, MATS.trunksLine);
+  n.trunks += meshOf(band.prims, band.cell, band.groupK, MATS.band, MATS.trunksLine);
+  const hs = params.headSize;
+  root.position.set(0, S.head.y + ChinHL * hs, S.head.z + AxisZ * hs);
+  root.scale.setScalar(HeadUnit * hs);
+  const ms = performance.now() - t0, total = n.body + n.hands + n.toes + n.trunks;
+  document.getElementById("counts").textContent = `${total.toLocaleString()} vertices · built in ${Math.round(ms)} ms`;
+  document.getElementById("mesh-stats").innerHTML =
+    `<dt>Body</dt><dd>${n.body.toLocaleString()}</dd><dt>Hands</dt><dd>${n.hands.toLocaleString()}</dd><dt>Toes</dt><dd>${n.toes.toLocaleString()}</dd>` +
+    `<dt>Trunks</dt><dd>${n.trunks.toLocaleString()}</dd><dt>Head (Toon Head)</dt><dd>${(head.pos.length / 3 + ears.pos.length / 3).toLocaleString()}</dd>` +
+    `<dt>Height to the crown</dt><dd>${(S.head.y + ChinHL * hs + HeadUnit * hs).toFixed(2)} m</dd>`;
+}
+let pending = 0;
+const schedule = () => { clearTimeout(pending); pending = setTimeout(rebuild, 120); };
+
+// ================================================================== light + camera
+let lightDeg = 35;
+function setLight(deg) {
+  lightDeg = deg;
+  const a = deg * Math.PI / 180;
+  light.dir.set(Math.sin(a), 0.5, Math.cos(a)).normalize();
+  document.getElementById("light-val").textContent = Math.round(deg) + "°";
+  document.getElementById("light").value = String(Math.round(deg));
+}
+setLight(35);
+
+const VIEWS = { "v-front": [0, 0.04, 1.1, 1], "v-three": [0.62, 0.08, 1.1, 1], "v-side": [Math.PI / 2, 0.03, 1.1, 1], "v-back": [Math.PI, 0.06, 1.1, 1], "v-torso": [0.35, 0.05, 1.42, 0.45] };
+const cam = { yaw: 0, pitch: 0.04, dist: 6, ty: 1.1, tYaw: 0, tPitch: 0.04, tDist: 6, tTy: 1.1, zoom: 1, tZoom: 1 };
+let baseDist = 6, view = "v-front", refOn = true;
+const refActive = () => refOn && view === "v-front";
+function placeCamera() {
+  const cp = Math.cos(cam.pitch);
+  persp.position.set(Math.sin(cam.yaw) * cp * cam.dist, cam.ty + Math.sin(cam.pitch) * cam.dist, Math.cos(cam.yaw) * cp * cam.dist);
+  persp.lookAt(0, cam.ty, 0);
+  const r = canvas.getBoundingClientRect(), aspect = r.width / Math.max(1, r.height);
+  const halfH = 1.3 / cam.zoom, halfW = halfH * aspect;
+  const fit = Math.max(1, 0.6 / halfW);   // keep the body's width on screen on narrow phones
+  ortho.left = -halfW * fit; ortho.right = halfW * fit; ortho.top = halfH * fit; ortho.bottom = -halfH * fit;
+  ortho.position.set(0, 1.08, 10); ortho.lookAt(0, 1.08, 0); ortho.updateProjectionMatrix();
+}
+function resize() {
+  const r = canvas.getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false);
+  persp.aspect = r.width / Math.max(1, r.height);
+  persp.updateProjectionMatrix();
+  if (!(r.width > 1 && r.height > 1)) return;
+  const next = 6.0 * Math.max(1, 0.75 / Math.sqrt(persp.aspect));
+  if (Math.abs(cam.tDist - baseDist * (VIEWS[view] ? VIEWS[view][3] : 1)) < 1e-3 || cam.tDist === baseDist) { cam.tDist = next * (VIEWS[view] ? VIEWS[view][3] : 1); cam.dist = cam.tDist; }
+  baseDist = next;
+}
+new ResizeObserver(resize).observe(canvas);
+resize();
+
+function setView(id) {
+  view = id;
+  for (const k of Object.keys(VIEWS)) document.getElementById(k).setAttribute("aria-pressed", String(k === id));
+}
+const pointers = new Map();
+let pinch0 = 0, dist0 = 0;
+canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, [e.clientX, e.clientY]); if (pointers.size === 2) { pinch0 = pinchDist(); dist0 = cam.tDist; } });
+canvas.addEventListener("pointermove", e => {
+  if (!pointers.has(e.pointerId)) return;
+  const prev = pointers.get(e.pointerId);
+  pointers.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pointers.size === 1) {
+    const dx = e.clientX - prev[0], dy = e.clientY - prev[1];
+    if (Math.abs(dx) + Math.abs(dy) < 1) return;
+    cam.tYaw -= dx * 0.008; cam.tPitch = Math.max(-1.0, Math.min(1.0, cam.tPitch + dy * 0.006));
+    if (view) setView(null);
+  } else if (pointers.size === 2 && pinch0 > 0) cam.tDist = clampDist(dist0 * pinch0 / pinchDist());
+});
+const lift = e => { pointers.delete(e.pointerId); pinch0 = 0; };
+canvas.addEventListener("pointerup", lift); canvas.addEventListener("pointercancel", lift);
+canvas.addEventListener("wheel", e => { e.preventDefault(); cam.tDist = clampDist(cam.tDist * Math.exp(e.deltaY * 0.001)); cam.tZoom = Math.max(0.8, Math.min(5, cam.tZoom * Math.exp(-e.deltaY * 0.001))); }, { passive: false });
+const pinchDist = () => { const [a, b] = [...pointers.values()]; return Math.hypot(a[0] - b[0], a[1] - b[1]); };
+const clampDist = d => Math.max(1.0, Math.min(14, d));
+for (const [id, [yaw, pitch, ty, dm]] of Object.entries(VIEWS))
+  document.getElementById(id).addEventListener("click", () => {
+    const twoPi = Math.PI * 2;
+    cam.tYaw += ((yaw - cam.tYaw) % twoPi + twoPi * 1.5) % twoPi - Math.PI;
+    cam.tPitch = pitch; cam.tTy = ty; cam.tDist = baseDist * dm; cam.tZoom = 1; setView(id);
+  });
+
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+(function frame() {
+  const k = reduce ? 1 : 0.18;
+  cam.yaw += (cam.tYaw - cam.yaw) * k; cam.pitch += (cam.tPitch - cam.pitch) * k; cam.dist += (cam.tDist - cam.dist) * k;
+  cam.ty += (cam.tTy - cam.ty) * k; cam.zoom += (cam.tZoom - cam.zoom) * k;
+  placeCamera();
+  const useRef = refActive();
+  refPlane.visible = useRef;
+  const camera = useRef ? ortho : persp;
+  // the painted face shadow / front-view morph follow how squarely the camera faces the face
+  const toCam = camera.position.clone().sub(new THREE.Vector3(0, 2.0, 0)).normalize();
+  front.value = useRef ? 1 : THREE.MathUtils.smoothstep(toCam.z, 0.55, 0.97);
+  lineGroup.visible = showLines; outlines.visible = showLines;
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+})();
+
+// ================================================================== panel
+const SLIDERS = [
+  ["muscle", "Muscle", 0.4, 1.3, 0.01, "Chest edge, abs, arm and leg muscle. 0.8 = the reference."],
+  ["bulk", "Build", 0.88, 1.15, 0.01, "Overall thickness of the torso and limbs."],
+  ["shoulders", "Shoulders", 0.9, 1.12, 0.01, "Width of the shoulders and upper chest."],
+  ["waist", "Waist", 0.88, 1.15, 0.01, "How much the waist pinches in."],
+  ["headSize", "Head size", 0.9, 1.45, 0.01, "1.30 = the game's head today. About 0.95 gives the reference's proportions (7.5 heads tall)."],
+];
+const box = document.getElementById("sliders");
+for (const [key, label, min, max, step, note] of SLIDERS) {
+  const d = document.createElement("div");
+  d.className = "sl";
+  d.innerHTML = `<label for="s-${key}">${label}</label><output id="o-${key}">${params[key].toFixed(2)}</output>` +
+    `<input type="range" id="s-${key}" min="${min}" max="${max}" step="${step}" value="${params[key]}"><small>${note}</small>`;
+  box.appendChild(d);
+  d.querySelector("input").addEventListener("input", e => {
+    params[key] = Number(e.target.value);
+    document.getElementById("o-" + key).textContent = params[key].toFixed(2);
+    schedule();
+  });
+}
+document.getElementById("reset").addEventListener("click", () => {
+  Object.assign(params, DEFAULTS);
+  for (const [key] of SLIDERS) { document.getElementById("s-" + key).value = String(params[key]); document.getElementById("o-" + key).textContent = params[key].toFixed(2); }
+  rebuild();
+});
+const tog = (id, fn) => document.getElementById(id).addEventListener("click", e => { const on = e.currentTarget.getAttribute("aria-pressed") !== "true"; e.currentTarget.setAttribute("aria-pressed", String(on)); fn(on); });
+tog("t-outline", on => { showLines = on; });
+tog("t-wire", on => { wireGroup.visible = on; });
+tog("t-ref", on => {
+  refOn = on;
+  if (on) document.getElementById("v-front").click();
+});
+document.getElementById("ref-op").addEventListener("input", e => { refMat.opacity = Number(e.target.value) / 100; document.getElementById("ref-op-val").textContent = e.target.value + "%"; });
+for (const [id, p] of [["p-ref", "ref"], ["p-game", "game"]])
+  document.getElementById(id).addEventListener("click", () => {
+    pose = p;
+    document.getElementById("p-ref").setAttribute("aria-pressed", String(p === "ref"));
+    document.getElementById("p-game").setAttribute("aria-pressed", String(p === "game"));
+    rebuild();
+  });
+document.getElementById("light").addEventListener("input", e => setLight(Number(e.target.value)));
+requestAnimationFrame(() => setTimeout(rebuild, 0));
+</script>
