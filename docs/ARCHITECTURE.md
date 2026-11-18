@@ -444,3 +444,25 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
   settings, the Customize screen and `GenerateAsync` / `Build(recipe, gen)` (the preview now also frees its shadow map).
   **Open:** the Customize jaw / chin / nose / ear sliders still edit `FaceParts` (the old SDF head), so they do nothing on
   the Toon head; they need to be pointed at `ToonHeadSettings`. Not compiled locally (no Unity here): run the Tests workflow.
+- Online accounts (Unity Gaming Services). Packages `com.unity.services.authentication` 3.8.1 + `com.unity.services.cloudsave`
+  3.4.2 (asmdef refs `Unity.Services.Core/Authentication/CloudSave`).
+  - `Accounts/OnlineAccounts.cs`: `Create` = `SignUpWithUsernamePasswordAsync`, `SignIn` = `SignInWithUsernamePasswordAsync`
+    then Cloud Save player key `profile` (the `AccountRecord` as JSON, no password data) → `AccountStore.AttachOnline`.
+    `SignOut` = `AuthenticationService.SignOut(clearCredentials)` + store sign-out. Every store change (match, GrantXp,
+    SetStats) goes to `AccountStore.Upload` → latest-wins upload loop, retried every 30 s while offline;
+    `MarkUploaded` clears `onlinePending`. Errors map to `AccountError` (Offline, NotSetUp, NameTaken, WrongPassword,
+    PasswordWeak, Busy, Failed). Skipped in batch mode (dedicated server).
+  - Stay signed in: `accounts.json` caches the online profile (`onlineCache`, `onlinePending`); at launch it shows at
+    once and `Resume` restores the session from Unity's cached token (`SignInAnonymouslyAsync` only when
+    `SessionTokenExists`, so guests never get anonymous accounts), then pulls the cloud copy (another device's progress)
+    unless this device has unsent progress, which is pushed instead. Invalid / revoked session → signed out.
+  - Device accounts from before stay readable: one still signed in shows the form with its name filled in; creating an
+    online account with that name (or any device account whose old password matches) moves its XP / stats / stat
+    points online and removes the device copy. Online passwords follow Unity's rule (8–30, upper + lower + digit +
+    symbol: `AccountStore.IsStrongPassword`); names keep the 3–16 `[A-Za-z0-9_]` rule.
+  - **Owner setup (once):** Edit → Project Settings → Services → link to a Unity Cloud project (writes `cloudProjectId`
+    into ProjectSettings; commit it so CI builds have it), then Unity Cloud dashboard → Authentication → Identity
+    providers → add Username & Password. Without a linked project the dialog says "Online accounts aren't set up".
+  - Tests: `AccountTests` +4 (password rule, upload + offline cache, MarkUploaded ordering, device → online move).
+    **Limit:** the client still writes its own profile (Cloud Save player data), so XP / level are the client's word;
+    making them cheat-proof needs Cloud Code (server-side `Record`) or the dedicated server reporting results.

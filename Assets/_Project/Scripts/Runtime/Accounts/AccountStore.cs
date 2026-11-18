@@ -23,6 +23,13 @@ namespace LightMMORPG.Accounts
         public float minutesPlayed;
         /// <summary>Stat points spent (file version 2+; older files load as all zero = everything unspent).</summary>
         public StatAllocation stats;
+        /// <summary>
+        /// True for an online account (Unity Authentication + Cloud Save): the record is the cloud profile, cached on
+        /// this device, and has no password data. False for a device-only account from before online accounts.
+        /// </summary>
+        public bool online;
+
+        public AccountRecord Clone() => (AccountRecord)MemberwiseClone();
 
         public int Level => Progression.LevelFor(totalXp);
         /// <summary>Stat points earned but not spent yet.</summary>
@@ -47,9 +54,18 @@ namespace LightMMORPG.Accounts
         public int version = AccountStore.FileVersion;
         public string lastSignedIn = "";
         public List<AccountRecord> accounts = new();
+        /// <summary>The signed-in online account's profile, cached so the menu works offline (empty username = none).</summary>
+        public AccountRecord onlineCache;
+        /// <summary>The cache holds progress the cloud does not have yet (upload failed or still running).</summary>
+        public bool onlinePending;
     }
 
-    public enum AccountError { None, NameInvalid, NameTaken, PasswordTooShort, NoSuchAccount, WrongPassword }
+    public enum AccountError
+    {
+        None, NameInvalid, NameTaken, PasswordTooShort, NoSuchAccount, WrongPassword,
+        // online only
+        PasswordWeak, Offline, NotSetUp, Busy, Failed,
+    }
 
     /// <summary>A finished match as shown on the results screen.</summary>
     public sealed class RecordedMatch
@@ -63,9 +79,11 @@ namespace LightMMORPG.Accounts
     }
 
     /// <summary>
-    /// Accounts on this device (JSON in <c>Application.persistentDataPath/accounts.json</c>): create, sign in / out,
-    /// stay signed in across launches, and record matches (XP via <see cref="Progression"/>). Guests play normally but
-    /// nothing is saved. Storage is behind two delegates so an online backend (or tests) can replace the file later.
+    /// The signed-in account and its progress: record matches (XP via <see cref="Progression"/>), stat points, stay
+    /// signed in across launches. Online accounts (<see cref="OnlineAccounts"/>: Unity Authentication + Cloud Save) are
+    /// attached with <see cref="AttachOnline"/>, cached in <c>accounts.json</c>, and every change goes to
+    /// <see cref="Upload"/>. Device-only accounts from before (same file) still sign in and can be moved online.
+    /// Guests play normally but nothing is saved. Storage is behind two delegates so tests can replace the file.
     /// </summary>
     public sealed class AccountStore
     {
@@ -106,12 +124,118 @@ namespace LightMMORPG.Accounts
         public static string Describe(AccountError e) => e switch
         {
             AccountError.NameInvalid => "Names are 3–16 letters, numbers or _",
-            AccountError.NameTaken => "That name is already used on this device",
+            AccountError.NameTaken => "That name is already taken",
             AccountError.PasswordTooShort => "Passwords need at least " + MinPassword + " characters",
-            AccountError.NoSuchAccount => "No account with that name on this device",
-            AccountError.WrongPassword => "Wrong password",
+            AccountError.NoSuchAccount => "No account with that name",
+            AccountError.WrongPassword => "Wrong name or password",
+            AccountError.PasswordWeak => "Passwords need " + MinOnlinePassword + "–" + MaxOnlinePassword + " characters with upper and lower case letters, a number and a symbol",
+            AccountError.Offline => "Can't reach the account server. Check your connection",
+            AccountError.NotSetUp => "Online accounts aren't set up in this build yet",
+            AccountError.Busy => "Still working on the last request",
+            AccountError.Failed => "Something went wrong. Try again",
             _ => "",
         };
+
+        public const int MinOnlinePassword = 8, MaxOnlinePassword = 30;
+
+        /// <summary>Unity Authentication's password rule: 8–30 characters, upper + lower case, a digit and a symbol.</summary>
+        public static bool IsStrongPassword(string p)
+        {
+            if (p == null || p.Length < MinOnlinePassword || p.Length > MaxOnlinePassword) return false;
+            bool up = false, low = false, digit = false, sym = false;
+            foreach (char c in p)
+            {
+                if (char.IsUpper(c)) up = true;
+                else if (char.IsLower(c)) low = true;
+                else if (char.IsDigit(c)) digit = true;
+                else if (!char.IsWhiteSpace(c)) sym = true;
+            }
+            return up && low && digit && sym;
+        }
+
+        /// <summary>Checks a new online account's name and password before anything is sent.</summary>
+        public static AccountError ValidateOnline(string username, string password)
+        {
+            if (!IsValidName(username?.Trim())) return AccountError.NameInvalid;
+            return IsStrongPassword(password) ? AccountError.None : AccountError.PasswordWeak;
+        }
+
+        // ------------------------------------------------------------------ online accounts
+        // OnlineAccounts does the network part (Unity Authentication + Cloud Save); the store only holds the profile.
+
+        /// <summary>Called with a copy of the online profile whenever it changes; the online layer uploads it.</summary>
+        public Action<AccountRecord> Upload;
+
+        public bool OnlinePending => _file.onlinePending;
+
+        /// <summary>The online profile as it is now (a copy), or null when no online account is signed in.</summary>
+        public AccountRecord OnlineSnapshot => Current != null && Current.online ? Current.Clone() : null;
+
+        /// <summary>Signs in with an online profile (just loaded from the cloud, or just created).</summary>
+        public void AttachOnline(AccountRecord profile, bool pending)
+        {
+            profile.online = true;
+            profile.salt = profile.hash = null;
+            profile.iterations = 0;
+            profile.stats = FighterStats.Validated(profile.Level, profile.stats);
+            _file.onlineCache = profile;
+            _file.onlinePending = pending;
+            _file.lastSignedIn = "";
+            Current = profile;
+            Save();
+            Changed?.Invoke();
+            if (pending) Upload?.Invoke(profile.Clone());
+        }
+
+        /// <summary>The cloud now has the profile as it was when <paramref name="sent"/> was taken.</summary>
+        public void MarkUploaded(AccountRecord sent)
+        {
+            var a = Current;
+            if (a == null || !a.online || !SameProgress(a, sent)) return; // changed again since: another upload follows
+            if (!_file.onlinePending) return;
+            _file.onlinePending = false;
+            Save();
+            Changed?.Invoke();
+        }
+
+        /// <summary>
+        /// A device account to move into a new online account with the same name: the one signed in on this device
+        /// before online accounts existed, or any whose device password matches. Null if there is none.
+        /// </summary>
+        public AccountRecord DeviceAccountFor(string username, string password)
+        {
+            var a = Find(username?.Trim());
+            if (a == null) return null;
+            if (string.Equals(_file.lastSignedIn, a.username, StringComparison.OrdinalIgnoreCase)) return a;
+            return FixedTimeEquals(Hash(password ?? "", Convert.FromBase64String(a.salt), a.iterations), a.hash) ? a : null;
+        }
+
+        /// <summary>The device-only account signed in from before online accounts (offered "move it online"), or null.</summary>
+        public AccountRecord DeviceSignedIn => Current != null && !Current.online ? Current : null;
+
+        /// <summary>Removes a device account after its progress moved online.</summary>
+        public void RemoveDeviceAccount(AccountRecord a)
+        {
+            if (a == null || !_file.accounts.Remove(a)) return;
+            if (string.Equals(_file.lastSignedIn, a.username, StringComparison.OrdinalIgnoreCase)) _file.lastSignedIn = "";
+            Save();
+        }
+
+        private static bool SameProgress(AccountRecord a, AccountRecord b) =>
+            b != null && a.totalXp == b.totalXp && a.matches == b.matches && a.trainingSessions == b.trainingSessions &&
+            a.stats == b.stats && a.kos == b.kos && a.deaths == b.deaths;
+
+        /// <summary>Saves a change to the signed-in account: device accounts to the file, online ones to cache + cloud.</summary>
+        private void Persist(AccountRecord a)
+        {
+            if (a.online)
+            {
+                _file.onlinePending = true;
+                Save();
+                Upload?.Invoke(a.Clone());
+            }
+            else Save();
+        }
 
         public AccountError Create(string username, string password)
         {
@@ -144,7 +268,13 @@ namespace LightMMORPG.Accounts
             return AccountError.None;
         }
 
-        public void SignOut() => SetCurrent(null);
+        /// <summary>Signs out. An online account's cached profile is dropped too (OnlineAccounts ends the session).</summary>
+        public void SignOut()
+        {
+            _file.onlineCache = null;
+            _file.onlinePending = false;
+            SetCurrent(null);
+        }
 
         /// <summary>
         /// Adds a finished match: XP and stats go to the signed-in account (guests: XP is only shown). Training adds
@@ -169,7 +299,7 @@ namespace LightMMORPG.Accounts
                 a.minutesPlayed += Math.Max(0f, r.Minutes);
                 rec.Saved = true;
                 rec.Username = a.username;
-                Save();
+                Persist(a);
             }
             _lastMatch = rec;
             Changed?.Invoke();
@@ -186,7 +316,7 @@ namespace LightMMORPG.Accounts
             var res = Progression.AddXp(a != null ? a.totalXp : 0, amount);
             if (a == null) return res;
             a.totalXp = res.NewXp;
-            Save();
+            Persist(a);
             Changed?.Invoke();
             return res;
         }
@@ -204,7 +334,7 @@ namespace LightMMORPG.Accounts
             if (a == null || !FighterStats.IsValid(a.Level, stats)) return false;
             if (a.stats == stats) return true;
             a.stats = stats;
-            Save();
+            Persist(a);
             Changed?.Invoke();
             return true;
         }
@@ -227,6 +357,7 @@ namespace LightMMORPG.Accounts
         private void SetCurrent(AccountRecord a)
         {
             Current = a;
+            if (a != null) { _file.onlineCache = null; _file.onlinePending = false; } // a device account replaces online
             _file.lastSignedIn = a != null ? a.username : "";
             Save();
             Changed?.Invoke();
@@ -246,7 +377,19 @@ namespace LightMMORPG.Accounts
             // older files have no stats (all zero); a hand-edited or out-of-date allocation is refunded, never kept
             foreach (var a in _file.accounts) a.stats = FighterStats.Validated(a.Level, a.stats);
             _file.version = FileVersion;
-            Current = Find(_file.lastSignedIn); // stay signed in
+            if (_file.onlineCache != null && IsValidName(_file.onlineCache.username))
+            {
+                // stay signed in online: the cached profile shows at once, OnlineAccounts resumes the session
+                _file.onlineCache.online = true;
+                _file.onlineCache.stats = FighterStats.Validated(_file.onlineCache.Level, _file.onlineCache.stats);
+                Current = _file.onlineCache;
+            }
+            else
+            {
+                _file.onlineCache = null;
+                _file.onlinePending = false;
+                Current = Find(_file.lastSignedIn); // stay signed in
+            }
         }
 
         private void Save()

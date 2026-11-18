@@ -25,6 +25,8 @@ namespace LightMMORPG.Menu
         private Text _resTitle, _resLines, _resTotal, _resLevel, _resLevelUp, _resUnlocks, _resGuest;
         private RectTransform _resXpFill;
         private float _accountPanelOutH, _accountPanelInH;
+        private Text _acctBlurb;
+        private string _prefilledFor;
 
         private static AccountStore Store => AccountStore.Instance;
 
@@ -79,11 +81,21 @@ namespace LightMMORPG.Menu
                 card.sizeDelta = new Vector2(Mathf.Max(260f, w), 100f);
             }
             if (_acctIn == null) return;
-            _acctOut.SetActive(a == null);
-            _acctIn.SetActive(a != null);
-            _accountPanel.sizeDelta = new Vector2(T.subPanelWidth, a == null ? _accountPanelOutH : _accountPanelInH);
-            if (a == null) return;
-            _acctName.text = a.username;
+            // a device-only account (from before online accounts) gets the form, to move it online under the same name
+            bool form = a == null || !a.online;
+            _acctOut.SetActive(form);
+            _acctIn.SetActive(!form);
+            _accountPanel.sizeDelta = new Vector2(T.subPanelWidth, form ? _accountPanelOutH : _accountPanelInH);
+            if (form)
+            {
+                _acctBlurb.text = a == null
+                    ? "Online account: your name, level and stats on every device."
+                    : a.username + " is saved on this device only. Create an online account with that name to take it online.";
+                if (a != null && _prefilledFor != a.username && string.IsNullOrEmpty(_userField.text)) _userField.text = a.username;
+                _prefilledFor = a?.username;
+                return;
+            }
+            _acctName.text = a.username + (Store.OnlinePending ? "  ·  saving…" : "");
             _acctLevel.text = "Level " + a.Level + (a.Title.Length > 0 ? " · " + a.Title : "");
             var (into, needed) = Progression.LevelProgress(a.totalXp);
             _acctXp.text = needed > 0 ? $"{into:N0} / {needed:N0} XP to level {a.Level + 1}" : $"Max level · {a.totalXp:N0} XP";
@@ -167,15 +179,14 @@ namespace LightMMORPG.Menu
             // signed out: sign in or create
             _acctOut = MenuUi.Rect("SignedOut", _accountPanel).Fill().gameObject;
             var outRt = (RectTransform)_acctOut.transform;
-            var blurb = Body(outRt, "Blurb", 26, -108f, 40f, TextAnchor.MiddleLeft, 0.75f);
-            blurb.text = "Saved on this device. Keeps your name, level and stats.";
+            _acctBlurb = Body(outRt, "Blurb", 24, -100f, 52f, TextAnchor.MiddleLeft, 0.75f);
             _userField = Field(outRt, "Name", -160f, w, false);
             _passField = Field(outRt, "Password", -256f, w, true);
             float bw = (w - 16f) * 0.5f;
             _signInButton = DialogButton(outRt, "Sign in", null, -356f, bw, 80f, () => DoAccount(false), -(bw + 16f) * 0.5f, centred: true);
             var create = DialogButton(outRt, "Create account", null, -356f, bw, 80f, () => DoAccount(true), (bw + 16f) * 0.5f, centred: true);
             var hint = Body(outRt, "Hint", 22, -452f, 34f, TextAnchor.MiddleCenter, 0.55f);
-            hint.text = "Names: 3–16 letters, numbers or _ · passwords: " + AccountStore.MinPassword + "+ characters";
+            hint.text = "Names: 3–16 letters, numbers or _ · passwords: " + AccountStore.MinOnlinePassword + "+ with Aa, 1 and !";
             var backOut = TextButton(outRt, "Back", -516f, () => SetState(_accountReturn));
             _accountPanelOutH = 516f + 84f;
             var nu = _userField.navigation; nu.selectOnDown = _passField; _userField.navigation = nu;
@@ -201,25 +212,29 @@ namespace LightMMORPG.Menu
             stats2.rectTransform.anchoredPosition = new Vector2(w * 0.25f, -280f);
             _acctUnlocks = Body(inRt, "Unlocks", 22, -414f, 70f, TextAnchor.UpperLeft, 0.85f);
             _acctNext = Body(inRt, "Next", 22, -488f, 32f, TextAnchor.MiddleLeft, 0.6f);
-            _signOutButton = DialogButton(inRt, "Sign out", null, -540f, 320f, 72f, () => { Store.SignOut(); ShowToast("Signed out"); SetState(State.Account); }, centred: true);
+            _signOutButton = DialogButton(inRt, "Sign out", null, -540f, 320f, 72f, () => { OnlineAccounts.SignOut(); ShowToast("Signed out"); SetState(State.Account); }, centred: true);
             var backIn = TextButton(inRt, "Back", -626f, () => SetState(_accountReturn));
             _accountPanelInH = 626f + 84f;
             Chain(_signOutButton, backIn);
             RefreshAccountUI();
         }
 
-        private void DoAccount(bool create)
+        private async void DoAccount(bool create)
         {
+            if (OnlineAccounts.Busy) return;
             string user = _userField.text, pass = _passField.text;
-            var err = create ? Store.Create(user, pass) : Store.SignIn(user, pass);
+            ShowToast(create ? "Creating account…" : "Signing in…");
+            var err = create ? await OnlineAccounts.Create(user, pass) : await OnlineAccounts.SignIn(user, pass);
+            if (this == null) return; // menu closed meanwhile
             if (err != AccountError.None)
             {
                 ShowToast(AccountStore.Describe(err));
                 return;
             }
             _passField.text = "";
+            _userField.text = "";
             ShowToast((create ? "Welcome, " : "Signed in as ") + Store.Current.username);
-            SetState(State.Account);
+            if (Current == State.Account) SetState(State.Account);
         }
 
         // ------------------------------------------------------------------ results dialog

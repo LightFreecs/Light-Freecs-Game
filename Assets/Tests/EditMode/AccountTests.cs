@@ -84,6 +84,86 @@ namespace LightMMORPG.Tests
         }
 
         [Test]
+        public void OnlinePassword_FollowsUnityRules()
+        {
+            Assert.IsTrue(AccountStore.IsStrongPassword("Kaien#2026"));
+            Assert.IsFalse(AccountStore.IsStrongPassword("Ka#1"), "too short");
+            Assert.IsFalse(AccountStore.IsStrongPassword("kaien#2026"), "no upper case");
+            Assert.IsFalse(AccountStore.IsStrongPassword("Kaien2026"), "no symbol");
+            Assert.IsFalse(AccountStore.IsStrongPassword("Kaien#abcd"), "no digit");
+            Assert.AreEqual(AccountError.NameInvalid, AccountStore.ValidateOnline("a b", "Kaien#2026"));
+            Assert.AreEqual(AccountError.PasswordWeak, AccountStore.ValidateOnline("Kaien", "secret1"));
+            Assert.AreEqual(AccountError.None, AccountStore.ValidateOnline("Kaien", "Kaien#2026"));
+        }
+
+        [Test]
+        public void OnlineAccount_UploadsEveryChange_AndStaysSignedInFromCache()
+        {
+            var s = NewStore();
+            var sent = new System.Collections.Generic.List<AccountRecord>();
+            s.Upload = sent.Add;
+            s.AttachOnline(new AccountRecord { username = "Kaien" }, pending: false);
+            Assert.AreEqual(0, sent.Count, "a profile fresh from the cloud is not sent back");
+            s.Record(new MatchResult { Kos = 3, Deaths = 2, Minutes = 6f, Won = true });
+            Assert.AreEqual(1, sent.Count);
+            Assert.AreEqual(560, sent[0].totalXp);
+            Assert.AreNotSame(s.Current, sent[0], "uploads get a copy");
+            Assert.IsTrue(s.OnlinePending);
+
+            var again = NewStore(); // relaunch, maybe offline
+            Assert.IsTrue(again.SignedIn);
+            Assert.IsTrue(again.Current.online);
+            Assert.AreEqual(560, again.Current.totalXp);
+            Assert.IsTrue(again.OnlinePending, "unsent progress is remembered");
+            again.MarkUploaded(again.OnlineSnapshot);
+            Assert.IsFalse(NewStore().OnlinePending);
+            StringAssert.DoesNotContain("\"hash\": \"", _disk.Replace("\"hash\": \"\"", ""), "online profiles hold no password data");
+
+            again.SignOut();
+            Assert.IsFalse(NewStore().SignedIn);
+        }
+
+        [Test]
+        public void MarkUploaded_KeepsPending_WhenChangedSince()
+        {
+            var s = NewStore();
+            AccountRecord last = null;
+            s.Upload = r => last = r;
+            s.AttachOnline(new AccountRecord { username = "Kaien" }, pending: true);
+            var first = last;
+            s.GrantXp(100);
+            s.MarkUploaded(first); // the older upload finished after the change
+            Assert.IsTrue(s.OnlinePending);
+            s.MarkUploaded(last);
+            Assert.IsFalse(s.OnlinePending);
+        }
+
+        [Test]
+        public void DeviceAccount_MovesOnline()
+        {
+            var s = NewStore();
+            s.Create("Kaien", "secret1");
+            s.Record(new MatchResult { Kos = 3, Minutes = 6f, Won = true });
+            Assert.IsNotNull(s.DeviceSignedIn);
+            Assert.IsNotNull(s.DeviceAccountFor("kaien", "anything"), "the account signed in on this device moves without its old password");
+            Assert.IsNull(s.DeviceAccountFor("Nobody", "secret1"));
+
+            s.Create("Other_1", "secret2"); // now Kaien is not the signed-in one
+            Assert.IsNull(s.DeviceAccountFor("Kaien", "wrong"));
+            var kaien = s.DeviceAccountFor("Kaien", "secret1");
+            Assert.IsNotNull(kaien, "or with the matching device password");
+
+            var moved = kaien.Clone();
+            s.AttachOnline(moved, pending: true);
+            s.RemoveDeviceAccount(kaien);
+            Assert.AreEqual(AccountError.NoSuchAccount, s.SignIn("Kaien", "secret1"));
+            var again = NewStore();
+            Assert.IsTrue(again.Current.online);
+            Assert.AreEqual(kaien.totalXp, again.Current.totalXp);
+            Assert.IsTrue(string.IsNullOrEmpty(again.Current.hash), "no password data online");
+        }
+
+        [Test]
         public void CorruptFile_StartsEmpty()
         {
             _disk = "{ not json";

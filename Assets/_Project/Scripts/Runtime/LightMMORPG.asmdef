@@ -7,7 +7,10 @@
         "Unity.InputSystem",
         "UnityEngine.UI",
         "Unity.RenderPipelines.Universal.Runtime",
-        "Unity.RenderPipelines.Core.Runtime"
+        "Unity.RenderPipelines.Core.Runtime",
+        "Unity.Services.Core",
+        "Unity.Services.Authentication",
+        "Unity.Services.CloudSave"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

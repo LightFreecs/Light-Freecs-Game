@@ -952,7 +952,7 @@ namespace LightMMORPG.Menu
                 State.PlayOnline => _hostButton.gameObject,
                 State.Settings => from == State.Controls ? _settingRows[0].gameObject : _skyButtons[(int)_sky.Current].b.gameObject,
                 State.Controls => _bindButtons[0].gameObject,
-                State.Account => Accounts.AccountStore.Instance.SignedIn ? _signOutButton.gameObject : _userField.gameObject,
+                State.Account => Accounts.AccountStore.Instance.Current is { online: true } ? _signOutButton.gameObject : _userField.gameObject,
                 State.Results => _resultsContinue.gameObject,
                 State.Customize => CustomizeFirstSelection(),
                 State.Stats => _statRows[0].plus.gameObject,
