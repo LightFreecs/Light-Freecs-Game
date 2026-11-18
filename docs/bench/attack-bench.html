@@ -184,6 +184,13 @@ const mul = (...qs) => qs.reduce((a, b) => a.clone().multiply(b));
 const rot = (q, v) => v.clone().applyQuaternion(q);
 const fromTo = (a, b) => new THREE.Quaternion().setFromUnitVectors(a.clone().normalize(), b.clone().normalize());
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+// rotation taking the frame (x along the bone, y = hinge axis) of the bind pose to the target one
+// (in Unity: Quaternion.LookRotation(xT, yT') * Inverse(Quaternion.LookRotation(xB, yB')) with y' made perpendicular to x)
+function frameQ(x, y) {
+  const X = x.clone().normalize(), Y = y.clone().sub(X.clone().multiplyScalar(y.dot(X))).normalize(), Z = X.clone().cross(Y);
+  return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(X, Y, Z));
+}
+const aimFrame = (xBind, yBind, xTarget, yTarget) => frameQ(xTarget, yTarget).multiply(frameQ(xBind, yBind).invert());
 
 class Rig {
   constructor(joints) {
@@ -226,8 +233,11 @@ class Rig {
       this.setFingerCurl(side, fist);
     }
   }
-  // NEW: two-bone IK from the joint's posed position (the game's SolveTwoBone uses the bind position, wrong once the torso turns)
-  solveTwoBone(upper, target, pole, weight) {
+  // NEW: two-bone IK from the joint's posed position (the game's SolveTwoBone uses the bind position, wrong once the torso turns).
+  // Both bones are aimed with ONE shared hinge axis (from the pole), so the middle joint bends like a hinge and the two bones
+  // never roll against each other (shortest-arc aiming per bone did, and wrung the skin at elbows and knees).
+  // bindPole: where the middle joint sticks out in the bind pose (elbows back, knees forward).
+  solveTwoBone(upper, target, pole, weight, bindPole) {
     if (weight <= 0) return;
     const mid = upper + 1, end = upper + 2;
     const a = this.modelPos(upper);
@@ -243,7 +253,9 @@ class Rig {
     poleDir.normalize();
     const elbowDir = dir.clone().multiplyScalar(Math.cos(angA)).add(poleDir.clone().multiplyScalar(Math.sin(angA)));
     const elbowPos = a.clone().add(elbowDir.clone().multiplyScalar(l1)), endPos = a.clone().add(dir.clone().multiplyScalar(dist));
-    const qU = fromTo(d1, elbowDir), qM = fromTo(d2, endPos.clone().sub(elbowPos));
+    const hinge = poleDir.clone().cross(dir).normalize();
+    const hingeBind = bindPole.clone().cross(d1).normalize();
+    const qU = aimFrame(d1, hingeBind, elbowDir, hinge), qM = aimFrame(d2, hingeBind, endPos.clone().sub(elbowPos), hinge);
     const endModel = this.model[end].clone();
     this.setModel(upper, curU.clone().slerp(qU, weight));
     this.setModel(mid, curM.clone().slerp(qM, weight));
@@ -280,9 +292,9 @@ const MOVES = [
       { t: 0, pose: {} },
       { t: 0.05, ease: "smooth", pose: { hips: { p: [0, -0.08, 0] }, torso: { yaw: 3 }, armL: { t: [-0.14, 1.57, 0.27] } } },
       { t: 0.09, ease: "snap", pose: { root: { p: [0, 0, 0.10] }, hips: { yaw: 30, p: [0, -0.08, 0] }, torso: { yaw: 22, pitch: 10 },
-        armL: { t: [-0.02, 1.60, 0.95], twist: -80 }, armR: { t: [0.12, 1.58, 0.22] }, legL: { t: [-0.20, 0.105, 0.40] } } },
+        armL: { t: [-0.02, 1.60, 0.95], twist: -50 }, armR: { t: [0.12, 1.58, 0.22] }, legL: { t: [-0.20, 0.105, 0.40] } } },
       { t: 0.18, ease: "smooth", pose: { root: { p: [0, 0, 0.10] }, hips: { yaw: 28, p: [0, -0.08, 0] }, torso: { yaw: 19, pitch: 10 },
-        armL: { t: [-0.04, 1.60, 0.86], twist: -70 }, armR: { t: [0.12, 1.58, 0.22] }, legL: { t: [-0.20, 0.105, 0.40] } } },
+        armL: { t: [-0.04, 1.60, 0.86], twist: -45 }, armR: { t: [0.12, 1.58, 0.22] }, legL: { t: [-0.20, 0.105, 0.40] } } },
       { t: 0.34, ease: "smooth", pose: {} },
     ] },
   { id: "cross", name: "Rear straight", note: "The hips whip round and the right fist drives through, back heel up. The weight shifts onto the front foot.",
@@ -291,10 +303,10 @@ const MOVES = [
       { t: 0, pose: {} },
       { t: 0.05, ease: "smooth", pose: { hips: { yaw: 30 }, torso: { yaw: 16 }, armR: { t: [0.20, 1.50, 0.08] } } },
       { t: 0.10, ease: "snap", pose: { root: { p: [0, 0, 0.16] }, hips: { yaw: -10, p: [0, -0.10, 0] }, torso: { yaw: -25, pitch: 14 },
-        armR: { t: [0.04, 1.58, 1.00], twist: 80 }, armL: { t: [-0.12, 1.58, 0.24] },
+        armR: { t: [0.04, 1.58, 1.00], twist: 50 }, armL: { t: [-0.12, 1.58, 0.24] },
         legR: { t: [0.20, 0.105, -0.05], yaw: -10, pitch: 25 }, legL: { t: [-0.20, 0.105, 0.40] } } },
       { t: 0.22, ease: "smooth", pose: { root: { p: [0, 0, 0.16] }, hips: { yaw: -8, p: [0, -0.10, 0] }, torso: { yaw: -22, pitch: 13 },
-        armR: { t: [0.06, 1.58, 0.92], twist: 70 }, armL: { t: [-0.12, 1.58, 0.24] },
+        armR: { t: [0.06, 1.58, 0.92], twist: 45 }, armL: { t: [-0.12, 1.58, 0.24] },
         legR: { t: [0.20, 0.105, -0.05], yaw: -10, pitch: 25 }, legL: { t: [-0.20, 0.105, 0.40] } } },
       { t: 0.38, ease: "smooth", pose: {} },
     ] },
@@ -317,14 +329,14 @@ const MOVES = [
     keys: [
       { t: 0, pose: {} },
       { t: 0.08, ease: "smooth", pose: { root: { p: [0, 0, -0.08] }, hips: { yaw: 45, p: [0, -0.20, 0], pitch: 0 }, torso: { yaw: 38, pitch: -2 }, head: { pitch: -10 },
-        armR: { t: [0.30, 1.12, -0.32] }, armL: { t: [-0.02, 1.50, 0.62], twist: -40 }, legL: { t: [-0.22, 0.105, 0.30] }, legR: { t: [0.28, 0.105, -0.32] } } },
+        armR: { t: [0.38, 1.20, -0.36] }, armL: { t: [-0.02, 1.50, 0.62], twist: -30 }, legL: { t: [-0.22, 0.105, 0.30] }, legR: { t: [0.28, 0.105, -0.32] } } },
       { t: 0.15, ease: "smooth", pose: { root: { p: [0, 0, -0.09] }, hips: { yaw: 47, p: [0, -0.21, 0], pitch: 0 }, torso: { yaw: 40, pitch: -2 }, head: { pitch: -10 },
-        armR: { t: [0.31, 1.11, -0.34] }, armL: { t: [-0.02, 1.50, 0.62], twist: -40 }, legL: { t: [-0.22, 0.105, 0.30] }, legR: { t: [0.28, 0.105, -0.32] } } },
+        armR: { t: [0.39, 1.19, -0.38] }, armL: { t: [-0.02, 1.50, 0.62], twist: -30 }, legL: { t: [-0.22, 0.105, 0.30] }, legR: { t: [0.28, 0.105, -0.32] } } },
       { t: 0.22, ease: "snap", pose: { root: { p: [0, 0, 0.35] }, hips: { yaw: -25, p: [0, -0.15, 0], pitch: 8 }, torso: { yaw: -32, pitch: 20 },
-        armR: { t: [0.02, 1.55, 1.55], twist: 80 }, armL: { t: [-0.28, 1.28, 0.25] },
+        armR: { t: [0.02, 1.55, 1.55], twist: 50 }, armL: { t: [-0.28, 1.28, 0.25] },
         legL: { t: [-0.22, 0.105, 0.75], yaw: 10 }, legR: { t: [0.24, 0.105, -0.08], yaw: -20, pitch: 30 } } },
       { t: 0.36, ease: "smooth", pose: { root: { p: [0, 0, 0.35] }, hips: { yaw: -22, p: [0, -0.15, 0], pitch: 8 }, torso: { yaw: -29, pitch: 18 },
-        armR: { t: [0.04, 1.55, 1.48], twist: 75 }, armL: { t: [-0.28, 1.28, 0.25] },
+        armR: { t: [0.04, 1.55, 1.48], twist: 45 }, armL: { t: [-0.28, 1.28, 0.25] },
         legL: { t: [-0.22, 0.105, 0.75], yaw: 10 }, legR: { t: [0.24, 0.105, -0.08], yaw: -20, pitch: 30 } } },
       { t: 0.48, ease: "smooth", pose: { root: { p: [0, 0.04, 0.15] }, legL: { t: [-0.20, 0.105, 0.40] }, legR: { t: [0.24, 0.105, -0.12] } } },
       { t: 0.62, ease: "smooth", pose: {} },
@@ -376,9 +388,11 @@ function applyPose(rig, P, w) {
       rig.setModel(ua, rig.model[B.UpperChest]); rig.setModel(ua + 1, rig.model[B.UpperChest]); rig.setModel(ua + 2, rig.model[B.UpperChest]);
       const shoulder = rig.modelPos(ua);
       const pole = shoulder.clone().add(rot(rig.model[B.UpperChest], V(side * 0.5, -0.7, -0.25)));
-      rig.solveTwoBone(ua, toModel(A.t), pole, 1);
+      rig.solveTwoBone(ua, toModel(A.t), pole, 1, V(0, 0, -1));
+      // fist roll, shared by forearm and hand (no twist bones, so one joint alone would wring the skin)
       const fore = rig.modelPos(ua + 2).sub(rig.modelPos(ua + 1)).normalize();
-      rig.setModel(ua + 2, mul(AA(A.twist, fore), rig.model[ua + 1]));
+      rig.setModel(ua + 1, mul(AA(A.twist * 0.5, fore), rig.model[ua + 1]));
+      rig.setModel(ua + 2, mul(AA(A.twist * 0.5, fore), rig.model[ua + 1]));
       rig.setFingerCurl(side, 1);
     }
     // legs: IK to the (planted) foot targets, knees towards the toes, then the foot's own yaw / pitch
@@ -387,8 +401,11 @@ function applyPose(rig, P, w) {
       rig.setModel(ul, H); rig.setModel(ul + 1, H); rig.setModel(ul + 2, H);
       const footT = toModel(L.t), fy = L.yaw - P.root.yaw;
       const pole = footT.clone().add(rot(AA(fy, UP), V(0, 0, 0.9))).add(V(0, 0.55, 0));
-      rig.solveTwoBone(ul, footT, pole, 1);
-      rig.setModel(ul + 2, mul(AA(fy, UP), AA(L.pitch, RIGHT)));
+      rig.solveTwoBone(ul, footT, pole, 1, V(0, 0, 1));
+      // planted foot: flat, pointing its own way; lifted foot (a kick): follows the shin, toes pointed by `pitch`
+      const planted = mul(AA(fy, UP), AA(L.pitch, RIGHT)), lifted = mul(rig.model[ul + 1], AA(L.pitch, RIGHT));
+      const lift = EASE.smooth(clamp((L.t[1] - 0.2) / 0.25, 0, 1));
+      rig.setModel(ul + 2, planted.slerp(lifted, lift));
       rig.inherit(ul + 3);
     }
   }
@@ -759,6 +776,7 @@ window.__bench = { MOVES, GUARD, play, get rig() { return rig; }, state,
   freezeAt(i, t) { play(i); curT = t; from = null; blendT = 1; weight = 1; hitDone = true; state.speed = 0; },
   get curT() { return cur ? curT : -1; },
   smearLayers: () => smearLayers, render: () => renderer.render(scene, camera),
+  cam(px, py, pz, tx, ty, tz) { camAnim = null; camera.position.copy(world.localToWorld(V(px, py, pz))); controls.target.copy(world.localToWorld(V(tx, ty, tz))); controls.update(); renderer.render(scene, camera); },
   get smearDebug() { const L = smearLayers[1].g.attributes; return { pos: Array.from(L.position.array.slice(-12)), col: Array.from(L.color.array.slice(-8)), pts: smearPts.slice(-3).map(s => [s.p.x, s.p.y, s.p.z, s.age]) }; }, get smearCount() { return smearPts.length; }, get impactCount() { return impacts.length; },
   advance(seconds) { for (let t = 0; t < seconds; t += 1 / 60) step(1 / 60); if (camAnim) { camera.position.copy(camAnim.to); camAnim = null; } controls.update(); renderer.render(scene, camera); return cur ? curT : -1; } };
 </script>
