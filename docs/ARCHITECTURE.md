@@ -481,3 +481,14 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     turn only starts left of 42 % of the screen.
   - Tests: `ToonHeadTests` +4 (sliders and eye reach the toon head, every eye on any palette, JSON round trip + sanitize,
     all sliders at -1 / +1 give valid characters). Written without a local Unity: run the Tests workflow.
+- Customize screen redesign (bench `docs/bench/customize-ui.html`, owner picked the serious "Bevel" style).
+  - Moved to `MainMenuUI.Customize.cs`. Panel 880 wide, square corners + accent strip; five icon tabs (Eyes, Head,
+    Jaw & Chin, Nose & Mouth, Ears & Neck; dot = something changed); Eyes tab has style tiles showing the real painted
+    eyes (`ToonFacePainter.Paint` cropped once per style on first open); slider rows with − / + buttons, centred fill,
+    bar handle, low/high labels, value tag and per-row reset; Random (top right), Reset all, Done.
+  - Buttons are 9-sliced boxes with the top-left and bottom-right corners cut: `MenuUi.BevelFill / BevelEdge /
+    BevelTop` (top edge lit); new line icons `MenuUi.IconKind.Eye … Minus`.
+  - Keys: Z / C or LB / RB tabs, R / Y random, Backspace / X reset all, Enter (off a button) / Start done, Esc / B
+    done; key hints follow the last device and hide on touch. Q / E still turn the fighter.
+  - `-menuCapture` adds `Customize_Jaw` (Dusk, Jaw & Chin tab); `ShowCustomize(face, tab)`.
+  - Verified: headless compile clean. Not run here (owner tests by hand): tests, build, screenshots, feel.

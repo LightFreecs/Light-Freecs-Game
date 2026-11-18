@@ -174,6 +174,7 @@ namespace LightMMORPG.Menu
                 ("Stats_Guest", SkyId.Dusk, MainMenuUI.State.Stats),
                 ("Customize", SkyId.Day, MainMenuUI.State.Customize),
                 ("Customize_Side", SkyId.Day, MainMenuUI.State.Customize),
+                ("Customize_Jaw", SkyId.Dusk, MainMenuUI.State.Customize),
             };
             SkyId saved = MenuSky.Saved;
             foreach (var size in sizes)
@@ -188,7 +189,7 @@ namespace LightMMORPG.Menu
                     Sky.Apply(shot.sky);
                     // -menuCaptureFace '<FaceCustomization json>' previews other face choices without touching the saved ones
                     string faceJson = Arg("-menuCaptureFace");
-                    if (shot.state == MainMenuUI.State.Customize) UI.ShowCustomize(faceJson != null ? PlayerAppearance.FromJson(faceJson) : PlayerAppearance.Load());
+                    if (shot.state == MainMenuUI.State.Customize) UI.ShowCustomize(faceJson != null ? PlayerAppearance.FromJson(faceJson) : PlayerAppearance.Load(), shot.name.EndsWith("_Jaw") ? 2 : 0);
                     else if (shot.name == "Stats") UI.ShowStatsPreview(Core.Progression.XpForLevel(24) + 600, new Core.StatAllocation(8, 6, 3, 4, 0));
                     else if (shot.name == "Stats_Guest") UI.ShowStatsGuest();
                     else UI.SetState(shot.state, instant: true);

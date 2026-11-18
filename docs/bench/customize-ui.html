@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Customize UI</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;500;700;900&display=swap">
+<style>
+/* Bench for the Fighters > Customize dialog (MainMenuUI.BuildCustomizeDialog).
+   The stage is the game's 1920x1080 canvas scaled to fit; colours come from the MenuTheme sky presets. */
+:root{
+  --sky-top:#2a72d8; --sky-up:#4f9be9; --sky-hor:#86c2f5; --sky-below:#b7dcfa;
+  --dialog:rgba(23,63,117,.94); --dialog-solid:#173f75; --accent:#ffc48a; --header:#fff3b0; --glow:#ffb36b;
+  --page:#0d1320; --ink:#e9eef7; --muted:#9aa6bb;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--page);color:var(--ink);font-family:Roboto,system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden}
+button{font:inherit;color:inherit}
+
+/* bench toolbar (not part of the game UI) */
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 16px;font-size:13px;color:var(--muted)}
+.bar b{color:var(--ink);font-weight:700;margin-right:6px}
+.bar button{background:#1c2536;border:1px solid #2c3850;border-radius:8px;padding:6px 12px;cursor:pointer}
+.bar button[aria-pressed=true]{background:#e9eef7;color:#0d1320;border-color:#e9eef7}
+.bar .hint{margin-left:auto}
+
+.wrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:0 16px 16px}
+.stage{position:relative;width:1920px;height:1080px;transform-origin:0 0;overflow:hidden;border-radius:6px;
+  background:linear-gradient(180deg,var(--sky-top) 0%,var(--sky-up) 35%,var(--sky-hor) 70%,var(--sky-below) 100%)}
+.holder{position:relative}
+
+/* fighter stand-in (the real one is the 3D Toon Head, camera close on the face) */
+.fighter{position:absolute;left:150px;top:90px;width:820px;height:900px}
+.fighter .tag{position:absolute;left:0;bottom:0;font-size:20px;color:rgba(255,255,255,.55);letter-spacing:.1em;text-transform:uppercase}
+.cloud{position:absolute;border-radius:50%;background:rgba(255,255,255,.55);filter:blur(2px)}
+
+/* ---------- the dialog ---------- */
+.panel{position:absolute;right:86px;top:50%;transform:translateY(-50%);width:880px;
+  background:var(--dialog);border:3px solid color-mix(in srgb,var(--accent) 70%,transparent);border-radius:36px;
+  padding:36px 40px 34px;box-shadow:0 0 120px color-mix(in srgb,var(--glow) 25%,transparent)}
+.head{display:flex;align-items:flex-end;justify-content:space-between}
+h1{margin:0;font-weight:300;font-size:56px;letter-spacing:.03em;line-height:1}
+.status{font-size:22px;color:rgba(255,255,255,.65);margin-top:10px}
+.random{display:flex;align-items:center;gap:10px;height:56px;padding:0 20px 0 14px;border-radius:18px;cursor:pointer;
+  background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.14);font-weight:700;font-size:22px}
+.random svg{width:30px;height:30px}
+
+/* category tabs: icon + short label, shoulder-button hints at the ends */
+.tabs{display:flex;align-items:center;gap:10px;margin:28px 0 24px;padding:8px;border-radius:24px;background:rgba(0,0,0,.22)}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 4px 10px;border:0;border-radius:17px;background:transparent;cursor:pointer;
+  color:rgba(255,255,255,.7);font-weight:700;font-size:17px;letter-spacing:.06em;text-transform:uppercase;position:relative;transition:background .15s,color .15s}
+.tab svg{width:40px;height:40px}
+.tab:hover,.tab:focus-visible{background:rgba(255,255,255,.1);color:#fff;outline:none}
+.tab[aria-selected=true]{background:var(--accent);color:var(--dialog-solid)}
+.tab .dot{position:absolute;top:9px;right:14px;width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--dialog-solid)}
+.tab[aria-selected=true] .dot{background:var(--dialog-solid);box-shadow:0 0 0 2px var(--accent)}
+.glyph{flex:none;min-width:48px;height:34px;padding:0 8px;border-radius:10px;display:grid;place-items:center;
+  font-size:16px;font-weight:900;background:rgba(255,255,255,.14);color:rgba(255,255,255,.85)}
+
+.sec{font-size:20px;font-weight:700;letter-spacing:.2em;color:var(--header);margin:0 0 14px}
+.body{min-height:520px}
+
+/* eye style tiles: a drawn preview of each eye, not a word */
+.eyes{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:26px}
+.eye{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 8px 12px;border-radius:22px;cursor:pointer;
+  background:rgba(255,255,255,.07);border:2px solid rgba(255,255,255,.14);transition:transform .12s,background .15s,border-color .15s}
+.eye svg{width:132px;height:78px}
+.eye span{font-weight:700;font-size:20px}
+.eye:hover,.eye:focus-visible{background:rgba(255,255,255,.14);border-color:var(--accent);outline:none;transform:translateY(-3px)}
+.eye[aria-checked=true]{background:color-mix(in srgb,var(--accent) 24%,transparent);border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 30%,transparent)}
+.eye .check{position:absolute;top:10px;right:10px;width:30px;height:30px;border-radius:50%;background:var(--accent);display:none;place-items:center}
+.eye[aria-checked=true] .check{display:grid}
+.eye .check svg{width:18px;height:18px}
+
+/* sliders: label + value chip, step buttons, centred track (0 = default) */
+.rows{display:flex;flex-direction:column;gap:6px}
+.row{display:grid;grid-template-columns:230px 52px 1fr 52px 150px;align-items:center;gap:12px;padding:8px 12px;border-radius:18px;transition:background .15s}
+.row:hover,.row.focus{background:rgba(255,255,255,.08)}
+.row.focus{box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--accent) 60%,transparent)}
+.row .name{font-weight:700;font-size:23px}
+.step{width:52px;height:52px;border-radius:16px;border:2px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);cursor:pointer;display:grid;place-items:center}
+.step svg{width:22px;height:22px}
+.step:active{transform:scale(.94)}
+.track{position:relative;height:52px;cursor:pointer;touch-action:none}
+.track .bg{position:absolute;left:0;right:0;top:50%;height:12px;margin-top:-6px;border-radius:6px;background:rgba(0,0,0,.32)}
+.track .tick{position:absolute;left:50%;top:50%;width:3px;height:24px;margin:-12px 0 0 -1.5px;background:rgba(255,255,255,.45);border-radius:2px}
+.track .fill{position:absolute;top:50%;height:12px;margin-top:-6px;border-radius:6px;background:var(--accent)}
+.track .knob{position:absolute;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:#fff;
+  box-shadow:0 2px 6px rgba(0,0,0,.35),0 0 0 0 var(--accent);transition:box-shadow .15s}
+.row.focus .knob,.track:hover .knob{box-shadow:0 2px 6px rgba(0,0,0,.35),0 0 0 6px color-mix(in srgb,var(--accent) 45%,transparent)}
+.ends{position:absolute;left:0;right:0;bottom:-2px;display:flex;justify-content:space-between;font-size:14px;color:rgba(255,255,255,.4);pointer-events:none}
+.val{justify-self:end;display:flex;align-items:center;gap:6px}
+.chip{font-size:18px;font-weight:500;padding:6px 12px;border-radius:12px;background:rgba(0,0,0,.25);color:rgba(255,255,255,.65);white-space:nowrap}
+.chip.set{background:color-mix(in srgb,var(--accent) 25%,transparent);color:#fff}
+.undo{width:34px;height:34px;border-radius:10px;border:0;background:transparent;cursor:pointer;display:grid;place-items:center;color:rgba(255,255,255,.6);visibility:hidden}
+.undo.on{visibility:visible}
+.undo:hover{background:rgba(255,255,255,.14);color:#fff}
+.undo svg{width:20px;height:20px}
+
+/* footer: icon + label + key glyph */
+.foot{display:grid;grid-template-columns:1fr 1.4fr;gap:16px;margin-top:22px}
+.btn{display:flex;align-items:center;justify-content:center;gap:14px;height:76px;border-radius:24px;cursor:pointer;font-weight:900;font-size:26px;letter-spacing:.08em;text-transform:uppercase;
+  border:2px solid rgba(255,255,255,.18);background:rgba(255,255,255,.07);transition:background .15s,transform .12s}
+.btn svg{width:30px;height:30px}
+.btn:hover,.btn:focus-visible{background:rgba(255,255,255,.16);outline:none;transform:translateY(-2px)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--dialog-solid);box-shadow:0 8px 30px color-mix(in srgb,var(--accent) 40%,transparent)}
+.btn .glyph{background:rgba(0,0,0,.2);color:inherit}
+.btn.primary .glyph{background:rgba(0,0,0,.14)}
+
+.toast{position:absolute;left:50%;bottom:70px;transform:translate(-50%,20px);opacity:0;transition:.25s;padding:18px 34px;border-radius:24px;background:var(--dialog);
+  border:2px solid var(--accent);font-weight:700;font-size:28px}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+/* ---------- button styles (serious tone) ----------
+   Thin lines, sharp geometry, no outlines or bouncy shadows. Each button has two layers: a fill and a frame.
+   The toolbar swaps the frame style (edge / bevel / frame). In Unity each is one 9-sliced sprite. */
+.stage{--line:rgba(255,255,255,.2);--line-hi:rgba(255,255,255,.55);
+  --fill-c:color-mix(in srgb,#fff 5%,var(--dialog-solid));--fill-hi:color-mix(in srgb,#fff 11%,var(--dialog-solid));
+  --sel:color-mix(in srgb,var(--accent) 16%,var(--dialog-solid))}
+.panel{border-radius:6px;border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);box-shadow:0 30px 80px rgba(0,0,0,.35)}
+.panel::before{content:"";position:absolute;left:40px;top:-1px;width:140px;height:3px;background:var(--accent)}
+h1{text-transform:uppercase;font-size:46px;letter-spacing:.14em}
+
+.stage :is(.random,.tab,.eye,.step,.btn){--fill:var(--fill-c);--edge:var(--line);--c:var(--line-hi);
+  position:relative;isolation:isolate;background:transparent;border:0;border-radius:0;box-shadow:none;outline:none;filter:none;transform:none;transition:color .15s}
+.stage :is(.random,.tab,.eye,.step,.btn)::before,.stage :is(.random,.tab,.eye,.step,.btn)::after{content:"";position:absolute;inset:0;pointer-events:none;box-sizing:border-box}
+.stage :is(.random,.tab,.eye,.step,.btn)::after{z-index:-2;background:var(--fill)}
+.stage :is(.random,.tab,.eye,.step,.btn)::before{z-index:-1}
+.stage :is(.random,.tab,.eye,.step,.btn):is(:hover,:focus-visible){--fill:var(--fill-hi);--edge:var(--line-hi);--c:var(--accent);background:transparent;transform:none}
+.stage :is(.random,.tab,.eye,.step,.btn):active{--fill:var(--fill-c)}
+.stage :is(.tab[aria-selected=true],.eye[aria-checked=true]){--fill:var(--sel);--edge:color-mix(in srgb,var(--accent) 70%,transparent);--c:var(--accent);color:#fff;background:transparent}
+.stage .btn.primary{--fill:var(--accent);--edge:var(--accent);--c:var(--dialog-solid);color:var(--dialog-solid);background:transparent}
+.stage .btn.primary:is(:hover,:focus-visible){--fill:color-mix(in srgb,#fff 18%,var(--accent))}
+
+/* edge: hairline box with corner brackets */
+.stage[data-shape=edge] :is(.random,.tab,.eye,.step,.btn)::before{border:1px solid var(--edge);background-origin:border-box;background-repeat:no-repeat;background-image:
+  linear-gradient(var(--c),var(--c)),linear-gradient(var(--c),var(--c)),linear-gradient(var(--c),var(--c)),linear-gradient(var(--c),var(--c)),
+  linear-gradient(var(--c),var(--c)),linear-gradient(var(--c),var(--c)),linear-gradient(var(--c),var(--c)),linear-gradient(var(--c),var(--c));
+  background-position:0 0,0 0,100% 0,100% 0,0 100%,0 100%,100% 100%,100% 100%;
+  background-size:12px 2px,2px 12px,12px 2px,2px 12px,12px 2px,2px 12px,12px 2px,2px 12px}
+
+/* bevel: two cut corners, faint top light */
+.stage[data-shape=bevel]{--cut:10px}
+.stage[data-shape=bevel] .step{--cut:7px}
+.stage[data-shape=bevel] :is(.random,.tab,.eye,.step,.btn)::before,.stage[data-shape=bevel] :is(.random,.tab,.eye,.step,.btn)::after{
+  clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut))}
+.stage[data-shape=bevel] :is(.random,.tab,.eye,.step,.btn)::before{z-index:-2;background:linear-gradient(180deg,var(--c),var(--edge) 60%)}
+.stage[data-shape=bevel] :is(.random,.tab,.eye,.step,.btn)::after{z-index:-1;inset:1px;background:linear-gradient(180deg,color-mix(in srgb,#fff 7%,var(--fill)),var(--fill) 55%)}
+
+/* frame: double hairline, fill inside the inner rule */
+.stage[data-shape=frame] :is(.random,.tab,.eye,.step,.btn)::before{border:1px solid var(--edge)}
+.stage[data-shape=frame] :is(.random,.tab,.eye,.step,.btn)::after{inset:4px;border:1px solid color-mix(in srgb,var(--c) 45%,transparent)}
+.stage[data-shape=frame] .step::after{inset:3px}
+
+/* type, tabs, small parts */
+.tabs{background:transparent;padding:0 0 16px;gap:8px;border-radius:0;border-bottom:1px solid var(--line)}
+.stage .tab{font-weight:500;font-size:15px;letter-spacing:.14em;padding:12px 4px 11px}
+.stage .tab svg{width:34px;height:34px}
+.tab .dot{border-radius:0;width:7px;height:7px;box-shadow:none;top:8px;right:10px}
+.tab[aria-selected=true] .dot{background:var(--accent);box-shadow:none}
+.stage .random{font-weight:500;letter-spacing:.12em;text-transform:uppercase;font-size:18px;height:52px}
+.stage .btn{font-weight:500;font-size:22px;letter-spacing:.22em;height:68px}
+.stage .btn.primary{font-weight:700}
+.stage .eye span{font-weight:500;letter-spacing:.06em}
+.eye .check{border-radius:0;width:26px;height:26px;background:var(--accent);top:9px;right:9px}
+.stage .glyph{border-radius:2px;background:transparent;border:1px solid var(--line);font-weight:500;font-size:14px;letter-spacing:.06em;color:inherit;opacity:.8}
+.stage .btn .glyph,.stage .btn.primary .glyph{background:transparent;border-color:currentColor;opacity:.6}
+.stage .chip{border-radius:2px;background:transparent;border:1px solid var(--line);font-size:17px}
+.stage .chip.set{border-color:var(--accent);background:var(--sel)}
+.row{border-radius:2px}
+.row .name{font-weight:500}
+.stage .track .bg{height:4px;margin-top:-2px;border-radius:0;background:rgba(255,255,255,.16)}
+.stage .track .fill{height:4px;margin-top:-2px;border-radius:0}
+.stage .track .tick{width:1px;height:18px;margin:-9px 0 0 0}
+.stage .track .knob{width:10px;height:34px;margin:-17px 0 0 -5px;border-radius:1px;border:0;transform:none;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.45)}
+.stage .row.focus .knob,.stage .track:hover .knob{box-shadow:0 0 0 1px rgba(0,0,0,.45),0 0 0 5px color-mix(in srgb,var(--accent) 45%,transparent)}
+.toast{border-radius:4px;border-width:1px;font-weight:500;letter-spacing:.1em}
+</style>
+</head>
+<body>
+<div class="bar">
+  <b>Customize UI bench</b>
+  Sky:
+  <button data-sky="blue" aria-pressed="true">Blue Sky</button>
+  <button data-sky="dusk" aria-pressed="false">Dusk</button>
+  <button data-sky="night" aria-pressed="false">Night</button>
+  Buttons:
+  <button data-shape="edge" aria-pressed="false">Edge</button>
+  <button data-shape="bevel" aria-pressed="true">Bevel (picked)</button>
+  <button data-shape="frame" aria-pressed="false">Frame</button>
+  Glyphs:
+  <button data-pad="kb" aria-pressed="true">Keyboard</button>
+  <button data-pad="pad" aria-pressed="false">Gamepad</button>
+  <span class="hint">Q / E switch tabs · ↑↓ pick a row · ←→ adjust · R random</span>
+</div>
+<div class="wrap" id="wrap"><div class="holder" id="holder"><div class="stage" id="stage" data-shape="bevel">
+  <div class="cloud" style="left:-80px;top:760px;width:700px;height:260px"></div>
+  <div class="cloud" style="left:420px;top:850px;width:620px;height:240px"></div>
+  <div class="cloud" style="left:1280px;top:900px;width:800px;height:260px"></div>
+
+  <div class="fighter"><svg id="face" viewBox="0 0 820 900" width="820" height="900"></svg><div class="tag">Fighter preview · 2D stand-in for the Toon Head</div></div>
+
+  <section class="panel" aria-label="Customize">
+    <div class="head">
+      <div><h1>Customize</h1><div class="status" id="status">Saved to this device</div></div>
+      <button class="random" id="random" title="Randomize">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="16" cy="16" r="1.4" fill="currentColor"/><circle cx="16" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="16" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/></svg>
+        Random <span class="glyph" data-kb="R" data-pad="Y">R</span>
+      </button>
+    </div>
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <div class="body" id="body"></div>
+    <div class="foot">
+      <button class="btn" id="reset"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg>Reset all <span class="glyph" data-kb="Bksp" data-pad="X">Bksp</span></button>
+      <button class="btn primary" id="done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>Done <span class="glyph" data-kb="Enter" data-pad="A">Enter</span></button>
+    </div>
+  </section>
+  <div class="toast" id="toast"></div>
+</div></div></div>
+
+<script>
+const SKIES={
+  blue:{"--sky-top":"#2a72d8","--sky-up":"#4f9be9","--sky-hor":"#86c2f5","--sky-below":"#b7dcfa","--dialog":"rgba(23,63,117,.94)","--dialog-solid":"#173f75","--accent":"#ffc48a","--header":"#fff3b0","--glow":"#ffb36b"},
+  dusk:{"--sky-top":"#4b52b6","--sky-up":"#7468cc","--sky-hor":"#a98bdb","--sky-below":"#eba7c6","--dialog":"rgba(42,29,74,.92)","--dialog-solid":"#2a1d4a","--accent":"#ffc48a","--header":"#ffd08a","--glow":"#ffb36b"},
+  night:{"--sky-top":"#040817","--sky-up":"#0a1438","--sky-hor":"#17245a","--sky-below":"#25366f","--dialog":"rgba(10,20,56,.94)","--dialog-solid":"#0a1438","--accent":"#7fe6ff","--header":"#9fe9ff","--glow":"#7fe6ff"}
+};
+// PlayerAppearance.Sliders, grouped into tabs
+const S=[["Head width","Narrow","Wide"],["Skull height","Low","Tall"],["Back of head","Flat","Round"],["Face depth","Flat","Deep"],["Cheek width","Narrow","Wide"],["Cheeks","Hollow","Full"],
+["Jaw width","Narrow","Wide"],["Face length","Short","Long"],["Chin width","Narrow","Wide"],["Chin shape","Pointed","Square"],["Chin position","Back","Forward"],
+["Nose size","Small","Large"],["Nose height","Low","High"],["Mouth height","Low","High"],
+["Eye size","Small","Large"],["Eye height","Low","High"],["Eye spacing","Close","Wide"],["Brow height","Low","High"],
+["Ear size","Small","Large"],["Ear height","Low","High"],["Ear angle","Flat","Out"],["Neck width","Slim","Thick"]];
+const I=n=>S.findIndex(s=>s[0]===n);
+const ICON={
+ eyes:'<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3.2" fill="currentColor"/>',
+ head:'<path d="M12 3c-4.4 0-7.5 3.3-7.5 8 0 4.6 3.2 9.5 7.5 9.5s7.5-4.9 7.5-9.5c0-4.7-3.1-8-7.5-8z"/><path d="M9 3.8c.7 2.4 3.6 3.6 6.8 3"/>',
+ jaw:'<path d="M5 6c0 7 3 12 7 13.5 4-1.5 7-6.5 7-13.5"/><path d="M9.5 17.3c1.5.8 3.5.8 5 0"/>',
+ nose:'<path d="M12 5v8.5c-1.8.4-2.8 1.3-2.8 2.2 0 .9 1.2 1.4 2.8 1.4s2.8-.5 2.8-1.4"/><path d="M8.5 20.5c2.3 1 4.7 1 7 0"/>',
+ ears:'<path d="M9 4.5c3.8 0 6.5 2.7 6.5 6.4 0 2.6-1.6 3.6-2.6 4.7-.9 1-.9 3.7-3.4 3.7-1.6 0-2.5-1.1-2.5-2.4"/><path d="M10 9.5c0-1.2 1-2 2.2-2"/>'
+};
+const TABS=[
+ {id:"eyes",name:"Eyes",rows:["Eye size","Eye height","Eye spacing","Brow height"].map(I)},
+ {id:"head",name:"Head",rows:[0,1,2,3,4,5]},
+ {id:"jaw",name:"Jaw & Chin",rows:[6,7,8,9,10]},
+ {id:"nose",name:"Nose & Mouth",rows:[11,12,13]},
+ {id:"ears",name:"Ears & Neck",rows:[18,19,20,21]}];
+const EYES=["Drawn","Tall","Wide","Hand-made"];
+
+let st={eye:0,v:new Array(S.length).fill(0)},tab=0,focus=-1,pad=false;
+
+function eyeArt(i,scale=1){ // little pictures of each eye style
+  const w=[34,28,44,36][i]*scale,h=[34,46,26,34][i]*scale;
+  if(i===3) return `<path d="M${-w*.95},2 C${-w*.7},${-h*1.05} ${w*.8},${-h*1.1} ${w},-1 C${w*.85},${h*1.02} ${-w*.75},${h} ${-w},4" fill="#fff" stroke="#1b1430" stroke-width="${4*scale}" stroke-linecap="round"/>
+   <path d="M${-w*.88},-5 C${-w*.5},${-h*.95} ${w*.6},${-h*.98} ${w*.9},-6" fill="none" stroke="#1b1430" stroke-width="${2.2*scale}" opacity=".6"/>
+   <circle cx="3" cy="2" r="${h*.55}" fill="#3c2a1e"/><circle cx="${-h*.12}" cy="${-h*.2}" r="${h*.2}" fill="#fff"/>`;
+  return `<ellipse rx="${w}" ry="${h}" fill="#fff" stroke="#1b1430" stroke-width="${4*scale}"/>
+   <ellipse cy="${h*.12}" rx="${Math.min(w,h)*.62}" ry="${h*.72}" fill="#2d4f8c"/><ellipse cy="${h*.12}" rx="${Math.min(w,h)*.33}" ry="${h*.42}" fill="#111"/>
+   <circle cx="${-w*.22}" cy="${-h*.28}" r="${Math.min(w,h)*.22}" fill="#fff"/>`;
+}
+
+function render(){
+  const T=TABS[tab];
+  document.getElementById("tabs").innerHTML=`<span class="glyph" data-kb="Q" data-pad="LB">Q</span>`+TABS.map((t,i)=>{
+    const changed=t.rows.some(r=>st.v[r]!==0)||(t.id==="eyes"&&st.eye!==0);
+    return `<button class="tab" role="tab" aria-selected="${i===tab}" data-tab="${i}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${ICON[t.id]}</svg>${t.name}${changed?'<i class="dot"></i>':''}</button>`}).join("")+`<span class="glyph" data-kb="E" data-pad="RB">E</span>`;
+  let h="";
+  if(T.id==="eyes"){
+    h+=`<div class="sec">STYLE</div><div class="eyes" role="radiogroup">`+EYES.map((n,i)=>`<button class="eye" role="radio" aria-checked="${st.eye===i}" data-eye="${i}"><span class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--dialog-solid)"><path d="M5 12.5l4.5 4.5L19 7"/></svg></span><svg viewBox="-66 -39 132 78"><g transform="translate(-28,0)">${eyeArt(i,.62)}</g><g transform="translate(28,0) scale(-1,1)">${eyeArt(i,.62)}</g></svg><span>${n}</span></button>`).join("")+`</div>`;
+  }
+  h+=`<div class="sec">${T.id==="eyes"?"SHAPE":T.name.toUpperCase()}</div><div class="rows">`+T.rows.map((r,k)=>row(r,k)).join("")+`</div>`;
+  document.getElementById("body").innerHTML=h;
+  applyPad(); drawFace();
+}
+function row(r,k){
+  const v=st.v[r],[n,lo,hi]=S[r],pct=Math.round(Math.abs(v)*100);
+  const left=50+Math.min(0,v)*50,w=Math.abs(v)*50;
+  return `<div class="row${focus===k?" focus":""}" data-row="${r}" data-k="${k}">
+   <div class="name">${n}</div>
+   <button class="step" data-step="-1" aria-label="${lo}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+   <div class="track"><div class="bg"></div><div class="fill" style="left:${left}%;width:${w}%"></div><div class="tick"></div><div class="knob" style="left:${50+v*50}%"></div><div class="ends"><span>${lo}</span><span>${hi}</span></div></div>
+   <button class="step" data-step="1" aria-label="${hi}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12h14M12 5v14"/></svg></button>
+   <div class="val"><span class="chip${v?" set":""}">${v?(v<0?lo:hi)+" "+pct+"%":"Default"}</span><button class="undo${v?" on":""}" data-undo="${r}" title="Back to default"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg></button></div></div>`;
+}
+const snap=v=>{v=Math.max(-1,Math.min(1,v));return Math.abs(v)<.04?0:Math.round(v*100)/100};
+function set(r,v){st.v[r]=snap(v);changed();}
+function changed(){document.getElementById("status").textContent="Unsaved changes";render();}
+
+// fighter stand-in reacting to a handful of the sliders
+function drawFace(){
+  const v=n=>st.v[I(n)];
+  const hw=230*(1+v("Head width")*.15+v("Cheek width")*.05), hh=270*(1+v("Skull height")*.1+v("Face length")*.1);
+  const jaw=150*(1+v("Jaw width")*.3), chin=48*(1+v("Chin width")*.6), sq=v("Chin shape");
+  const cx=410,cy=400, eyeY=cy+10-v("Eye height")*40, sp=95+v("Eye spacing")*30, es=1.35*(1+v("Eye size")*.25);
+  const earS=1+v("Ear size")*.35, earY=cy+20-v("Ear height")*45, earA=v("Ear angle")*25, neck=95*(1+v("Neck width")*.3);
+  const noseS=1+v("Nose size")*.6, noseY=cy+80-v("Nose height")*30, mouthY=cy+150-v("Mouth height")*30, browY=eyeY-62-v("Brow height")*25;
+  const bot=cy+hh*.95, cheekBulge=v("Cheeks")*18;
+  const headPath=`M${cx-hw},${cy-20} C${cx-hw},${cy-hh*1.15} ${cx+hw},${cy-hh*1.15} ${cx+hw},${cy-20}
+   C${cx+hw+cheekBulge},${cy+110} ${cx+jaw},${bot-90} ${cx+chin},${bot-12+sq*-8} Q${cx},${bot+18-sq*14} ${cx-chin},${bot-12+sq*-8}
+   C${cx-jaw},${bot-90} ${cx-hw-cheekBulge},${cy+110} ${cx-hw},${cy-20}Z`;
+  const ear=s=>`<g transform="translate(${cx+s*(hw-8)},${earY}) rotate(${s*earA}) scale(${s*earS},${earS})"><path d="M0,-55 C70,-75 85,10 30,55 C10,70 0,40 0,25Z" fill="#f2c7a5" stroke="#1b1430" stroke-width="6"/><path d="M14,-30 C50,-35 52,15 22,30" fill="none" stroke="#d99b7a" stroke-width="7" stroke-linecap="round"/></g>`;
+  document.getElementById("face").innerHTML=`
+   <rect x="${cx-neck/2}" y="${bot-80}" width="${neck}" height="260" fill="#e5b391" stroke="#1b1430" stroke-width="6"/>
+   <path d="M${cx-290},900 C${cx-260},${bot+120} ${cx+260},${bot+120} ${cx+290},900Z" fill="#2c3a63" stroke="#1b1430" stroke-width="6"/>
+   ${ear(-1)}${ear(1)}
+   <path d="${headPath}" fill="#f6d0b0" stroke="#1b1430" stroke-width="7" stroke-linejoin="round"/>
+   <path d="M${cx-hw-6},${cy-40} C${cx-hw-20},${cy-hh*1.4} ${cx+hw+30},${cy-hh*1.35} ${cx+hw+8},${cy-30} C${cx+hw-40},${cy-140} ${cx+60},${cy-190} ${cx-40},${cy-150} C${cx-120},${cy-120} ${cx-hw+20},${cy-110} ${cx-hw-6},${cy-40}Z" fill="#3a2a2a" stroke="#1b1430" stroke-width="6"/>
+   <path d="M${cx-sp-40},${browY} q40,-18 80,0 M${cx+sp-40},${browY} q40,-18 80,0" fill="none" stroke="#3a2a2a" stroke-width="11" stroke-linecap="round"/>
+   <g transform="translate(${cx-sp},${eyeY})">${eyeArt(st.eye,es)}</g><g transform="translate(${cx+sp},${eyeY}) scale(-1,1)">${eyeArt(st.eye,es)}</g>
+   <ellipse cx="${cx-sp-20}" cy="${eyeY+70}" rx="34" ry="16" fill="#f59a9a" opacity=".45"/><ellipse cx="${cx+sp+20}" cy="${eyeY+70}" rx="34" ry="16" fill="#f59a9a" opacity=".45"/>
+   <path d="M${cx},${noseY-30*noseS} q${-14*noseS},${30*noseS} 0,${34*noseS}" fill="none" stroke="#c98a6a" stroke-width="7" stroke-linecap="round"/>
+   <path d="M${cx-44},${mouthY} q44,34 88,0" fill="#7a2d3a" stroke="#1b1430" stroke-width="6" stroke-linecap="round"/>`;
+}
+
+// ---------- input ----------
+const stage=document.getElementById("stage");
+stage.addEventListener("click",e=>{
+  const t=e.target.closest("[data-tab],[data-eye],[data-step],[data-undo]");
+  if(!t) return;
+  if(t.dataset.tab){tab=+t.dataset.tab;focus=-1;render();}
+  else if(t.dataset.eye){st.eye=+t.dataset.eye;changed();}
+  else if(t.dataset.step){const r=+t.closest(".row").dataset.row;set(r,st.v[r]+(+t.dataset.step)*.1);}
+  else if(t.dataset.undo){set(+t.dataset.undo,0);}
+});
+let drag=null;
+stage.addEventListener("pointerdown",e=>{const tr=e.target.closest(".track");if(!tr)return;drag={r:+tr.closest(".row").dataset.row};move(e);});
+addEventListener("pointermove",e=>drag&&move(e));
+addEventListener("pointerup",()=>drag=null);
+function move(e){
+  const tr=document.querySelector(`.row[data-row="${drag.r}"] .track`).getBoundingClientRect();
+  st.v[drag.r]=snap(((e.clientX-tr.left)/tr.width)*2-1);
+  const k=TABS[tab].rows.indexOf(drag.r); focus=k; document.getElementById("status").textContent="Unsaved changes"; render();
+}
+document.getElementById("random").onclick=()=>{st.eye=Math.floor(Math.random()*4);st.v=st.v.map(()=>snap((Math.random()*2-1)*.7));changed();toast("Randomized");};
+document.getElementById("reset").onclick=()=>{st={eye:0,v:new Array(S.length).fill(0)};changed();toast("Back to default");};
+document.getElementById("done").onclick=()=>{document.getElementById("status").textContent="Saved to this device";toast("Fighter saved");};
+addEventListener("keydown",e=>{
+  const rows=TABS[tab].rows,k=e.key.toLowerCase();
+  if(k==="q"||k==="e"){tab=(tab+(k==="e"?1:TABS.length-1))%TABS.length;focus=-1;render();}
+  else if(k==="arrowdown"){focus=Math.min(rows.length-1,focus+1);render();e.preventDefault();}
+  else if(k==="arrowup"){focus=Math.max(0,focus-1);render();e.preventDefault();}
+  else if((k==="arrowleft"||k==="arrowright")&&focus>=0){set(rows[focus],st.v[rows[focus]]+(k==="arrowright"?.05:-.05));e.preventDefault();}
+  else if(k==="r") document.getElementById("random").click();
+  else if(k==="backspace") document.getElementById("reset").click();
+  else if(k==="enter") document.getElementById("done").click();
+});
+let tt;function toast(s){const t=document.getElementById("toast");t.textContent=s;t.classList.add("show");clearTimeout(tt);tt=setTimeout(()=>t.classList.remove("show"),1400);}
+
+// ---------- bench toolbar ----------
+document.querySelectorAll("[data-sky]").forEach(b=>b.onclick=()=>{
+  for(const [k,v] of Object.entries(SKIES[b.dataset.sky])) document.documentElement.style.setProperty(k,v);
+  document.querySelectorAll("[data-sky]").forEach(x=>x.setAttribute("aria-pressed",x===b));});
+document.querySelectorAll(".bar [data-shape]").forEach(b=>b.onclick=()=>{stage.dataset.shape=b.dataset.shape;
+  document.querySelectorAll(".bar [data-shape]").forEach(x=>x.setAttribute("aria-pressed",x===b));});
+document.querySelectorAll("[data-pad]").forEach(b=>b.onclick=()=>{pad=b.dataset.pad==="pad";
+  document.querySelectorAll(".bar [data-pad]").forEach(x=>x.setAttribute("aria-pressed",x===b));applyPad();});
+function applyPad(){document.querySelectorAll(".glyph").forEach(g=>g.textContent=pad?g.dataset.pad:g.dataset.kb);}
+
+function fit(){const w=document.getElementById("wrap"),s=Math.min(w.clientWidth/1920,(w.clientHeight-16)/1080);
+  stage.style.transform=`scale(${s})`;const h=document.getElementById("holder");h.style.width=1920*s+"px";h.style.height=1080*s+"px";}
+addEventListener("resize",fit);fit();render();
+</script>
+</body>
+</html>

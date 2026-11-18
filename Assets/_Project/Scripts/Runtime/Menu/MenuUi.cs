@@ -104,6 +104,54 @@ namespace LightMMORPG.Menu
                 (x, y) => Color.Lerp(a, b, Mathf.Clamp01((x + (s - y)) / (2f * s))));
         }
 
+        // ---------------- bevel (Customize buttons) ----------------
+
+        /// <summary>Signed distance to a box with the top-left and bottom-right corners cut at 45° (texture y up).</summary>
+        private static float BevelSdf(float x, float y, float size, float cut)
+        {
+            const float pad = 1f;
+            float lo = pad, hi = size - pad;
+            float d = Mathf.Max(Mathf.Max(lo - x, x - hi), Mathf.Max(lo - y, y - hi));
+            const float k = 0.70710678f;
+            d = Mathf.Max(d, (cut - ((x - lo) + (hi - y))) * k); // top-left
+            d = Mathf.Max(d, (cut - ((hi - x) + (y - lo))) * k); // bottom-right
+            return d;
+        }
+
+        private static int BevelSize(int cut) => cut * 2 + 6;
+        private static Vector4 BevelBorder(int cut) => new(cut + 3, cut + 3, cut + 3, cut + 3);
+
+        /// <summary>9-sliced fill of a box with two cut corners (top-left, bottom-right).</summary>
+        public static Sprite BevelFill(int cut)
+        {
+            int s = BevelSize(cut);
+            return Make("bvf" + cut, s, s, (x, y) => 0.5f - BevelSdf(x, y, s, cut), BevelBorder(cut));
+        }
+
+        /// <summary>9-sliced outline of the bevel box.</summary>
+        public static Sprite BevelEdge(int cut, float stroke)
+        {
+            int s = BevelSize(cut);
+            return Make("bve" + cut + "_" + stroke, s, s, (x, y) =>
+            {
+                float d = BevelSdf(x, y, s, cut);
+                return Mathf.Min(0.5f - d, 0.5f + d + stroke);
+            }, BevelBorder(cut));
+        }
+
+        /// <summary>The bevel outline's top border only (top edge, cut corner, top of the sides): a light catching the top.</summary>
+        public static Sprite BevelTop(int cut, float stroke)
+        {
+            int s = BevelSize(cut);
+            float from = s - (cut + 3);
+            return Make("bvt" + cut + "_" + stroke, s, s, (x, y) =>
+            {
+                float d = BevelSdf(x, y, s, cut);
+                float a = Mathf.Min(0.5f - d, 0.5f + d + stroke);
+                return y >= from ? a * Mathf.Clamp01((y - from) / (s - from) * 1.6f) : 0f;
+            }, BevelBorder(cut));
+        }
+
         // ---------------- icons (SDF strokes) ----------------
 
         private static float Seg(Vector2 p, Vector2 a, Vector2 b)
@@ -127,12 +175,85 @@ namespace LightMMORPG.Menu
             return Mathf.Min((p - e0).magnitude, (p - e1).magnitude);
         }
 
-        public enum IconKind { Friends, Settings, Quit, Diamond, Crystal }
+        public enum IconKind { Friends, Settings, Quit, Diamond, Crystal, Eye, Head, Jaw, Nose, Ear, Dice, Undo, Check, Plus, Minus }
+
+        private static float Poly(Vector2 p, params Vector2[] pts)
+        {
+            float d = float.MaxValue;
+            for (int i = 0; i + 1 < pts.Length; i++) d = Mathf.Min(d, Seg(p, pts[i], pts[i + 1]));
+            return d;
+        }
+
+        private static float Disc(Vector2 p, Vector2 c, float r) => r - (p - c).magnitude + 0.5f;
+
+        /// <summary>Line icons for the Customize screen (thicker stroke, drawn at ~24-34 px).</summary>
+        private static Func<float, float, float> CustomizeIcon(IconKind kind)
+        {
+            const float half = 4.6f;
+            float Stroke(float d) => half - d + 0.5f;
+            return kind switch
+            {
+                IconKind.Eye => (x, y) =>
+                {
+                    var p = new Vector2(x, y);
+                    float d = Mathf.Min(Arc(p, new Vector2(48, 22), 38f, 43f, 137f), Arc(p, new Vector2(48, 74), 38f, 223f, 317f));
+                    return Mathf.Max(Stroke(d), Disc(p, new Vector2(48, 48), 9f));
+                },
+                IconKind.Head => (x, y) =>
+                {
+                    var p = new Vector2(x, y);
+                    return Stroke(Mathf.Min(Ring(p, new Vector2(48, 60), 19f), Arc(p, new Vector2(48, 4), 34f, 28f, 152f)));
+                },
+                IconKind.Jaw => (x, y) =>
+                {
+                    var p = new Vector2(x, y);
+                    float d = Poly(p, new Vector2(22, 80), new Vector2(26, 48), new Vector2(48, 20), new Vector2(70, 48), new Vector2(74, 80));
+                    return Stroke(Mathf.Min(d, Seg(p, new Vector2(40, 40), new Vector2(56, 40))));
+                },
+                IconKind.Nose => (x, y) =>
+                {
+                    var p = new Vector2(x, y);
+                    float d = Poly(p, new Vector2(52, 82), new Vector2(39, 46), new Vector2(57, 42));
+                    return Stroke(Mathf.Min(d, Arc(p, new Vector2(48, 42), 22f, 232f, 308f)));
+                },
+                IconKind.Ear => (x, y) =>
+                {
+                    var p = new Vector2(x, y);
+                    return Stroke(Mathf.Min(Arc(p, new Vector2(42, 52), 26f, -110f, 110f), Arc(p, new Vector2(45, 54), 10f, -70f, 120f)));
+                },
+                IconKind.Dice => (x, y) =>
+                {
+                    var p = new Vector2(x, y);
+                    float qx = Mathf.Abs(x - 48) - 24f, qy = Mathf.Abs(y - 48) - 24f;
+                    float box = Mathf.Abs(new Vector2(Mathf.Max(qx, 0f), Mathf.Max(qy, 0f)).magnitude + Mathf.Min(Mathf.Max(qx, qy), 0f) - 8f);
+                    float dots = Mathf.Max(Mathf.Max(Disc(p, new Vector2(34, 62), 5.5f), Disc(p, new Vector2(62, 34), 5.5f)),
+                        Mathf.Max(Disc(p, new Vector2(48, 48), 5.5f), Mathf.Max(Disc(p, new Vector2(62, 62), 5.5f), Disc(p, new Vector2(34, 34), 5.5f))));
+                    return Mathf.Max(Stroke(box), dots);
+                },
+                IconKind.Undo => (x, y) =>
+                {
+                    var p = new Vector2(x, y);
+                    var c = new Vector2(48, 46);
+                    const float r = 25f, a1 = 70f;
+                    var e = c + new Vector2(Mathf.Cos(a1 * Mathf.Deg2Rad), Mathf.Sin(a1 * Mathf.Deg2Rad)) * r;
+                    var t = new Vector2(-Mathf.Sin(a1 * Mathf.Deg2Rad), Mathf.Cos(a1 * Mathf.Deg2Rad)); // counter-clockwise travel
+                    var n = new Vector2(-t.y, t.x);
+                    float d = Arc(p, c, r, 110f, a1);
+                    d = Mathf.Min(d, Seg(p, e, e - t * 13f + n * 11f));
+                    d = Mathf.Min(d, Seg(p, e, e - t * 13f - n * 11f));
+                    return Stroke(d);
+                },
+                IconKind.Check => (x, y) => Stroke(Poly(new Vector2(x, y), new Vector2(22, 48), new Vector2(40, 30), new Vector2(74, 66))),
+                IconKind.Plus => (x, y) => Stroke(Mathf.Min(Seg(new Vector2(x, y), new Vector2(24, 48), new Vector2(72, 48)), Seg(new Vector2(x, y), new Vector2(48, 24), new Vector2(48, 72)))),
+                _ => (x, y) => Stroke(Seg(new Vector2(x, y), new Vector2(24, 48), new Vector2(72, 48))),
+            };
+        }
 
         public static Sprite Icon(IconKind kind)
         {
             const int s = 96;
             const float half = 3.6f; // stroke half width
+            if (kind >= IconKind.Eye) return Make("icon" + kind, s, s, CustomizeIcon(kind));
             Func<float, float, float> f = kind switch
             {
                 IconKind.Friends => (x, y) =>
