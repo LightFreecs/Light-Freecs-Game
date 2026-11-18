@@ -482,7 +482,8 @@ earGeo.computeVertexNormals();
 const headMesh = new THREE.Mesh(headGeo, skinMat), earMesh = new THREE.Mesh(earGeo, skinMat);
 const skinOutline = outlineMat("#9c5446", 0.0065);
 const outlines = new THREE.Group();
-outlines.add(new THREE.Mesh(headGeo, skinOutline), new THREE.Mesh(earGeo, outlineMat("#9c5446", 0.004)));
+const earOutline = new THREE.Mesh(earGeo, outlineMat("#9c5446", 0.004));
+outlines.add(new THREE.Mesh(headGeo, skinOutline), earOutline);
 root.add(headMesh, earMesh, outlines);
 
 // face features: patches that follow the head surface (sampled from the actual mesh), textured and slightly in front
@@ -653,7 +654,7 @@ const makeHairline = T => deg => {
 };
 const hairlineY = makeHairline(HAIRLINE);
 // Messy layers: the hair mass itself comes down over the forehead to the brows and over the cheeks in front of the ears
-const messyHairlineY = makeHairline([[0, 0.67], [30, 0.66], [45, 0.62], [58, 0.52], [68, 0.42], [78, 0.38], [88, 0.55], [94, 0.58], [110, 0.58], [118, 0.47], [125, 0.21], [150, 0.235], [180, 0.265]]);
+const messyHairlineY = makeHairline([[0, 0.67], [30, 0.66], [45, 0.62], [58, 0.52], [68, 0.42], [78, 0.38], [88, 0.45], [94, 0.45], [110, 0.45], [118, 0.38], [125, 0.21], [150, 0.235], [180, 0.265]]);
 const fullHairline = a => hairlineY(a * 180);
 
 // this head's horizontal radius by direction and height, as a lookup table (2° × 0.01)
@@ -832,9 +833,9 @@ const STYLES = [
   },
   {
     id: "messy", label: "Messy layers", seed: 23,
-    note: "Rounded, shaggy medium cut from your reference sheet: a smooth full dome with a shine band, every lock falling from the crown and lying on it to a point. Long bangs over the forehead (one pair down between the eyes, the next crossing the eyes), face-framing locks to the cheekbones, locks over the tops of the ears, and pointed tufts at the nape. Blue-black.",
+    note: "Rounded, shaggy medium cut from your reference sheet: a smooth full dome with a shine band, every lock falling from the crown and lying on it to a point. Long bangs over the forehead (one pair down between the eyes, the next crossing the eyes), face-framing locks to the cheekbones, locks hanging over the ears to the jaw (the ears are hidden), and long pointed locks down the back past the nape. Blue-black.",
     colors: { lit: "#2d3448", shade: "#11131c", rim: "#5a6894", band: "#66769e", line: "#06070b" }, band: 0.45, bandY: 0.9,
-    hairline: a => messyHairlineY(a * 180), capOff: 0.055, capTop: 0.035, tuck: 0.35,
+    hairline: a => messyHairlineY(a * 180), capOff: 0.055, capTop: 0.035, tuck: 0.35, hideEars: true,
     build(G) {
       // variation keyed by the unsigned angle, so the left and right piece of each pair match
       const j = (a, key) => { const v = Math.sin(Math.abs(key) * 12.9898 + a * 78.233) * 43758.5453; return ((v - Math.floor(v)) * 2 - 1) * a; };
@@ -855,10 +856,10 @@ const STYLES = [
       pair(70, 72, 0.33, 0.2, 0.03);
       // round the ear and down the back to the nape: a dense row of pointed locks, alternating lengths, so the edge is
       // jagged like the bangs instead of a smooth line. [angle, tip height, tip distance off the head]
-      for (const [th, tipY, off] of [[80, 0.4, 0.035], [89, 0.49, 0.085], [98, 0.46, 0.1], [107, 0.5, 0.095], [116, 0.4, 0.06],
-        [124, 0.29, 0.04], [133, 0.2, 0.04], [142, 0.24, 0.04], [151, 0.18, 0.045], [160, 0.23, 0.045], [169, 0.17, 0.05]])
-        pair(th, th + 3, tipY, 0.17 + 0.03 * Math.sin(th), off, 0.5);
-      lock(180, 180, 0.2, 0.19, 0.05, 0.5);
+      for (const [th, tipY, off] of [[80, 0.38, 0.035], [88, 0.3, 0.045], [96, 0.27, 0.045], [104, 0.31, 0.045], [112, 0.26, 0.045],
+        [120, 0.22, 0.045], [128, 0.15, 0.045], [136, 0.11, 0.05], [144, 0.15, 0.05], [152, 0.1, 0.05], [160, 0.14, 0.05], [168, 0.1, 0.05]])
+        pair(th, th + 3, tipY, 0.21 + 0.03 * Math.sin(th), off, 0.45);
+      lock(180, 180, 0.12, 0.22, 0.05, 0.45);
       // back: rounded, tapering into pointed tufts at the nape
 
       // shorter locks on the dome for the clump lines, tips lifting a little
@@ -1049,8 +1050,10 @@ let last = performance.now();
 
 // ================================================================== panel
 const headTrisN = head.idx.length / 3 + ears.idx.length / 3;
+// styles whose hair hangs over the ears hide the ears (they would poke through the hair); hiding the hair shows them again
+function syncEars() { earMesh.visible = earOutline.visible = !(style.hideEars && !hairHidden); }
 function showStyle(st) {
-  style.group.visible = false; style = st; st.group.visible = !hairHidden;
+  style.group.visible = false; style = st; st.group.visible = !hairHidden; syncEars();
   for (const c of document.getElementById("pick-style").children) c.setAttribute("aria-pressed", String(c.dataset.id === st.id));
   document.getElementById("style-note").textContent = st.note;
   document.getElementById("counts").textContent = `${(headTrisN + st.tris).toLocaleString()} triangles`;
@@ -1075,7 +1078,7 @@ document.getElementById("light").addEventListener("input", e => { sweeping = fal
 document.getElementById("sweep").addEventListener("click", e => { sweeping = !sweeping; e.currentTarget.setAttribute("aria-pressed", String(sweeping)); });
 const tog = (id, fn) => document.getElementById(id).addEventListener("click", e => { const on = e.currentTarget.getAttribute("aria-pressed") !== "true"; e.currentTarget.setAttribute("aria-pressed", String(on)); fn(on); });
 tog("t-outline", on => { outlines.visible = on; for (const o of hairOutlines) o.visible = on; });
-tog("t-hide", on => { hairHidden = on; style.group.visible = !on; });
+tog("t-hide", on => { hairHidden = on; style.group.visible = !on; syncEars(); });
 tog("t-wire", on => { for (const w of hairWires) w.visible = on; });
 window.setLight = setLight;
 </script>
