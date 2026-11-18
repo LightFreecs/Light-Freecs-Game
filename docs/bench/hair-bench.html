@@ -579,7 +579,8 @@ function buildShell(G, st) {
       const phiEnd = h >= 0.5 ? Math.acos(Math.min(1, (h - 0.5) / 0.5)) : Math.PI / 2, dome = 0.5 * phiEnd, L = dome + Math.max(0, 0.5 - h), d = s * L;
       const y = d <= dome ? 0.5 + 0.5 * Math.cos(d / 0.5) : 0.5 - (d - dome);
       const p = surface(th, y);
-      const off = st.capOff * (1 - 0.6 * smooth((s - 0.75) / 0.25));
+      const tuck = st.tuck ? lerp(st.tuck, 1, smooth((y - 0.3) / 0.3)) : 1;   // optional: volume thins toward the nape
+      const off = (st.capOff * (1 - 0.6 * smooth((s - 0.75) / 0.25)) + (st.capTop || 0) * (1 - s) * (1 - s)) * tuck;
       row.push(G.push(vadd(p, vmul(outward(p), off)), head.morphDX(p[0], p[1], p[2]), i === R ? 0.5 : 1));
     }
     rows.push(row);
@@ -645,11 +646,14 @@ function buildUnderside(G, off = 0.024) {
 // The ear sits at about 97–116° and y 0.24–0.48: the line runs down a sideburn in front of it, hugs just above it, then
 // drops behind it all the way down to where the head meets the neck, and stays there round the back.
 const HAIRLINE = [[0, 0.80], [30, 0.79], [50, 0.74], [64, 0.64], [74, 0.45], [86, 0.42], [94, 0.52], [110, 0.53], [118, 0.42], [125, 0.21], [150, 0.235], [180, 0.265]];
-function hairlineY(deg) {
+const makeHairline = T => deg => {
   deg = Math.min(180, Math.abs(deg));
-  let i = 0; while (i < HAIRLINE.length - 2 && deg > HAIRLINE[i + 1][0]) i++;
-  return lerp(HAIRLINE[i][1], HAIRLINE[i + 1][1], smooth((deg - HAIRLINE[i][0]) / (HAIRLINE[i + 1][0] - HAIRLINE[i][0])));
-}
+  let i = 0; while (i < T.length - 2 && deg > T[i + 1][0]) i++;
+  return lerp(T[i][1], T[i + 1][1], smooth((deg - T[i][0]) / (T[i + 1][0] - T[i][0])));
+};
+const hairlineY = makeHairline(HAIRLINE);
+// Messy layers: the hair mass itself comes down over the forehead to the brows and over the cheeks in front of the ears
+const messyHairlineY = makeHairline([[0, 0.67], [30, 0.66], [45, 0.62], [58, 0.52], [68, 0.42], [78, 0.38], [88, 0.5], [94, 0.53], [110, 0.53], [118, 0.42], [125, 0.21], [150, 0.235], [180, 0.265]]);
 const fullHairline = a => hairlineY(a * 180);
 
 // this head's horizontal radius by direction and height, as a lookup table (2° × 0.01)
@@ -829,8 +833,8 @@ const STYLES = [
   {
     id: "messy", label: "Messy layers", seed: 23,
     note: "Rounded, shaggy medium cut from your reference sheet: a smooth full dome with a shine band, every lock falling from the crown and lying on it to a point. Long bangs over the forehead (one pair down between the eyes, the next crossing the eyes), face-framing locks to the cheekbones, locks over the tops of the ears, and pointed tufts at the nape. Blue-black.",
-    colors: { lit: "#2d3448", shade: "#11131c", rim: "#5a6894", band: "#66769e", line: "#06070b" }, band: 0.75, bandY: 0.88,
-    hairline: fullHairline, capOff: 0.045,
+    colors: { lit: "#2d3448", shade: "#11131c", rim: "#5a6894", band: "#66769e", line: "#06070b" }, band: 0.45, bandY: 0.9,
+    hairline: a => messyHairlineY(a * 180), capOff: 0.055, capTop: 0.035, tuck: 0.35,
     build(G) {
       // variation keyed by the unsigned angle, so the left and right piece of each pair match
       const j = (a, key) => { const v = Math.sin(Math.abs(key) * 12.9898 + a * 78.233) * 43758.5453; return ((v - Math.floor(v)) * 2 - 1) * a; };
@@ -839,26 +843,26 @@ const STYLES = [
       const from = G.pos.length / 3;
       // a lock starts at the crown whorl, lies on the volume as it falls, and ends in a point
       // [angle at the crown, angle at the tip, tip height, width, how far the tip sits off the head]
-      const lock = (th, tipTh, tipY, w, tipOff = 0.035) => strand(G, [[th, 0.99, -0.03], [th, 0.9, 0.06], [lerp(th, tipTh, 0.5), lerp(0.9, tipY, 0.5), 0.055], [tipTh, tipY, tipOff]], { w, flat: 0.32, taper: 0.9 });
-      const pair = (th, tipTh, tipY, w, tipOff) => { lock(th, tipTh, tipY, w, tipOff); lock(-th, -tipTh, tipY, w, tipOff); };
+      const lock = (th, tipTh, tipY, w, tipOff = 0.035, taper = 0.85) => strand(G, [[th, 0.99, -0.03], [th, 0.9, 0.11], [lerp(th, tipTh, 0.5), lerp(0.9, tipY, 0.5), 0.085], [tipTh, tipY, tipOff]], { w, flat: 0.3, taper });
+      const pair = (th, tipTh, tipY, w, tipOff, taper) => { lock(th, tipTh, tipY, w, tipOff, taper); lock(-th, -tipTh, tipY, w, tipOff, taper); };
       // bangs: one pair down between the eyes, the next crossing the eyes to just under the brows, outer ones framing the face
-      pair(6, 3, 0.43, 0.13);
-      pair(17, 15, 0.55, 0.15);
-      pair(29, 31, 0.56, 0.15);
-      pair(42, 47, 0.5, 0.15);
-      pair(55, 61, 0.4, 0.14, 0.03);
+      pair(6, 3, 0.43, 0.2, 0.035, 0.45);
+      pair(18, 16, 0.53, 0.24, 0.035, 0.45);
+      pair(31, 33, 0.55, 0.24, 0.035, 0.45);
+      pair(44, 48, 0.5, 0.24, 0.035, 0.5);
+      pair(56, 62, 0.4, 0.22, 0.03, 0.55);
       // sides: a lock in front of the ear to the cheek, locks over the top of the ear, one behind it
-      pair(70, 72, 0.36, 0.15, 0.03);
-      pair(85, 88, 0.5, 0.16, 0.07);
-      pair(100, 104, 0.5, 0.16, 0.08);
-      pair(116, 120, 0.36, 0.17, 0.045);
+      pair(70, 72, 0.33, 0.2, 0.03);
+      pair(85, 88, 0.47, 0.2, 0.08);
+      pair(100, 104, 0.48, 0.2, 0.09);
+      pair(116, 120, 0.34, 0.2, 0.05);
       // back: rounded, tapering into pointed tufts at the nape
-      pair(132, 134, 0.3, 0.2, 0.04);
-      pair(147, 149, 0.27, 0.2, 0.04);
-      pair(163, 164, 0.27, 0.2, 0.04);
-      lock(180, 180, 0.27, 0.2, 0.04);
+      pair(132, 140, 0.3, 0.24, 0.03, 0.6);
+      pair(147, 158, 0.25, 0.24, 0.03, 0.6);
+      pair(163, 171, 0.23, 0.24, 0.03, 0.6);
+      lock(180, 180, 0.22, 0.24, 0.03, 0.6);
       // shorter locks on the dome for the clump lines, tips lifting a little
-      for (const th of [24, 52, 80, 108, 136, 164]) pair(th, th + j(8, th), 0.66 + j(0.04, th), 0.2, 0.065);
+      for (const th of [24, 52, 80, 108, 136, 164]) pair(th, th + j(8, th), 0.66 + j(0.04, th), 0.24, 0.1);
       // a small cowlick at the back of the crown and a little flick on each side of the outline
       spike(G, 180, 0.95, { len: 0.2, w: 0.15, up: 0.75, back: 0.8, out: 0.3 });
       for (const s of [-1, 1]) spike(G, 74 * s, 0.64, { len: 0.13, w: 0.1, up: 0.15, back: 0.3, out: 1, depth: 0.02 });
