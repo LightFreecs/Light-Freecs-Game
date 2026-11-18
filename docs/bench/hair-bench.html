@@ -760,16 +760,20 @@ function sideFill(G, w = 0.3) {
 // Back of the head as spikes, all the way down to where it meets the neck (no flat area): layered rows pointing
 // back and down; behind the ear a short spike pointing back and a long one sweeping down to the neck.
 function spikyBack(G) {
+  // all aimed like the Light model's own back spikes: straight back and a little up, never down
+  const B = { back: 1, curl: 0.08, bend: [0, 0.25, -1] };
   for (const s of [-1, 1]) {
-    spike(G, 130 * s, 0.5, { len: 0.34, w: 0.3, up: -0.15, back: 1, out: 0.55 });
-    strand(G, [[126 * s, 0.62, -0.1], [127 * s, 0.45, 0.06], [131 * s, 0.3, 0.09], [137 * s, 0.16, 0.13]], { w: 0.3 });
-    spike(G, 145 * s, 0.62, { len: 0.42, w: 0.4, up: -0.3, back: 1, out: 0.45 });
-    spike(G, 150 * s, 0.42, { len: 0.36, w: 0.36, up: -0.75, back: 0.6, out: 0.35 });
+    // behind the ear
+    spike(G, 137 * s, 0.5, { ...B, len: 0.36, w: 0.32, up: 0.25, out: 0.5 });
+    spike(G, 138 * s, 0.34, { ...B, len: 0.3, w: 0.3, up: 0.15, out: 0.45 });
+    // back of the head, two rows
+    spike(G, 148 * s, 0.62, { ...B, len: 0.44, w: 0.4, up: 0.4, out: 0.4, side: 0.2 });
+    spike(G, 152 * s, 0.42, { ...B, len: 0.38, w: 0.36, up: 0.25, out: 0.35, side: 0.15 });
   }
-  spike(G, 180, 0.62, { len: 0.44, w: 0.42, up: -0.3, back: 1, out: 0.45 });
-  spike(G, 180, 0.42, { len: 0.38, w: 0.38, up: -0.75, back: 0.6, out: 0.35 });
-  // short spikes growing from the underside of the skull, pointing down, ending at the neck line
-  for (const th of [-162, -146, 146, 162, 180]) spike(G, th, 0.3, { len: 0.15, w: 0.26, up: -1, back: 0.45, out: 0.25, depth: 0.08 });
+  spike(G, 180, 0.62, { ...B, len: 0.46, w: 0.42, up: 0.4, out: 0.4 });
+  spike(G, 180, 0.42, { ...B, len: 0.4, w: 0.38, up: 0.25, out: 0.35 });
+  // from the underside of the skull, behind the neck line: pointing back as well
+  for (const th of [-162, -146, 146, 162, 180]) spike(G, th, 0.3, { ...B, len: 0.26, w: 0.28, up: 0.1, out: 0.2, depth: 0.08 });
 }
 
 // the Light hair model, imported (16 spikes + back shell), refitted to this head
@@ -883,7 +887,7 @@ const STYLES = [
       for (const th of [-145, 180, 145]) spike(G, th + sg(th) * j(4, th), 0.75, { len: 0.62 * (1 + j(0.08, th)), w: 0.46, up: 0.4, back: 1, out: 0.45, side: 0.3, bend: [0, 0.5, -1] });
       for (const th of [-150, 180, 150]) spike(G, th + sg(th) * j(4, Math.abs(th) + 1), 0.55, { len: 0.5 * (1 + j(0.08, Math.abs(th) + 1)), w: 0.42, up: 0.05, back: 1, out: 0.55, side: 0.25 });
       // nape: pointing down
-      for (const th of [-162, 162]) spike(G, th, 0.4, { len: 0.32, w: 0.3, up: -0.6, back: 0.6, out: 0.5 });
+      for (const th of [-162, 162]) spike(G, th, 0.4, { len: 0.34, w: 0.3, up: 0.15, back: 1, out: 0.45, bend: [0, 0.25, -1] });
       // fill: low blades swept back flat over the top
       for (const th of [-50, 0, 50]) spike(G, th, 0.97, { len: 0.55, w: 0.46, up: 0.3, back: 1, out: 0.1, side: 0.1 });
       spikyBack(G);
