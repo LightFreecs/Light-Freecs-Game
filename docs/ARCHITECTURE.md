@@ -307,3 +307,33 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     over white clouds; Quit really quits on PC; Server Only added to Play Online (the bench had Quick/Host/Join); no
     shooting star at night; no glass blur on panels (translucent fill only). Palette choice is local only (the server still
     assigns palettes) — hook it up with the character creator.
+- Toon Head (branch `claude/bench-continuation-ovh2yg`) — the user's pick from the Toon Head bench
+  (https://claude.ai/artifact/1CQK8oY3jXA2pDiNgSt6Kd: "Ship this, it is perfect"). Replaces the SDF head of every hero.
+  - `Characters/ToonHead.cs`: head measured from the user's Blockbench model (straightened, chin = 0, crown = 1 "head
+    units"; tall round skull, eyes at 38 % of the head height, narrow V chin, forward nose, short back of the neck).
+    `ToonHeadSettings` = the bench's 22 sliders (head width, skull height, back of head, face depth, cheek width/fullness,
+    jaw width, face length, chin width/shape/forward, nose size/height, mouth height, eye size/height/spacing, brow height,
+    ear size/height/angle, neck width) + `eyeStyle`; all 1 / 0 = the measured head. `ToonHeadPresets.Get(i)` = the bench
+    shapes (Your model, Soft-V, Round, Sharp, Square-Jaw Hero, Long / Mature, Heart, Young). `Apply` → `ToonHeadShape`,
+    `BuildMesh` (72 columns, 16 skull + 40 face + 3 jaw→neck + 5 neck rows, lofted ears; same index order as the bench —
+    three.js and Unity mirror each other, so it already faces outward), `ShadowMap` (256², the painted face shadow).
+  - `Characters/ToonFacePainter.cs`: paints eyes/brows/mouth into one 1024² RGBA face texture (transparent skin) laid on
+    by a front planar projection (head x −0.5…0.5, y −0.1…0.9). Eyes: the three traced sketches from the Low-Poly Head
+    bench (`Drawn`, `Tall`, `Wide`; small anti-aliased polygon/ellipse/stroke rasterizer) and the hand-made layered eye
+    from the Eye Bench (`HandMade`: `Resources/Eyes/eye_{base,tone,highlight}.bytes` = PNG bytes, decoded once on the
+    main thread by `ToonEyeLayers.EnsureLoaded`; falls back to `Drawn` if not loaded). Iris colour = `recipe.eyeColor`,
+    brows from the hair colour. Brows rise for taller eyes like on the bench.
+  - `Resources/Shaders/ToonFace.shader` (`LightMMORPG/ToonFace`, in Resources so builds include it): body N·L band +
+    painted face shadow (light angle around the head → threshold, map → edge shape; head axes from the skinned tangent =
+    model +X, forward = right × up), lit/shade = the body skin's colours (neck joins cleanly), SH ambient, faint rim, world
+    cast shadows, features from `_BaseMap` × front weight (uv1.w), outline #9c5446 thinner across the face (uv1.z mask).
+    Vertex data: uv1 = (sin θ, height, face mask, front weight), tangents = (1,0,0,1) on every vertex.
+  - Builder: head on the `face` slot, placed by `HeadToModel` (1 head unit = 0.287 m × headSize, chin 0.027 below the
+    Head bone); head rows skin to Head, neck rows blend into Neck; the body's SDF neck now ends inside the toon neck; the
+    hair's scalp ellipsoid / hairline / ear cut-outs follow the toon skull. Heroes: Kaien = Your model + Drawn, Seiran =
+    Sharp + Wide, Gorran = Square-Jaw Hero + Tall, Veyl = Heart + hand-made eye. Old `FacePainter` face (eyeShape, brows,
+    expression) is unused by heads now (hair gradient still from it).
+  - Tests: `ToonHeadTests` (all shape presets → valid mesh, outward normals + winding, sliders, painted eyes mirrored,
+    shadow map gradient, recipe clone, character carries the face data). Written without a local Unity: compile + tests
+    run on CI (Tests workflow, manual dispatch). Not yet seen in a rendered match; no in-game creator UI for the sliders
+    yet (the settings live on `CharacterRecipe.toonHead`).

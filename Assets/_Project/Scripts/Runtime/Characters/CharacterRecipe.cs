@@ -42,9 +42,14 @@ namespace LightMMORPG.Characters
         [Range(0.3f, 2f)] public float spikeLength = 1f;
         [Range(0f, 1f)] public float spikeCurl = 0.3f;
 
+        [Header("Head (Toon Head: shape sliders + painted eye)")]
+        public ToonHeadSettings toonHead = new();
+
         [Header("Face")]
-        public EyeShape eyeShape = EyeShape.Sharp;
+        [Tooltip("Iris colour of the painted eye.")]
         public Color eyeColor = new(0.2f, 0.25f, 0.35f);
+        [Tooltip("Old procedural face only (FacePainter); the Toon Head uses toonHead.eyeStyle.")]
+        public EyeShape eyeShape = EyeShape.Sharp;
         [Tooltip("Positive = angry (inner end lower).")]
         [Range(-1f, 1.5f)] public float browAngle = 0.6f;
         [Range(0.5f, 1.8f)] public float browThickness = 1f;
@@ -77,7 +82,12 @@ namespace LightMMORPG.Characters
         [Header("Powers")]
         public Color auraColor = new(1.8f, 1.1f, 0.15f);
 
-        public CharacterRecipe Clone() => (CharacterRecipe)MemberwiseClone();
+        public CharacterRecipe Clone()
+        {
+            var c = (CharacterRecipe)MemberwiseClone();
+            c.toonHead = toonHead?.Clone() ?? new ToonHeadSettings();
+            return c;
+        }
 
         /// <summary>Stable key for mesh/material caches (same recipe → same key).</summary>
         public string CacheKey() => JsonUtility.ToJson(this);

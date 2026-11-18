@@ -8,9 +8,10 @@ namespace LightMMORPG.Characters
 {
     /// <summary>
     /// Turns a <see cref="CharacterRecipe"/> into a rigged, skinned anime fighter: an implicit-surface body (smooth-union
-    /// of anatomical primitives → surface nets), separate finer head/face and hand meshes, outfit shells built from the
-    /// same body primitives grown outwards (so they skin identically), spiky hair clumps, a painted face texture. One
-    /// <see cref="SkinnedMeshRenderer"/>, one submesh per material slot, all <c>LightMMORPG/ToonLit</c>.
+    /// of anatomical primitives → surface nets), the Toon Head (<see cref="ToonHead"/>: measured anime head + painted face
+    /// shadow, <c>LightMMORPG/ToonFace</c>), hand meshes, outfit shells built from the same body primitives grown outwards
+    /// (so they skin identically), spiky hair clumps. One <see cref="SkinnedMeshRenderer"/>, one submesh per material slot,
+    /// <c>LightMMORPG/ToonLit</c> except the head.
     /// Meshes are cached per recipe, so repeated spawns of the same hero are free.
     /// </summary>
     public static class ProceduralCharacterBuilder
@@ -38,6 +39,12 @@ namespace LightMMORPG.Characters
             public Vector3[] Positions, Normals;
             public Vector2[] Uvs;
             public BoneWeight[] Weights;
+            /// <summary>uv1: (sin θ around the head, head height, face mask, face-front weight) on the head, 0 elsewhere.</summary>
+            public Vector4[] FaceCoords;
+            /// <summary>Model +X everywhere (the head's right for the ToonFace shader; skinned with the head).</summary>
+            public Vector4[] Tangents;
+            public byte[] ShadowPixels;
+            public Texture2D ShadowMap;
             public List<int>[] Triangles;
             public Color[] FacePixels;
             public int FaceSize;
@@ -48,6 +55,7 @@ namespace LightMMORPG.Characters
             public float Height;
             public Vector3 ArmDirL, ArmDirR, PalmL, PalmR;
             public Texture2D Face;
+            public ToonHeadShape HeadShape;
             public double Milliseconds;
             public Color Aura;
         }
@@ -90,7 +98,7 @@ namespace LightMMORPG.Characters
             smr.bones = bones;
             smr.rootBone = bones[(int)B.Hips];
             var mats = new Material[gen.Slots.Count];
-            for (int i = 0; i < mats.Length; i++) mats[i] = GetMaterial(gen.Slots[i], gen.Face);
+            for (int i = 0; i < mats.Length; i++) mats[i] = GetMaterial(gen.Slots[i], gen.Face, gen.ShadowMap);
             smr.sharedMaterials = mats;
             var b = gen.Mesh.bounds;
             smr.localBounds = new Bounds(b.center - gen.BonePositions[(int)B.Hips], b.size * 1.6f);
@@ -107,6 +115,7 @@ namespace LightMMORPG.Characters
         {
             string key = recipe.CacheKey();
             if (Cache.TryGetValue(key, out var g) && g.Mesh != null && g.Face != null) return g;
+            ToonEyeLayers.EnsureLoaded();
             System.Threading.Tasks.Task<GeneratedCharacter> pending;
             lock (Pending) Pending.TryGetValue(key, out pending);
             g = pending != null ? pending.Result : GenerateData(recipe);
@@ -121,6 +130,7 @@ namespace LightMMORPG.Characters
         /// <summary>Starts generating the mesh data of these recipes on worker threads (call early, e.g. at game start).</summary>
         public static void Prewarm(IEnumerable<CharacterRecipe> recipes)
         {
+            ToonEyeLayers.EnsureLoaded();   // main thread: the hand-made eye's PNG layers
             foreach (var r in recipes)
             {
                 string key = r.CacheKey();
@@ -140,6 +150,7 @@ namespace LightMMORPG.Characters
             {
                 if (g.Mesh != null) UnityEngine.Object.DestroyImmediate(g.Mesh);
                 if (g.Face != null) UnityEngine.Object.DestroyImmediate(g.Face);
+                if (g.ShadowMap != null) UnityEngine.Object.DestroyImmediate(g.ShadowMap);
             }
             Cache.Clear();
             MaterialCache.Clear();
@@ -148,6 +159,7 @@ namespace LightMMORPG.Characters
         /// <summary>Pure mesh generation (no GameObjects, no materials) — used by tests and the cache.</summary>
         public static GeneratedCharacter Generate(CharacterRecipe recipe)
         {
+            ToonEyeLayers.EnsureLoaded();
             var g = GenerateData(recipe);
             Upload(g);
             return g;
@@ -165,8 +177,10 @@ namespace LightMMORPG.Characters
             c.Outfit();
             c.Hair();
             var gen = c.Finish();
-            gen.FaceSize = 512;
-            gen.FacePixels = FacePainter.PaintFacePixels(recipe, gen.FaceSize);
+            var head = recipe.toonHead ?? new ToonHeadSettings();
+            gen.FaceSize = ToonFacePainter.Size;
+            gen.FacePixels = ToonFacePainter.Paint(gen.HeadShape, head.eyeStyle, recipe.eyeColor, recipe.hairColor, recipe.skinTone);
+            gen.ShadowPixels = ToonHead.ShadowMap(gen.HeadShape);
             gen.Milliseconds = sw.Elapsed.TotalMilliseconds;
             return gen;
         }
@@ -180,6 +194,8 @@ namespace LightMMORPG.Characters
             mesh.SetVertices(g.Positions);
             mesh.SetNormals(g.Normals);
             mesh.SetUVs(0, g.Uvs);
+            mesh.SetUVs(1, g.FaceCoords);
+            mesh.SetTangents(g.Tangents);
             mesh.boneWeights = g.Weights;
             mesh.subMeshCount = g.Triangles.Length;
             for (int i = 0; i < g.Triangles.Length; i++) mesh.SetTriangles(g.Triangles[i], i, false);
@@ -189,13 +205,26 @@ namespace LightMMORPG.Characters
             mesh.RecalculateBounds();
             g.Mesh = mesh;
             g.Face = FacePainter.ToTexture(g.FacePixels, g.FaceSize, "Face_" + g.Name);
+            g.ShadowMap = ShadowTexture(g.ShadowPixels, "FaceShadow_" + g.Name);
             g.UploadMilliseconds = sw.Elapsed.TotalMilliseconds;
         }
 
         // ------------------------------------------------------------------ materials
 
-        public static Material GetMaterial(SlotDef slot, Texture2D face)
+        private static Texture2D ShadowTexture(byte[] px, string name)
         {
+            var t = new Texture2D(ToonHead.ShadowMapSize, ToonHead.ShadowMapSize, TextureFormat.R8, false, true)
+            {
+                name = name, wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear,
+            };
+            t.LoadRawTextureData(px);
+            t.Apply(false, false);
+            return t;
+        }
+
+        public static Material GetMaterial(SlotDef slot, Texture2D face, Texture2D faceShadow = null)
+        {
+            if (slot.Kind == SlotKind.Face) return GetFaceMaterial(slot, face, faceShadow);
             string key = slot.Kind + "|" + ColorUtility.ToHtmlStringRGBA(slot.Color) + "|" + ColorUtility.ToHtmlStringRGBA(slot.Color2) + (slot.Kind == SlotKind.Face && face != null ? "|" + System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(face) : "");
             if (MaterialCache.TryGetValue(key, out var m) && m != null) return m;
             m = CreateToonMaterial();
@@ -238,6 +267,36 @@ namespace LightMMORPG.Characters
             return m;
         }
 
+        /// <summary>The Toon Head's skin (<c>LightMMORPG/ToonFace</c>): same lit/shade colours as the body skin so the neck joins cleanly.</summary>
+        private static Material GetFaceMaterial(SlotDef slot, Texture2D face, Texture2D faceShadow)
+        {
+            string key = "ToonFace|" + ColorUtility.ToHtmlStringRGBA(slot.Color) + "|" + (face != null ? System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(face) : 0)
+                + "|" + (faceShadow != null ? System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(faceShadow) : 0);
+            if (MaterialCache.TryGetValue(key, out var m) && m != null) return m;
+            var shader = Shader.Find("LightMMORPG/ToonFace");
+            if (shader == null) { m = CreateToonMaterial(); m.SetTexture("_BaseMap", face); return m; }
+            m = new Material(shader) { name = "ToonFace_" + slot.Key };
+            Color skin = slot.Color;
+            m.SetTexture("_BaseMap", face);
+            if (faceShadow != null) m.SetTexture("_ShadowMap", faceShadow);
+            m.SetColor("_BaseColor", skin);
+            m.SetColor("_ShadeColor", new Color(skin.r * 0.93f, skin.g * 0.77f, skin.b * 0.72f, 1f));
+            m.SetFloat("_BodyThreshold", -0.05f);
+            m.SetFloat("_EdgeSoftness", 0.03f);
+            m.SetFloat("_FaceEdgeSoftness", 0.012f);
+            m.SetFloat("_ShadowV0", ToonHead.ShadowV0);
+            m.SetFloat("_ShadowVSpan", ToonHead.ShadowVSpan);
+            m.SetFloat("_AmbientStrength", 0.4f);
+            m.SetFloat("_FeatureLight", 0.5f);
+            m.SetColor("_RimColor", new Color(1f, 0.95f, 0.92f));
+            m.SetFloat("_RimStrength", 0.35f);
+            m.SetColor("_OutlineColor", new Color(0.61f, 0.33f, 0.27f));   // reddish brown, like the bench (#9c5446)
+            m.SetFloat("_OutlineWidth", 3f);
+            m.SetFloat("_FaceOutlineScale", 0.45f);
+            MaterialCache[key] = m;
+            return m;
+        }
+
         private static Material CreateToonMaterial()
         {
             var shader = Shader.Find("LightMMORPG/ToonLit");
@@ -267,7 +326,13 @@ namespace LightMMORPG.Characters
             private readonly float _m, _w, _sw, _hs;
             private readonly Vector3[] _p = new Vector3[CharacterBones.Count];
             private readonly List<SdfPrim> _body = new();
-            private readonly List<SdfPrim> _headPrims = new();
+            // Toon Head placement: head units (chin = 0, crown ≈ 1) → head-local metres at head size 1 (×_hs, from the Head bone)
+            private const float HeadUnit = 0.287f, ChinHL = -0.027f, AxisZ = -0.019f;
+            private readonly ToonHeadShape _toon;
+            private int _faceStart = -1;
+            private readonly List<Vector4> _faceData = new();
+            private Vector3 _craniumC, _craniumR;
+            private float _hairDy;
             private readonly MeshBuffers _buf = new();
             private readonly List<SlotDef> _slots = new();
             private readonly Dictionary<string, int> _slotIndex = new();
@@ -283,7 +348,17 @@ namespace LightMMORPG.Characters
                 _sw = r.shoulderWidth;
                 _hs = r.headSize;
                 _rnd = new System.Random(r.seed * 7919 + 17);
+                _toon = ToonHead.Apply(r.toonHead);
+                // the hair's scalp ellipsoid follows the toon skull (same as the old one for the base head)
+                float crown = ChinHL + _toon.Top * HeadUnit;
+                float ry = 0.128f * (crown + 0.003f) / 0.256f;
+                _craniumR = new Vector3(_toon.CrW * HeadUnit + 0.002f, ry, (_toon.CrF + _toon.CrB) / 2f * HeadUnit + 0.002f);
+                _craniumC = new Vector3(0f, crown - ry, AxisZ + (_toon.CrF - _toon.CrB) / 2f * HeadUnit);
+                _hairDy = _craniumC.y - 0.125f;
             }
+
+            /// <summary>Toon Head point (head units) → model space.</summary>
+            private Vector3 HeadToModel(Vector3 h) => P(B.Head) + new Vector3(h.x * HeadUnit, ChinHL + h.y * HeadUnit, AxisZ + h.z * HeadUnit) * _hs;
 
             private float Rand() => (float)_rnd.NextDouble();
             private float Rand(float a, float b) => a + (b - a) * Rand();
@@ -399,7 +474,10 @@ namespace LightMMORPG.Characters
                         AddBody(SdfPrim.Ellipsoid(new Vector3(side * 0.034f, y, z), new Vector3(0.031f * m, 0.03f, 0.018f * m), (int)B.Spine, 0.012f, GTorso, TAbs));
                     }
                 // neck
-                AddBody(SdfPrim.Limb(new Vector3(0f, 1.68f, -0.025f), new Vector3(0f, 1.93f, -0.008f), 0.058f * Mathf.Sqrt(m), 0.05f, (int)B.Neck, 0.03f, GTorso, TNeck));
+                // (top end inside the Toon Head's neck, a little thinner so the head's neck covers it)
+                Vector3 neckTop = HeadToModel(new Vector3(0f, 0.08f, _toon.NeckZ));
+                float neckTopR = Mathf.Min(_toon.NeckW, _toon.NeckF) * HeadUnit * _hs * 0.95f;
+                AddBody(SdfPrim.Limb(new Vector3(0f, 1.68f, -0.025f), neckTop, 0.058f * Mathf.Sqrt(m), neckTopR, (int)B.Neck, 0.03f, GTorso, TNeck));
 
                 for (int side = -1; side <= 1; side += 2)
                 {
@@ -477,30 +555,30 @@ namespace LightMMORPG.Characters
 
             public void Head()
             {
-                float hs = _hs;
-                int head = (int)B.Head;
-                _headPrims.Add(SdfPrim.Ellipsoid(HL(0f, 0.13f, -0.014f), new Vector3(0.116f, 0.13f, 0.13f) * hs, head, 0.04f, 0));
-                _headPrims.Add(SdfPrim.Ellipsoid(HL(0f, 0.068f, 0.034f), new Vector3(0.088f, 0.085f, 0.088f) * hs, head, 0.045f, 0));
-                for (int side = -1; side <= 1; side += 2)
+                // The Toon Head: one smooth mesh (head + neck + ears) on the "face" slot (LightMMORPG/ToonFace)
+                int face = Slot("face", _r.skinTone, SlotKind.Face);
+                var mesh = ToonHead.BuildMesh(_toon);
+                int start = _buf.Positions.Count;
+                _faceStart = start;
+                var tris = _buf.Slot(face);
+                for (int i = 0; i < mesh.Positions.Count; i++)
                 {
-                    _headPrims.Add(SdfPrim.Limb(HL(side * 0.074f, 0.085f, -0.012f), HL(side * 0.014f, -0.006f, 0.077f), 0.024f * hs, 0.017f * hs, head, 0.03f, 0));
-                    _headPrims.Add(SdfPrim.Ellipsoid(HL(side * 0.11f, 0.068f, -0.014f), new Vector3(0.014f, 0.032f, 0.022f) * hs, Quaternion.Euler(0f, -side * 20f, 0f), head, 0.01f, 0));
+                    Vector3 hp = mesh.Positions[i], n = mesh.Normals[i], fc = mesh.FaceCoords[i];
+                    _buf.Positions.Add(HeadToModel(hp));
+                    _buf.Normals.Add(n);
+                    _buf.Uvs.Add(ToonFacePainter.Uv(hp));
+                    float nb = mesh.NeckBlend[i];
+                    float head = Mathf.Lerp(1f, 0.35f, nb), neck = 1f - head;
+                    _buf.Weights.Add(neck <= 0f
+                        ? new BoneWeight { boneIndex0 = (int)B.Head, weight0 = 1f }
+                        : head >= neck
+                            ? new BoneWeight { boneIndex0 = (int)B.Head, weight0 = head, boneIndex1 = (int)B.Neck, weight1 = neck }
+                            : new BoneWeight { boneIndex0 = (int)B.Neck, weight0 = neck, boneIndex1 = (int)B.Head, weight1 = head });
+                    // the painted features only go on the front of the face (the planar projection also hits the back)
+                    float front = hp.z > 0f && n.z > 0.05f ? Mathf.SmoothStep(0f, 1f, (n.z - 0.05f) / 0.25f) : 0f;
+                    _faceData.Add(new Vector4(fc.x, fc.y, fc.z, front));
                 }
-                _headPrims.Add(SdfPrim.Ellipsoid(HL(0f, -0.008f, 0.077f), new Vector3(0.026f, 0.019f, 0.02f) * hs, head, 0.025f, 0));
-                _headPrims.Add(SdfPrim.Limb(HL(0f, 0.064f, 0.112f), HL(0f, 0.038f, 0.124f), 0.006f * hs, 0.007f * hs, head, 0.012f, 0));
-
-                int skin = Slot("skin", _r.skinTone, SlotKind.Skin);
-                int face = Slot("face", Color.white, SlotKind.Face);
-                Vector3 hp = P(B.Head);
-                var part = new SdfPart("Head", 0.0088f, skin) { GroupK = 0.03f, Weights = new SkinWeightSource(head) };
-                part.Prims.AddRange(_headPrims);
-                part.Uv = (p, n) => FacePainter.FaceUv((p - hp) / hs);
-                part.Classify = (cen, nrm) =>
-                {
-                    Vector3 l = (cen - hp) / hs;
-                    return l.z > 0.015f && nrm.z > 0.1f && Mathf.Abs(l.x) < 0.112f && l.y > -0.058f && l.y < 0.178f ? face : -1;
-                };
-                SdfMesher.Polygonize(part, _buf);
+                foreach (int t in mesh.Triangles) tris.Add(start + t);
             }
 
             // ---------------------------------------------------------- hands
@@ -940,10 +1018,8 @@ namespace LightMMORPG.Characters
             }
 
             // ---------------------------------------------------------- hair
-            private static readonly Vector3 CraniumC = new(0f, 0.125f, -0.012f);
-            private static readonly Vector3 CraniumR = new(0.112f, 0.128f, 0.128f);
-            private static Vector3 Scalp(Vector3 u) => CraniumC + Vector3.Scale(u, CraniumR);
-            private static bool InHairRegion(Vector3 s) => s.y > 0.16f + 0.9f * (s.z - 0.115f) && s.y > -0.03f;
+            private Vector3 Scalp(Vector3 u) => _craniumC + Vector3.Scale(u, _craniumR);
+            private bool InHairRegion(Vector3 s) => s.y - _hairDy > 0.16f + 0.9f * (s.z - 0.115f) && s.y - _hairDy > -0.03f;
 
             public void Hair()
             {
@@ -951,10 +1027,13 @@ namespace LightMMORPG.Characters
                 int hair = Slot("hair", r.hairColor, SlotKind.Hair, r.hairTipColor);
                 // scalp cap fills the gaps between clumps
                 var cap = new SdfPart("HairCap", 0.012f, hair) { GroupK = 0.02f, Weights = new SkinWeightSource((int)B.Head) };
-                cap.Add(SdfPrim.Ellipsoid(HL(0f, 0.127f, -0.014f), (CraniumR + Vector3.one * 0.011f) * _hs, (int)B.Head, 0.02f, 0));
-                cap.Add(SdfPrim.Keep(HL(0f, 0.145f, 0.115f), new Vector3(0f, -1f, 0.9f)));
+                cap.Add(SdfPrim.Ellipsoid(HL(0f, _craniumC.y + 0.002f, _craniumC.z), (_craniumR + Vector3.one * 0.011f) * _hs, (int)B.Head, 0.02f, 0));
+                cap.Add(SdfPrim.Keep(HL(0f, 0.145f + _hairDy, 0.115f), new Vector3(0f, -1f, 0.9f)));
+                // keep the ears free
+                ToonHead.FaceAt(_toon, _toon.EarY, out float earW, out _, out _, out _);
+                float earY = ChinHL + _toon.EarY * HeadUnit, earZ = AxisZ + _toon.EarZ * HeadUnit, earX = earW * HeadUnit + 0.012f;
                 for (int side = -1; side <= 1; side += 2)
-                    cap.Add(SdfPrim.Ellipsoid(HL(side * 0.115f, 0.055f, -0.01f), new Vector3(0.035f, 0.045f, 0.04f) * _hs, -1, 0.01f, -1).WithOp(SdfOp.Subtract));
+                    cap.Add(SdfPrim.Ellipsoid(HL(side * earX, earY, earZ), new Vector3(0.035f, 0.05f, 0.04f) * _hs, -1, 0.01f, -1).WithOp(SdfOp.Subtract));
                 cap.Uv = (p, n) => new Vector2(0.5f, 0.08f);
                 Emit(cap);
 
@@ -1065,7 +1144,7 @@ namespace LightMMORPG.Characters
                 {
                     float t = bangs == 1 ? 0.5f : i / (float)(bangs - 1);
                     float x = r.hairStyle == HairStyle.SweptBack ? (i == 0 ? -0.06f : 0.045f) : Mathf.Lerp(-0.085f, 0.085f, t) + Rand(-0.006f, 0.006f);
-                    Vector3 u = new Vector3(x / 0.112f, 0.66f, 0.74f).normalized;
+                    Vector3 u = new Vector3(x / _craniumR.x, 0.66f, 0.74f).normalized;
                     Vector3 s = Scalp(u);
                     Vector3 g = r.hairStyle == HairStyle.SpikyUp || r.hairStyle == HairStyle.Wild
                         ? new Vector3(x * 4f + Rand(-0.2f, 0.2f), -0.55f, 0.85f).normalized
@@ -1098,8 +1177,13 @@ namespace LightMMORPG.Characters
                 for (int i = 0; i < bones.Length; i++) bones[i] = _p[i] * s;
 
                 while (_buf.Triangles.Count < _slots.Count) _buf.Triangles.Add(new List<int>());
+                var faceCoords = new Vector4[pos.Count];
+                if (_faceStart >= 0) for (int i = 0; i < _faceData.Count; i++) faceCoords[_faceStart + i] = _faceData[i];
+                var tangents = new Vector4[pos.Count];
+                for (int i = 0; i < tangents.Length; i++) tangents[i] = new Vector4(1f, 0f, 0f, 1f);
                 return new GeneratedCharacter
                 {
+                    FaceCoords = faceCoords, Tangents = tangents, HeadShape = _toon,
                     Name = _r.displayName,
                     Positions = pos.ToArray(), Normals = _buf.Normals.ToArray(), Uvs = _buf.Uvs.ToArray(), Weights = _buf.Weights.ToArray(),
                     Triangles = _buf.Triangles.GetRange(0, _slots.Count).ToArray(),
