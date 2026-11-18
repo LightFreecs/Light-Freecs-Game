@@ -178,11 +178,7 @@ namespace LightMMORPG.Characters
             }
 
             // ---------------------------------------------------------------- base layer
-            /// <param name="layerY">
-            /// When &gt; 0: at the back the base layer stops at this bench height as a top layer, its lower edge cut in points
-            /// and lifted off the head by <paramref name="lip"/>, so the lower hair (<see cref="UnderLayer"/>) comes out from under it.
-            /// </param>
-            private void Shell(float[][] hairline, float capOff, float capTop, float tuck, float layerY = -1f, float lip = 0f)
+            private void Shell(float[][] hairline, float capOff, float capTop, float tuck)
             {
                 const int N = 64, R = 20;
                 int crown = G.Push(new Vector3(0f, H.Top + capOff, 0f), 0.04f);
@@ -194,19 +190,12 @@ namespace LightMMORPG.Characters
                     for (int j = 0; j < N; j++)
                     {
                         float th = -Mathf.PI + 2f * Mathf.PI * j / N, deg = th * Mathf.Rad2Deg, h = Hairline(hairline, deg);
-                        float back = layerY > 0f ? Smooth((Mathf.Abs(deg) - 112f) / 18f) : 0f;
-                        if (layerY > 0f && Mathf.Abs(deg) >= 110f)
-                        {
-                            float tooth = 1f - Mathf.Abs(j % 4 - 2) / 2f;   // a point every 4th column
-                            h = Mathf.Max(h, layerY - 0.07f * tooth * back);
-                        }
                         float phiEnd = h >= 0.5f ? Mathf.Acos(Mathf.Min(1f, (h - 0.5f) / 0.5f)) : Mathf.PI / 2f, dome = 0.5f * phiEnd;
                         float L = dome + Mathf.Max(0f, 0.5f - h), d = s * L;
                         float y = d <= dome ? 0.5f + 0.5f * Mathf.Cos(d / 0.5f) : 0.5f - (d - dome);
                         var p = ToonHead.Surface(H, th, Fit(deg, y));
                         float tk = tuck > 0f ? Lerp(tuck, 1f, Smooth((y - 0.3f) / 0.3f)) : 1f;
                         float off = (capOff * (1f - 0.6f * Smooth((s - 0.75f) / 0.25f)) + capTop * (1f - s) * (1f - s)) * tk;
-                        off += lip * back * Smooth((s - 0.7f) / 0.3f);
                         row[j] = G.Push(p + Outward(p) * off, 0.04f + 0.08f * s);
                     }
                     rows.Add(row);
@@ -219,7 +208,6 @@ namespace LightMMORPG.Characters
                         int a = rows[r][j], b = rows[r][(j + 1) % N], c = rows[r + 1][(j + 1) % N], d = rows[r + 1][j];
                         t.AddRange(new[] { a, d, c, a, c, b });
                     }
-                if (layerY > 0f) UnderLayer(hairline, layerY, capOff * 0.4f);
                 Underside();
             }
 
@@ -228,20 +216,25 @@ namespace LightMMORPG.Characters
             /// of pointed locks at <paramref name="edge"/>, each lock leaning back a little and lifting off the head toward its
             /// tip (by <paramref name="lip"/>) so the layer below shows from under it. <paramref name="phase"/> 2 puts the points
             /// between the points of a phase-0 layer. Where the hairline comes down past the edge the layer lies flat.
+            /// <para>The layer is a closed slab (a top side and an underside meeting at the pointed edge), like the blades:
+            /// the inverted-hull outline only draws round closed shapes, so an open sheet would melt into the hair under it.</para>
             /// </summary>
             private void Tier(float[][] hairline, float y0, float edge, float depth, float lip, int phase, float off, float lean = 12f)
             {
                 const int N = 80, R = 12;   // 20 locks round the head
+                const float under = 0.012f; // the underside starts this far below the top side
                 static float Hash(float key)
                 {
                     double v = Math.Sin(key * 12.9898) * 43758.5453;
                     return (float)(v - Math.Floor(v));
                 }
-                var rows = new List<int[]>();
+                var top = new List<int[]>();
+                var bot = new List<int[]>();
                 for (int i = 0; i <= R; i++)
                 {
                     float s = i / (float)R;
-                    var row = new int[N];
+                    var rowT = new int[N];
+                    var rowB = new int[N];
                     for (int j = 0; j < N; j++)
                     {
                         float deg0 = -180f + 360f * j / N, deg = deg0 + lean * s * Mathf.Sin(Rad(deg0));
@@ -251,49 +244,32 @@ namespace LightMMORPG.Characters
                         float centre = Mathf.Abs(deg0 + 360f / N * (2 - k));
                         if (centre > 180f) centre = 360f - centre;
                         float tip = depth * (0.7f + 0.6f * Hash(Mathf.Round(centre) + edge * 100f));
-                        float h = Mathf.Max(hl, edge - tip * tooth), top = Mathf.Max(y0, h + 0.03f);
-                        float room = Smooth((edge - hl) / (depth + 0.04f));
-                        row[j] = G.Push(S(deg, Lerp(top, h, s), off + lip * room * s * s), 0.04f + 0.08f * s);
+                        float h = Mathf.Max(hl, edge - tip * tooth), yt = Mathf.Max(y0, h + 0.03f), y = Lerp(yt, h, s);
+                        float room = Smooth((edge - hl) / (depth + 0.04f)), rise = lip * room;
+                        float along = 0.1f + 0.85f * s * room;   // where the layer lies flat it keeps the base colour
+                        rowT[j] = G.Push(S(deg, y, off + rise * s * s), along);
+                        // underside: shares the pointed edge (last row), elsewhere sits a little lower and rises late
+                        rowB[j] = i == R ? rowT[j] : G.Push(S(deg, y, off - under + (rise + under) * s * s * s * s), along);
                     }
-                    rows.Add(row);
+                    top.Add(rowT);
+                    bot.Add(rowB);
                 }
                 var t = G.Triangles;
                 for (int r = 0; r < R; r++)
                     for (int j = 0; j < N; j++)
                     {
-                        int a = rows[r][j], b = rows[r][(j + 1) % N], c = rows[r + 1][(j + 1) % N], d = rows[r + 1][j];
+                        int jn = (j + 1) % N;
+                        int a = top[r][j], b = top[r][jn], c = top[r + 1][jn], d = top[r + 1][j];
                         t.AddRange(new[] { a, d, c, a, c, b });
+                        a = bot[r][j]; b = bot[r][jn]; c = bot[r + 1][jn]; d = bot[r + 1][j];
+                        t.AddRange(new[] { a, c, d, a, b, c });   // facing the head
                     }
-            }
-
-            /// <summary>
-            /// The lower hair at the back: a layer close to the head that starts hidden under the top layer's edge (above
-            /// <paramref name="top"/>) and runs down to the hairline, where <see cref="Underside"/> carries it on under the skull.
-            /// </summary>
-            private void UnderLayer(float[][] hairline, float top, float off)
-            {
-                const int M = 24, R = 10;
-                var rows = new List<int[]>();
-                for (int i = 0; i <= R; i++)
+                // close the top: the top side and the underside joined along the first row
+                for (int j = 0; j < N; j++)
                 {
-                    float s = i / (float)R;
-                    var row = new int[M + 1];
-                    for (int j = 0; j <= M; j++)
-                    {
-                        float deg = 114f + 132f * j / M;
-                        if (deg > 180f) deg -= 360f;
-                        float h = Hairline(hairline, deg), y0 = Mathf.Max(top, h) + 0.08f;
-                        row[j] = G.Push(S(deg, Lerp(y0, h, s), off), 0.04f + 0.08f * s);
-                    }
-                    rows.Add(row);
+                    int jn = (j + 1) % N, a = top[0][j], b = top[0][jn], c = bot[0][jn], d = bot[0][j];
+                    t.AddRange(new[] { a, b, c, a, c, d });
                 }
-                var t = G.Triangles;
-                for (int r = 0; r < R; r++)
-                    for (int j = 0; j < M; j++)
-                    {
-                        int a = rows[r][j], b = rows[r][j + 1], c = rows[r + 1][j + 1], d = rows[r + 1][j];
-                        t.AddRange(new[] { a, d, c, a, c, b });
-                    }
             }
 
             /// <summary>
@@ -538,9 +514,12 @@ namespace LightMMORPG.Characters
             /// <summary>Light: the owner's Blockbench hair (mirrored) on a clean hairline, fill blades over the top front and sides.</summary>
             public void Light()
             {
-                Shell(HairlineFull, 0.025f, 0f, 0f, 0.42f, 0.05f);
-                Tier(HairlineFull, 1f, 0.82f, 0.09f, 0.035f, 0, 0.037f);     // from the crown
-                Tier(HairlineFull, 0.88f, 0.64f, 0.1f, 0.035f, 2, 0.037f);   // the middle layer, points between the ones above
+                Shell(HairlineFull, 0.025f, 0f, 0f);
+                // three layers of pointed locks over the dome, each tucked under the one above
+                // (each layer starts a little further out than the one under it, so they never sit at the same height)
+                Tier(HairlineFull, 1f, 0.82f, 0.09f, 0.05f, 0, 0.048f);      // from the crown
+                Tier(HairlineFull, 0.88f, 0.64f, 0.1f, 0.05f, 2, 0.04f);     // middle, points between the ones above
+                Tier(HairlineFull, 0.72f, 0.44f, 0.1f, 0.055f, 0, 0.034f);   // the back, behind the ears
                 int from = G.Positions.Count;
                 Imported();
                 foreach (var (th, w) in new[] { (-26f, 0.4f), (0f, 0.44f), (26f, 0.4f) })
