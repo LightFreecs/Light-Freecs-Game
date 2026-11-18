@@ -9,8 +9,8 @@ using UnityEngine.UI;
 namespace LightMMORPG.Menu
 {
     /// <summary>
-    /// Customize (Fighters item), design bench <c>docs/bench/customize-ui.html</c>, "Bevel" style: a square-cornered
-    /// panel on the right, five icon tabs (Eyes, Head, Jaw &amp; Chin, Nose &amp; Mouth, Ears &amp; Neck), eye-style tiles
+    /// Customize (Fighters item), design bench <c>docs/bench/customize-ui.html</c>, "Bevel" style with no panel: five
+    /// icon tabs floating along the top left, Random top right, and a frameless column on the right with (Eyes, Head, Jaw &amp; Chin, Nose &amp; Mouth, Ears &amp; Neck), eye-style tiles
     /// showing the real painted eyes, slider rows with − / + buttons, a centred fill, a value tag and a per-row reset,
     /// and Random / Reset all / Done. Buttons are 9-sliced boxes with two cut corners (<see cref="MenuUi.BevelFill"/>).
     /// Keys: Z / C or LB / RB switch tabs, R / Y random, Backspace / X reset all, Enter / Start done, Esc / B done.
@@ -73,20 +73,26 @@ namespace LightMMORPG.Menu
         private void BuildCustomizeDialog(RectTransform parent)
         {
             _custDlg = Group("Customize", parent);
-            var panelImg = Panel(_custDlg.transform, "Panel", new Vector2(CustPW, 860f), 6, p => p.dialog, p => A(p.accent, 0.4f), 1.5f);
-            panelImg.raycastTarget = true;
-            var panel = panelImg.rectTransform;
-            var strip = MenuUi.Img(panel, "Strip", null, Color.white);
-            TL(strip.rectTransform, CustPad, 1f, 140f, 3f);
-            Bind(p => strip.color = p.accent);
+            // no panel: tabs float along the top-left, Random in the top-right corner, and the style tiles / sliders / footer
+            // float in a frameless column on the right; text gets drop shadows so it reads over the sky
+            var panel = MenuUi.Rect("Column", _custDlg.transform);
 
-            var title = MenuUi.Label(panel, "Title", "CUSTOMIZE", T.lightFont, 46, Color.white, TextAnchor.MiddleLeft, 0.14f);
-            TL(title.rectTransform, CustPad, -34f, 520f, 54f);
-            _custStatus = MenuUi.Label(panel, "Status", "", T.bodyFont, 21, A(Color.white, 0.65f), TextAnchor.MiddleLeft);
-            TL(_custStatus.rectTransform, CustPad, -90f, 560f, 28f);
+            // tab bar (top left)
+            const float tabH = 82f, tw = 160f, slot = 48f, gap = 8f;
+            float barW = slot * 2f + tw * CustTabs.Length + gap * (CustTabs.Length - 1);
+            var bar = MenuUi.Rect("TabBar", _custDlg.transform)
+                .Place(new Vector2(T.edgeMargin, 1f - T.cornerTop), new Vector2(0f, 1f), Vector2.zero, new Vector2(barW, tabH + 40f));
+            var prev = KeyGlyph(bar, "Z", "LB", null);
+            prev.Place(new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(0f, -tabH * 0.5f), Vector2.zero);
+            var next = KeyGlyph(bar, "C", "RB", null);
+            next.Place(new Vector2(0f, 1f), new Vector2(1f, 0.5f), new Vector2(barW, -tabH * 0.5f), Vector2.zero);
+            _custStatus = MenuUi.Label(bar, "Status", "", T.bodyFont, 21, A(Color.white, 0.8f), TextAnchor.MiddleLeft);
+            TL(_custStatus.rectTransform, slot, -tabH - 10f, 700f, 28f);
+            Shade(_custStatus);
 
             // Random (top right)
-            _custRandom = CustomButton(panel, "Random", new Vector2(CustPW - CustPad - 200f, -38f), new Vector2(200f, 52f), 8, Randomize);
+            _custRandom = CustomButton(_custDlg.transform as RectTransform, "Random", Vector2.zero, new Vector2(200f, 52f), 8, Randomize);
+            _custRandom.rt.Place(new Vector2(1f - T.edgeMargin, 1f - T.cornerTop), new Vector2(1f, 1f), Vector2.zero, new Vector2(200f, 52f));
             var dice = Icon(_custRandom, MenuUi.IconKind.Dice, 26f);
             dice.rectTransform.Place(new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(16f, 0f), new Vector2(26f, 26f));
             var rl = MenuUi.Label(_custRandom.rt, "Label", "RANDOM", T.bodyFont, 17, Color.white, TextAnchor.MiddleLeft, 0.12f);
@@ -94,17 +100,10 @@ namespace LightMMORPG.Menu
             _custRandom.ink.Add((rl, 1f));
             KeyGlyph(_custRandom.rt, "R", "Y", _custRandom).Place(new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-12f, 0f), Vector2.zero);
 
-            // tabs
-            const float tabY = -128f, tabH = 82f, slot = 48f, gap = 8f;
-            float tw = (CustW - slot * 2f - gap * (CustTabs.Length - 1)) / CustTabs.Length;
-            var prev = KeyGlyph(panel, "Z", "LB", null);
-            prev.Place(new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(CustPad, tabY - tabH * 0.5f), Vector2.zero);
-            var next = KeyGlyph(panel, "C", "RB", null);
-            next.Place(new Vector2(0f, 1f), new Vector2(1f, 0.5f), new Vector2(CustPad + CustW, tabY - tabH * 0.5f), Vector2.zero);
             for (int i = 0; i < CustTabs.Length; i++)
             {
                 int ti = i;
-                var b = CustomButton(panel, "Tab_" + CustTabs[i].name, new Vector2(CustPad + slot + i * (tw + gap), tabY), new Vector2(tw, tabH), 9,
+                var b = CustomButton(bar, "Tab_" + CustTabs[i].name, new Vector2(slot + i * (tw + gap), 0f), new Vector2(tw, tabH), 9,
                     () => SetCustTab(ti, false), () => _custTab == ti);
                 var ic = Icon(b, CustTabs[i].icon, 30f);
                 ic.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -12f), new Vector2(30f, 30f));
@@ -117,11 +116,8 @@ namespace LightMMORPG.Menu
                 _tabDots.Add(dot);
                 _tabButtons.Add(b);
             }
-            var rule = MenuUi.Img(panel, "Rule", null, A(Color.white, 0.2f));
-            TL(rule.rectTransform, CustPad, tabY - tabH - 14f, CustW, 1f);
-
             // pages
-            const float bodyY = -244f;
+            const float bodyY = 0f;
             for (int t = 0; t < CustTabs.Length; t++)
             {
                 var page = TL(MenuUi.Rect("Page_" + CustTabs[t].name, panel), CustPad, bodyY, CustW, 500f);
@@ -176,7 +172,7 @@ namespace LightMMORPG.Menu
             _custDone = CustomButton(panel, "Done", new Vector2(CustPad + rw + 16f, fy), new Vector2(CustW - rw - 16f, 68f), 12, CloseCustomize, primary: true);
             FooterContent(_custDone, MenuUi.IconKind.Check, "DONE", T.boldFont, "Enter", "Start");
             float height = -(fy - 68f - 34f);
-            panel.Place(new Vector2(1f - T.edgeMargin, 0.5f), new Vector2(1f, 0.5f), Vector2.zero, new Vector2(CustPW, height));
+            panel.Place(new Vector2(1f - T.edgeMargin, 0.5f), new Vector2(1f, 0.5f), new Vector2(CustPad, 0f), new Vector2(CustPW, height)); // content edge lines up with Random
 
             Bind(_ => { RefreshCust(); foreach (var r in _faceRows) ShowSliderValue(r); });
             SetCustTab(0, false);
@@ -186,7 +182,15 @@ namespace LightMMORPG.Menu
         {
             var head = MenuUi.Label(page, "Head_" + text, text, T.boldFont, 19, Color.white, TextAnchor.MiddleLeft, 0.2f);
             TL(head.rectTransform, 0f, y, 400f, 26f);
+            Shade(head);
             Bind(p => head.color = p.newsHeader);
+        }
+
+        /// <summary>Drop shadow in the sky's text-shadow colour, so frameless text reads over bright clouds.</summary>
+        private void Shade(Graphic g)
+        {
+            var s = MenuUi.AddShadow(g, Color.black, new Vector2(0f, -2f));
+            Bind(p => s.effectColor = p.textShadow);
         }
 
         private void FooterContent(CustButton b, MenuUi.IconKind icon, string label, Font font, string kb, string pad)
@@ -257,6 +261,7 @@ namespace LightMMORPG.Menu
             r.highlight.rectTransform.Fill();
             r.label = MenuUi.Label(root, "Label", def.Label, T.bodyFont, 22, Color.white, TextAnchor.MiddleLeft);
             TL(r.label.rectTransform, 12f, 0f, 200f, RowH);
+            Shade(r.label);
 
             const float step = 48f, valueW = 150f;
             float plusX = CustW - 12f - valueW - 10f - step, trackX = 222f + step + 12f, trackW = plusX - 12f - trackX;
@@ -269,7 +274,7 @@ namespace LightMMORPG.Menu
             var area = MenuUi.Img(root, "Track", null, Color.clear);
             area.raycastTarget = true;
             TL(area.rectTransform, trackX, -(RowH - 40f) * 0.5f, trackW, 40f);
-            var bg = MenuUi.Img(area.transform, "Bg", null, A(Color.white, 0.16f));
+            var bg = MenuUi.Img(area.transform, "Bg", null, A(Color.white, 0.3f));
             bg.rectTransform.anchorMin = new Vector2(0f, 0.5f);
             bg.rectTransform.anchorMax = new Vector2(1f, 0.5f);
             bg.rectTransform.sizeDelta = new Vector2(0f, 4f);
@@ -279,10 +284,12 @@ namespace LightMMORPG.Menu
             r.fill.rectTransform.sizeDelta = new Vector2(0f, 4f);
             var tick = MenuUi.Img(area.transform, "Centre", null, A(Color.white, 0.45f));
             tick.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(1.5f, 18f));
-            var lo = MenuUi.Label(area.transform, "Low", def.Low, T.bodyFont, 13, A(Color.white, 0.4f), TextAnchor.LowerLeft);
+            var lo = MenuUi.Label(area.transform, "Low", def.Low, T.bodyFont, 13, A(Color.white, 0.6f), TextAnchor.LowerLeft);
             lo.rectTransform.Place(new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 2f), new Vector2(120f, 16f));
-            var hi = MenuUi.Label(area.transform, "High", def.High, T.bodyFont, 13, A(Color.white, 0.4f), TextAnchor.LowerRight);
+            var hi = MenuUi.Label(area.transform, "High", def.High, T.bodyFont, 13, A(Color.white, 0.6f), TextAnchor.LowerRight);
             hi.rectTransform.Place(new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(0f, 2f), new Vector2(120f, 16f));
+            Shade(lo);
+            Shade(hi);
             var handleArea = MenuUi.Rect("HandleArea", area.transform).Fill();
             var handleEdge = MenuUi.Img(handleArea, "Handle", null, new Color(0f, 0f, 0f, 0.45f));
             handleEdge.rectTransform.anchorMin = handleEdge.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
@@ -317,6 +324,7 @@ namespace LightMMORPG.Menu
             r.chipEdge.rectTransform.Fill();
             r.value = MenuUi.Label(r.chipRt, "Text", "", T.bodyFont, 17, Color.white);
             r.value.rectTransform.Fill();
+            Shade(r.value);
             r.undo = CustomButton(root, "Undo", new Vector2(CustW - 12f - 34f, -(RowH - 34f) * 0.5f), new Vector2(34f, 34f), -1, () => r.s.value = 0f);
             Icon(r.undo, MenuUi.IconKind.Undo, 20f);
 

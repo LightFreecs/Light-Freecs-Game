@@ -492,3 +492,8 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     done; key hints follow the last device and hide on touch. Q / E still turn the fighter.
   - `-menuCapture` adds `Customize_Jaw` (Dusk, Jaw & Chin tab); `ShowCustomize(face, tab)`.
   - Verified: headless compile clean. Not run here (owner tests by hand): tests, build, screenshots, feel.
+- Customize: panel removed (owner's sketch). Tabs float in a top-left bar (Z / C hints, "Drag your fighter" hint
+  under them), Random sits in the top-right corner, and style tiles / sliders / Reset all / Done float in a frameless
+  column on the right whose content edge lines up with Random. Frameless text has sky-coloured drop shadows
+  (`Shade`), the slider track and low/high labels are a bit brighter. No CUSTOMIZE title any more.
+  - Verified: headless compile clean. Not run here (owner tests by hand).
