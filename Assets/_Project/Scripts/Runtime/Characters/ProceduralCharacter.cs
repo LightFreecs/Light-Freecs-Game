@@ -44,7 +44,7 @@ namespace LightMMORPG.Characters
             return Generate(CharacterPresets.ForPalette(paletteIndex));
         }
 
-        /// <summary>The palette's hero with a player's face choices (face part sliders).</summary>
+        /// <summary>The palette's hero with a player's face choices (eye style + Toon Head sliders).</summary>
         public CharacterRig GenerateForPalette(int paletteIndex, FaceCustomization face)
         {
             _presetIndex = paletteIndex;

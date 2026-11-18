@@ -16,7 +16,7 @@ namespace LightMMORPG.Menu
     /// small sun), player card + currency (top-left), Friends / Settings / Quit icons (top-right), patch news (right),
     /// toasts, the Play Online dialog (Quick Match placeholder, Host, Join by IP, Server Only), Settings (sky picker,
     /// graphics, frame rate, look, key bindings; see MainMenuUI.Settings.cs), the Controls (rebinding) dialog and
-    /// Customize (Fighters item: jaw / chin / nose / ear sliders on the right, the camera closes in on the face).
+    /// Customize (Fighters item: eye style + Toon Head sliders on the right, the camera closes in on the face).
     /// All sizes are 1920×1080 reference pixels from <see cref="MenuTheme"/>; the canvas is Screen Space – Camera on the
     /// menu camera (so screenshots of a RenderTexture include it) and the content sits inside the safe area.
     /// Keyboard / gamepad navigate with explicit Selectable navigation; mouse hover selects; touch taps.
@@ -45,6 +45,7 @@ namespace LightMMORPG.Menu
         private MenuFighter _fighter;
         private FaceCustomization _face;
         private readonly List<(Slider s, Text label, Text value, Image handle, int index)> _faceSliders = new();
+        private readonly List<GlowSelectable> _eyeButtons = new();
         private GlowSelectable _custDone;
         private Text _custStatus;
         private readonly List<Action<SkyPreset>> _recolor = new();
@@ -674,45 +675,11 @@ namespace LightMMORPG.Menu
 
         // ---------------- customize (Fighters) ----------------
 
-        private static readonly (string label, string lo, string hi)[] FaceSliderDefs =
-        {
-            ("Jaw width", "Narrow", "Wide"), ("Jaw length", "Short", "Long"), ("Jaw position", "Back", "Forward"),
-            ("Jaw thickness", "Slim", "Heavy"), ("Chin size", "Small", "Large"), ("Chin length", "Short", "Long"),
-            ("Chin position", "Back", "Forward"), ("Nose size", "Small", "Large"), ("Nose length", "Short", "Long"),
-            ("Nose height", "Low", "High"), ("Ear size", "Small", "Large"), ("Ear height", "Low", "High"),
-            ("Ear angle", "Flat", "Out"),
-        };
-
-        private static float GetSlider(in FaceSliders f, int i) => i switch
-        {
-            0 => f.jawWidth, 1 => f.jawLength, 2 => f.jawForward, 3 => f.jawThickness, 4 => f.chinSize, 5 => f.chinLength,
-            6 => f.chinForward, 7 => f.noseSize, 8 => f.noseLength, 9 => f.noseHeight, 10 => f.earSize, 11 => f.earHeight,
-            _ => f.earFlare,
-        };
-
-        private static void SetSlider(ref FaceSliders f, int i, float v)
-        {
-            switch (i)
-            {
-                case 0: f.jawWidth = v; break;
-                case 1: f.jawLength = v; break;
-                case 2: f.jawForward = v; break;
-                case 3: f.jawThickness = v; break;
-                case 4: f.chinSize = v; break;
-                case 5: f.chinLength = v; break;
-                case 6: f.chinForward = v; break;
-                case 7: f.noseSize = v; break;
-                case 8: f.noseLength = v; break;
-                case 9: f.noseHeight = v; break;
-                case 10: f.earSize = v; break;
-                case 11: f.earHeight = v; break;
-                default: f.earFlare = v; break;
-            }
-        }
+        private const int FaceRows = 8;
 
         private void BuildCustomizeDialog(RectTransform parent)
         {
-            const float pw = 840f;
+            const float pw = 1040f;
             float w = pw - 80f;
             _custDlg = Group("Customize", parent);
             var panelImg = Panel(_custDlg.transform, "Panel", new Vector2(pw, 900f), 36, p => p.dialog, p => p.accent, 3f);
@@ -724,62 +691,104 @@ namespace LightMMORPG.Menu
             _custStatus = MenuUi.Label(panel, "Blurb", "", T.bodyFont, 24, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleLeft);
             _custStatus.rectTransform.Place(new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(40f, -100f), new Vector2(w, 32f));
 
+            // eyes: any style on the one hero
             float y = -140f;
-            var faceHead = MenuUi.Label(panel, "FaceHead", "FACE", T.boldFont, 22, Color.white, TextAnchor.MiddleLeft, 0.2f);
-            faceHead.rectTransform.Place(new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(40f, y), new Vector2(300f, 30f));
-            Bind(p => faceHead.color = p.newsHeader);
-            y -= 34f;
-            const int rows = 7;
-            const float rowH = 84f, gap = 40f;
-            float colW = (w - gap) * 0.5f;
-            for (int i = 0; i < FaceSliderDefs.Length; i++)
+            SectionHeader(panel, "EyesHead", "EYES", y);
+            y -= 32f;
+            const float eyeGap = 12f;
+            int eyeCount = PlayerAppearance.EyeNames.Length;
+            float ew = (w - eyeGap * (eyeCount - 1)) / eyeCount;
+            for (int i = 0; i < eyeCount; i++)
             {
-                int col = i / rows, row = i % rows;
+                var style = (ToonEyeStyle)i;
+                float x = -w * 0.5f + ew * 0.5f + i * (ew + eyeGap);
+                var b = DialogButton(panel, PlayerAppearance.EyeNames[i], null, y, ew, 56f, () => { _face.eyeStyle = style; RefreshEyeButtons(); FaceChanged(); }, x, centred: true);
+                var glow = b.OnGlow;
+                b.OnGlow = g => glow(Mathf.Max(g, _face.eyeStyle == style ? 0.5f : 0f));
+                _eyeButtons.Add(b);
+            }
+            y -= 56f + 20f;
+
+            // head sliders (the Toon Head bench sliders), three columns
+            SectionHeader(panel, "FaceHead", "HEAD & FACE", y);
+            y -= 30f;
+            const float rowH = 70f, gap = 32f;
+            float colW = (w - gap * 2f) / 3f;
+            for (int i = 0; i < PlayerAppearance.Sliders.Length; i++)
+            {
+                int col = i / FaceRows, row = i % FaceRows;
                 float x = -w * 0.5f + colW * 0.5f + col * (colW + gap);
                 BuildFaceSlider(panel, i, x, y - row * rowH, colW);
             }
-            y -= rows * rowH + 16f;
+            y -= FaceRows * rowH + 10f;
 
             float hw = (w - 16f) * 0.5f;
-            var reset = DialogButton(panel, "Reset", null, y, hw, 80f, () => { _face.sliders = default; SyncFaceControls(); FaceChanged(); }, -hw * 0.5f - 8f, centred: true);
-            _custDone = DialogButton(panel, "Done", null, y, hw, 80f, CloseCustomize, hw * 0.5f + 8f, centred: true);
-            y -= 80f + 40f;
+            var reset = DialogButton(panel, "Reset", null, y, hw, 68f, () => { _face = default; SyncFaceControls(); FaceChanged(); }, -hw * 0.5f - 8f, centred: true);
+            _custDone = DialogButton(panel, "Done", null, y, hw, 68f, CloseCustomize, hw * 0.5f + 8f, centred: true);
+            y -= 68f + 32f;
             panel.Place(new Vector2(1f - T.edgeMargin, 0.5f), new Vector2(1f, 0.5f), Vector2.zero, new Vector2(pw, -y));
 
-            // navigation: two slider columns -> Reset / Done (up from the top row wraps to the buttons)
-            Selectable At(int i) => _faceSliders[i].s;
-            for (int i = 0; i < _faceSliders.Count; i++)
+            // navigation: eye row -> three slider columns -> Reset / Done (wrapping bottom -> top)
+            int n = _faceSliders.Count;
+            Selectable At(int i) => _faceSliders[Mathf.Clamp(i, 0, n - 1)].s;
+            Selectable EyeFor(int col) => _eyeButtons[Mathf.Min(_eyeButtons.Count - 1, col == 0 ? 0 : col + 1)];
+            Selectable BottomFor(int col) => col == 0 ? reset : _custDone;
+            int ColTop(int col) => Mathf.Min(col * FaceRows, n - 1);
+            for (int i = 0; i < _eyeButtons.Count; i++)
             {
-                int col = i / rows, row = i % rows;
-                var n = At(i).navigation;
-                n.mode = Navigation.Mode.Explicit;
-                n.selectOnUp = row > 0 ? At(i - 1) : (col == 0 ? reset : _custDone);
-                n.selectOnDown = row < rows - 1 && i + 1 < _faceSliders.Count ? At(i + 1) : (col == 0 ? reset : _custDone);
-                At(i).navigation = n;
+                var nav = _eyeButtons[i].navigation;
+                nav.mode = Navigation.Mode.Explicit;
+                int col = i <= 1 ? 0 : i - 1;
+                nav.selectOnLeft = i > 0 ? _eyeButtons[i - 1] : null;
+                nav.selectOnRight = i < _eyeButtons.Count - 1 ? _eyeButtons[i + 1] : null;
+                nav.selectOnDown = At(ColTop(col));
+                nav.selectOnUp = BottomFor(col);
+                _eyeButtons[i].navigation = nav;
             }
-            var nr = reset.navigation; nr.selectOnUp = At(rows - 1); nr.selectOnDown = At(0); nr.selectOnRight = _custDone; reset.navigation = nr;
-            var nd = _custDone.navigation; nd.selectOnUp = At(Mathf.Min(_faceSliders.Count - 1, 2 * rows - 1)); nd.selectOnDown = At(Mathf.Min(rows, _faceSliders.Count - 1)); nd.selectOnLeft = reset; _custDone.navigation = nd;
+            for (int i = 0; i < n; i++)
+            {
+                int col = i / FaceRows, row = i % FaceRows;
+                var nav = At(i).navigation;
+                nav.mode = Navigation.Mode.Explicit;
+                nav.selectOnUp = row > 0 ? At(i - 1) : EyeFor(col);
+                nav.selectOnDown = row < FaceRows - 1 && i + 1 < n ? At(i + 1) : BottomFor(col);
+                At(i).navigation = nav;
+            }
+            var nr = reset.navigation; nr.mode = Navigation.Mode.Explicit; nr.selectOnUp = At(FaceRows - 1); nr.selectOnDown = _eyeButtons[0]; nr.selectOnRight = _custDone; reset.navigation = nr;
+            var nd = _custDone.navigation; nd.mode = Navigation.Mode.Explicit; nd.selectOnUp = At(n - 1); nd.selectOnDown = _eyeButtons[_eyeButtons.Count - 1]; nd.selectOnLeft = reset; _custDone.navigation = nd;
+        }
+
+        private void SectionHeader(RectTransform panel, string name, string text, float y)
+        {
+            var head = MenuUi.Label(panel, name, text, T.boldFont, 22, Color.white, TextAnchor.MiddleLeft, 0.2f);
+            head.rectTransform.Place(new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(40f, y), new Vector2(400f, 30f));
+            Bind(p => head.color = p.newsHeader);
+        }
+
+        private void RefreshEyeButtons()
+        {
+            foreach (var b in _eyeButtons) b.OnGlow?.Invoke(b.Glow);
         }
 
         private void BuildFaceSlider(RectTransform panel, int index, float x, float y, float width)
         {
-            var def = FaceSliderDefs[index];
-            var root = MenuUi.Rect("Slider_" + def.label, panel).Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(x, y), new Vector2(width, 80f));
-            var label = MenuUi.Label(root, "Label", def.label, T.boldFont, 26, Color.white, TextAnchor.MiddleLeft);
-            label.rectTransform.Place(new Vector2(0f, 1f), new Vector2(0f, 1f), Vector2.zero, new Vector2(width * 0.6f, 32f));
-            var value = MenuUi.Label(root, "Value", "", T.bodyFont, 21, new Color(1f, 1f, 1f, 0.6f), TextAnchor.MiddleRight);
-            value.rectTransform.Place(new Vector2(1f, 1f), new Vector2(1f, 1f), Vector2.zero, new Vector2(width * 0.5f, 32f));
+            var def = PlayerAppearance.Sliders[index];
+            var root = MenuUi.Rect("Slider_" + def.Label, panel).Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(x, y), new Vector2(width, 70f));
+            var label = MenuUi.Label(root, "Label", def.Label, T.boldFont, 23, Color.white, TextAnchor.MiddleLeft);
+            label.rectTransform.Place(new Vector2(0f, 1f), new Vector2(0f, 1f), Vector2.zero, new Vector2(width * 0.62f, 28f));
+            var value = MenuUi.Label(root, "Value", "", T.bodyFont, 19, new Color(1f, 1f, 1f, 0.6f), TextAnchor.MiddleRight);
+            value.rectTransform.Place(new Vector2(1f, 1f), new Vector2(1f, 1f), Vector2.zero, new Vector2(width * 0.5f, 28f));
 
             // hit area (the Slider's target graphic), track, centre tick, fill and handle
             var area = MenuUi.Img(root, "Track", null, Color.clear);
             area.raycastTarget = true;
-            area.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, -56f), new Vector2(width - 30f, 40f));
+            area.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 0.5f), new Vector2(0f, -50f), new Vector2(width - 30f, 36f));
             var track = MenuUi.Img(area.transform, "Bg", MenuUi.RoundedRect(5), new Color(0f, 0f, 0f, 0.3f), true);
             track.rectTransform.anchorMin = new Vector2(0f, 0.5f);
             track.rectTransform.anchorMax = new Vector2(1f, 0.5f);
             track.rectTransform.sizeDelta = new Vector2(0f, 10f);
             var tick = MenuUi.Img(area.transform, "Centre", null, new Color(1f, 1f, 1f, 0.45f));
-            tick.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(3f, 24f));
+            tick.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(3f, 22f));
             var fillArea = MenuUi.Rect("FillArea", area.transform);
             fillArea.anchorMin = new Vector2(0f, 0.5f);
             fillArea.anchorMax = new Vector2(1f, 0.5f);
@@ -790,7 +799,7 @@ namespace LightMMORPG.Menu
             var handleArea = MenuUi.Rect("HandleArea", area.transform).Fill();
             var handle = MenuUi.Img(handleArea, "Handle", MenuUi.Disc(), Color.white);
             handle.rectTransform.anchorMin = handle.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
-            handle.rectTransform.sizeDelta = new Vector2(34f, -6f); // the Slider stretches the handle over the 40 px area height
+            handle.rectTransform.sizeDelta = new Vector2(30f, -6f); // the Slider stretches the handle over the 36 px area height
 
             var s = area.gameObject.AddComponent<Slider>();
             s.transition = Selectable.Transition.None;
@@ -805,8 +814,8 @@ namespace LightMMORPG.Menu
             int idx = index;
             s.onValueChanged.AddListener(v =>
             {
-                v = Mathf.Abs(v) < 0.04f ? 0f : v; // easy to drop back onto the preset
-                SetSlider(ref _face.sliders, idx, v);
+                v = Mathf.Abs(v) < 0.04f ? 0f : v; // easy to drop back onto the default
+                _face.sliders[idx] = v;
                 ShowSliderValue(idx, v);
                 FaceChanged();
             });
@@ -817,21 +826,22 @@ namespace LightMMORPG.Menu
         private void ShowSliderValue(int i, float v)
         {
             if (i >= _faceSliders.Count) return;
-            var def = FaceSliderDefs[i];
-            _faceSliders[i].value.text = Mathf.Abs(v) < 0.005f ? "Preset" : (v < 0f ? def.lo : def.hi) + " " + Mathf.RoundToInt(Mathf.Abs(v) * 100f) + "%";
+            var def = PlayerAppearance.Sliders[i];
+            _faceSliders[i].value.text = Mathf.Abs(v) < 0.005f ? "Default" : (v < 0f ? def.Low : def.High) + " " + Mathf.RoundToInt(Mathf.Abs(v) * 100f) + "%";
         }
 
         private void SyncFaceControls()
         {
             foreach (var f in _faceSliders)
             {
-                float v = GetSlider(_face.sliders, f.index);
+                float v = _face.sliders[f.index];
                 f.s.SetValueWithoutNotify(v);
                 ShowSliderValue(f.index, v);
             }
+            RefreshEyeButtons();
         }
 
-        private GameObject CustomizeFirstSelection() => _faceSliders.Count > 0 ? _faceSliders[0].s.gameObject : _custDone.gameObject;
+        private GameObject CustomizeFirstSelection() => _eyeButtons.Count > 0 ? _eyeButtons[0].gameObject : _faceSliders.Count > 0 ? _faceSliders[0].s.gameObject : _custDone.gameObject;
 
         private void FaceChanged()
         {

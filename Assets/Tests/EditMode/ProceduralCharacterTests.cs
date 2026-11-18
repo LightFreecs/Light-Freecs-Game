@@ -6,7 +6,7 @@ namespace LightMMORPG.Tests
 {
     public sealed class ProceduralCharacterTests
     {
-        private static ProceduralCharacterBuilder.GeneratedCharacter Gen(int i) => ProceduralCharacterBuilder.GenerateData(CharacterPresets.Distinct(i));
+        private static ProceduralCharacterBuilder.GeneratedCharacter Gen(int i) => ProceduralCharacterBuilder.GenerateData(TestRecipes.Variant(i));
 
         [Test]
         public void AllPresets_ProduceValidSkinnedMeshData([Values(0, 1, 2, 3)] int preset)
@@ -63,7 +63,7 @@ namespace LightMMORPG.Tests
         [Test]
         public void DifferentSeed_ChangesHair()
         {
-            var r = CharacterPresets.Distinct(0);
+            var r = TestRecipes.Variant(0);
             var a = ProceduralCharacterBuilder.GenerateData(r);
             r.seed += 1;
             var b = ProceduralCharacterBuilder.GenerateData(r);
@@ -89,7 +89,7 @@ namespace LightMMORPG.Tests
             [Values(JawPreset.Classic, JawPreset.Head1, JawPreset.Square, JawPreset.Pointed)] JawPreset jaw,
             [Values(false, true)] bool extremes)
         {
-            var r = CharacterPresets.Distinct(1);
+            var r = TestRecipes.Variant(1);
             int i = (int)jaw;
             r.jawPreset = jaw;
             r.chinPreset = (ChinPreset)i;

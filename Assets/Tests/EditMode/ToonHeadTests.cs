@@ -109,7 +109,7 @@ namespace LightMMORPG.Tests
         [Test]
         public void RecipeClone_CopiesTheHeadSettings()
         {
-            var r = CharacterPresets.Distinct(0);
+            var r = TestRecipes.Variant(0);
             var c = r.Clone();
             c.toonHead.headWidth = 1.1f;
             Assert.AreEqual(1f, r.toonHead.headWidth);
@@ -119,7 +119,7 @@ namespace LightMMORPG.Tests
         [Test]
         public void Character_HasToonFaceData()
         {
-            var g = ProceduralCharacterBuilder.GenerateData(CharacterPresets.Distinct(1));
+            var g = ProceduralCharacterBuilder.GenerateData(TestRecipes.Variant(1));
             Assert.AreEqual(g.VertexCount, g.FaceCoords.Length);
             Assert.AreEqual(g.VertexCount, g.Tangents.Length);
             Assert.AreEqual(ToonHead.ShadowMapSize * ToonHead.ShadowMapSize, g.ShadowPixels.Length);
@@ -130,6 +130,64 @@ namespace LightMMORPG.Tests
             int masked = 0;
             foreach (var f in g.FaceCoords) if (f.z > 0.5f) masked++;
             Assert.Greater(masked, 300);
+        }
+
+        [Test]
+        public void Customization_SlidersAndEyeReachTheToonHead()
+        {
+            var f = new FaceCustomization { eyeStyle = ToonEyeStyle.HandMade };
+            f.sliders.jawWidth = 1f;
+            f.sliders.noseSize = -1f;
+            f.sliders.eyeSize = 0.5f;
+            var r = PlayerAppearance.ForPalette(2, f);
+            Assert.AreEqual(ToonEyeStyle.HandMade, r.toonHead.eyeStyle);
+            Assert.AreEqual(1.4f, r.toonHead.jawWidth, 1e-5f);
+            Assert.AreEqual(0f, r.toonHead.noseSize, 1e-5f);
+            Assert.AreEqual(1.125f, r.toonHead.eyeSize, 1e-5f);
+            Assert.AreEqual(1f, r.toonHead.headWidth, 1e-5f, "untouched sliders keep the base head");
+            Assert.AreNotEqual(CharacterPresets.ForPalette(2).CacheKey(), r.CacheKey());
+            Assert.AreEqual(1f, CharacterPresets.Hero().toonHead.jawWidth, "the base hero is not modified");
+        }
+
+        [Test]
+        public void Customization_EveryEyeOnAnyPalette([Values(ToonEyeStyle.Drawn, ToonEyeStyle.Tall, ToonEyeStyle.Wide, ToonEyeStyle.HandMade)] ToonEyeStyle eye,
+            [Values(0, 3)] int palette)
+        {
+            var r = PlayerAppearance.ForPalette(palette, new FaceCustomization { eyeStyle = eye });
+            Assert.AreEqual(eye, r.toonHead.eyeStyle);
+        }
+
+        [Test]
+        public void Customization_JsonRoundTripAndSanitize()
+        {
+            var f = new FaceCustomization { eyeStyle = ToonEyeStyle.Wide };
+            for (int i = 0; i < FaceSliders.Count; i++) f.sliders[i] = (i % 5 - 2) * 0.3f;
+            var back = PlayerAppearance.FromJson(PlayerAppearance.ToJson(f));
+            Assert.AreEqual(ToonEyeStyle.Wide, back.eyeStyle);
+            for (int i = 0; i < FaceSliders.Count; i++) Assert.AreEqual(f.sliders[i], back.sliders[i], 1e-6f, "slider " + i);
+            Assert.AreEqual(PlayerAppearance.Sliders.Length, FaceSliders.Count);
+
+            var bad = new FaceCustomization { eyeStyle = (ToonEyeStyle)99 };
+            bad.sliders.chinWidth = 7f;
+            bad.sliders.earFlare = float.NaN;
+            bad = bad.Sanitized();
+            Assert.AreEqual(ToonEyeStyle.Drawn, bad.eyeStyle);
+            Assert.AreEqual(1f, bad.sliders.chinWidth);
+            Assert.AreEqual(0f, bad.sliders.earFlare);
+        }
+
+        [Test]
+        public void Customization_SliderExtremes_GiveValidCharacters([Values(-1f, 1f)] float v)
+        {
+            var f = new FaceCustomization { eyeStyle = ToonEyeStyle.Tall };
+            for (int i = 0; i < FaceSliders.Count; i++) f.sliders[i] = v;
+            var g = ProceduralCharacterBuilder.GenerateData(PlayerAppearance.ForPalette(0, f));
+            Assert.Less(g.VertexCount, ProceduralCharacterBuilder.VertexBudget);
+            for (int k = 0; k < g.VertexCount; k++)
+            {
+                Vector3 p = g.Positions[k], n = g.Normals[k];
+                Assert.IsFalse(float.IsNaN(p.x + p.y + p.z) || float.IsNaN(n.x + n.y + n.z), "NaN at " + k);
+            }
         }
     }
 }

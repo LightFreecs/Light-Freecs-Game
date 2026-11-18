@@ -12,7 +12,7 @@ namespace LightMMORPG.Menu
 
         public static int Palette
         {
-            get => Mathf.Clamp(PlayerPrefs.GetInt(PaletteKey, 0), 0, CharacterPresets.Count - 1);
+            get => Mathf.Clamp(PlayerPrefs.GetInt(PaletteKey, 0), 0, CharacterPresets.PaletteCount - 1);
             set { PlayerPrefs.SetInt(PaletteKey, value); PlayerPrefs.Save(); }
         }
     }

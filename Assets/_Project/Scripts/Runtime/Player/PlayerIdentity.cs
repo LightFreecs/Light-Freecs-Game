@@ -22,7 +22,7 @@ namespace LightMMORPG.Player
 
         public readonly SyncVar<int> PaletteIndex = new(-1);
         public readonly SyncVar<string> DisplayName = new(string.Empty);
-        /// <summary>The player's <see cref="FaceCustomization"/> as JSON (empty = preset face).</summary>
+        /// <summary>The player's <see cref="FaceCustomization"/> as JSON (empty = the default hero).</summary>
         public readonly SyncVar<string> Face = new(string.Empty);
 
         [Tooltip("Procedural character generator on Graphics/Model (built per palette on clients).")]
@@ -99,7 +99,7 @@ namespace LightMMORPG.Player
             // the local player's own face on every palette (the server picks the palette)
             var face = PlayerAppearance.Load();
             var list = new List<CharacterRecipe>();
-            for (int i = 0; i < CharacterPresets.Count; i++) list.Add(PlayerAppearance.ForPalette(i, face));
+            for (int i = 0; i < CharacterPresets.PaletteCount; i++) list.Add(PlayerAppearance.ForPalette(i, face));
             ProceduralCharacterBuilder.Prewarm(list);
         }
 

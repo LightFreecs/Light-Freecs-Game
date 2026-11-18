@@ -101,7 +101,7 @@ namespace LightMMORPG.Menu
                 Vector3 dir = (head - cPos).normalized;
                 Vector3 right = Vector3.Cross(Vector3.up, dir).normalized;
                 float halfW = dist * Mathf.Tan(_camera.fieldOfView * 0.5f * Mathf.Deg2Rad) * Mathf.Max(1f, _camera.aspect);
-                Vector3 cLook = head + right * halfW * 0.42f;
+                Vector3 cLook = head + right * halfW * 0.5f;
                 float e = _closeUp * _closeUp * (3f - 2f * _closeUp);
                 pos = Vector3.Lerp(pos, cPos, e);
                 look = Vector3.Lerp(look, cLook, e);
@@ -124,7 +124,7 @@ namespace LightMMORPG.Menu
             var ptr = Pointer.current;
             if (ptr != null)
             {
-                if (ptr.press.wasPressedThisFrame) _dragging = ptr.position.ReadValue().x < Screen.width * 0.52f;
+                if (ptr.press.wasPressedThisFrame) _dragging = ptr.position.ReadValue().x < Screen.width * 0.42f; // left of the Customize panel
                 if (!ptr.press.isPressed) _dragging = false;
                 if (_dragging) _fighter.Turn -= ptr.delta.ReadValue().x * 0.35f;
             }

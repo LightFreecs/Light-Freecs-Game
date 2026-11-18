@@ -466,3 +466,18 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
   - Tests: `AccountTests` +4 (password rule, upload + offline cache, MarkUploaded ordering, device → online move).
     **Limit:** the client still writes its own profile (Cloud Save player data), so XP / level are the client's word;
     making them cheat-proof needs Cloud Code (server-side `Record`) or the dedicated server reporting results.
+- One customizable hero + working Customize screen (closes the "Open" item of the Toon Head merge).
+  - `CharacterPresets`: the four designs (Kaien / Seiran / Gorran / Veyl) are gone; `Hero()` is the one base fighter
+    (the old Kaien body/outfit, base Toon Head, Drawn eye). `ForPalette(i)` = `Hero()` with the player slot's jacket
+    colour; `Count` → `PaletteCount` (player slots, not characters). The old designs live on only as test fixtures
+    (`Tests/EditMode/TestRecipes.cs`) to keep generator coverage of other hair / outfits / gear.
+  - `PlayerAppearance` / `FaceCustomization` (PlayerPrefs key `profile.face.v4`, older saves ignored): `eyeStyle` (any of
+    the four `ToonEyeStyle`s, not tied to a character) + `FaceSliders` = the 22 `ToonHeadSettings` sliders, each -1..1
+    around the base head (`PlayerAppearance.Sliders` holds labels + ranges; `FaceSliders[i]` indexes them). `Apply`
+    writes them into a clone of `recipe.toonHead`, so the sliders now reshape the real head. The recipe's old
+    `FaceParts` fields (jaw/chin/nose/ear presets) are no longer touched by the player.
+  - Customize screen (`MainMenuUI`): EYES row (Drawn / Tall / Wide / Hand-made, chosen one stays lit), HEAD & FACE
+    sliders in three columns of 8, Reset / Done; panel 1040 wide, the close-up puts the head further left and dragging to
+    turn only starts left of 42 % of the screen.
+  - Tests: `ToonHeadTests` +4 (sliders and eye reach the toon head, every eye on any palette, JSON round trip + sanitize,
+    all sliders at -1 / +1 give valid characters). Written without a local Unity: run the Tests workflow.

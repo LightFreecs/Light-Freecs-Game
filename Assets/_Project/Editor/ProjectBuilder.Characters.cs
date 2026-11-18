@@ -58,7 +58,7 @@ namespace LightMMORPG.EditorTools
             ground.transform.localScale = new Vector3(12f, 0.05f, 7f);
             ground.GetComponent<Renderer>().sharedMaterial = config.arenaGroundMaterial;
 
-            for (int i = 0; i < CharacterPresets.Count; i++)
+            for (int i = 0; i < CharacterPresets.PaletteCount; i++)
             {
                 var go = new GameObject("Hero_" + i + "_" + CharacterPresets.ForPalette(i).displayName);
                 go.transform.position = new Vector3(ShowcaseX[i], 0f, 0f);
@@ -98,7 +98,7 @@ namespace LightMMORPG.EditorTools
             ProceduralCharacterBuilder.ClearCache();
             SdfMesher.LogStats = GetArg("-partStats") != null;
             for (int pass = 0; pass < 2; pass++) // pass 1 = warm (JIT done)
-                for (int i = 0; i < CharacterPresets.Count; i++)
+                for (int i = 0; i < CharacterPresets.PaletteCount; i++)
                 {
                     var gen = ProceduralCharacterBuilder.Generate(CharacterPresets.ForPalette(i));
                     Debug.Log("[ProjectBuilder] Character " + i + " " + gen.Name + " pass " + pass + ": " + gen.VertexCount + " verts, "
