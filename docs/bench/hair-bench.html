@@ -653,7 +653,7 @@ const makeHairline = T => deg => {
 };
 const hairlineY = makeHairline(HAIRLINE);
 // Messy layers: the hair mass itself comes down over the forehead to the brows and over the cheeks in front of the ears
-const messyHairlineY = makeHairline([[0, 0.67], [30, 0.66], [45, 0.62], [58, 0.52], [68, 0.42], [78, 0.38], [88, 0.5], [94, 0.53], [110, 0.53], [118, 0.42], [125, 0.21], [150, 0.235], [180, 0.265]]);
+const messyHairlineY = makeHairline([[0, 0.67], [30, 0.66], [45, 0.62], [58, 0.52], [68, 0.42], [78, 0.38], [88, 0.55], [94, 0.58], [110, 0.58], [118, 0.47], [125, 0.21], [150, 0.235], [180, 0.265]]);
 const fullHairline = a => hairlineY(a * 180);
 
 // this head's horizontal radius by direction and height, as a lookup table (2° × 0.01)
@@ -853,14 +853,14 @@ const STYLES = [
       pair(56, 62, 0.4, 0.22, 0.03, 0.55);
       // sides: a lock in front of the ear to the cheek, locks over the top of the ear, one behind it
       pair(70, 72, 0.33, 0.2, 0.03);
-      pair(85, 88, 0.47, 0.2, 0.08);
-      pair(100, 104, 0.48, 0.2, 0.09);
-      pair(116, 120, 0.34, 0.2, 0.05);
+      // round the ear and down the back to the nape: a dense row of pointed locks, alternating lengths, so the edge is
+      // jagged like the bangs instead of a smooth line. [angle, tip height, tip distance off the head]
+      for (const [th, tipY, off] of [[80, 0.4, 0.035], [89, 0.49, 0.085], [98, 0.46, 0.1], [107, 0.5, 0.095], [116, 0.4, 0.06],
+        [124, 0.29, 0.04], [133, 0.2, 0.04], [142, 0.24, 0.04], [151, 0.18, 0.045], [160, 0.23, 0.045], [169, 0.17, 0.05]])
+        pair(th, th + 3, tipY, 0.17 + 0.03 * Math.sin(th), off, 0.5);
+      lock(180, 180, 0.2, 0.19, 0.05, 0.5);
       // back: rounded, tapering into pointed tufts at the nape
-      pair(132, 140, 0.3, 0.24, 0.03, 0.6);
-      pair(147, 158, 0.25, 0.24, 0.03, 0.6);
-      pair(163, 171, 0.23, 0.24, 0.03, 0.6);
-      lock(180, 180, 0.22, 0.24, 0.03, 0.6);
+
       // shorter locks on the dome for the clump lines, tips lifting a little
       for (const th of [24, 52, 80, 108, 136, 164]) pair(th, th + j(8, th), 0.66 + j(0.04, th), 0.24, 0.1);
       // a small cowlick at the back of the crown and a little flick on each side of the outline
