@@ -62,11 +62,15 @@ namespace LightMMORPG.Characters
         }
     }
 
-    /// <summary>The player's choices from the Customize screen: any eye style plus the head sliders.</summary>
+    /// <summary>Hairstyles the player can pick (the Hair Bench styles), in Customize order.</summary>
+    public enum PlayerHair { Light, Messy }
+
+    /// <summary>The player's choices from the Customize screen: any eye style, a hairstyle and the head sliders.</summary>
     [Serializable]
     public struct FaceCustomization
     {
         public ToonEyeStyle eyeStyle;
+        public PlayerHair hair;
         public FaceSliders sliders;
 
         /// <summary>Copy with every slider clamped to -1..1 and a valid eye style (values can come from other players).</summary>
@@ -79,6 +83,7 @@ namespace LightMMORPG.Characters
                 f.sliders[i] = float.IsNaN(v) ? 0f : Mathf.Clamp(v, -1f, 1f);
             }
             if (!Enum.IsDefined(typeof(ToonEyeStyle), f.eyeStyle)) f.eyeStyle = ToonEyeStyle.Drawn;
+            if (!Enum.IsDefined(typeof(PlayerHair), f.hair)) f.hair = PlayerHair.Light;
             return f;
         }
     }
@@ -128,6 +133,12 @@ namespace LightMMORPG.Characters
 
         /// <summary>Names of the eye styles for the Customize screen, in <see cref="ToonEyeStyle"/> order.</summary>
         public static readonly string[] EyeNames = { "Drawn", "Tall", "Wide", "Hand-made" };
+
+        /// <summary>Names of the hairstyles for the Customize screen, in <see cref="PlayerHair"/> order.</summary>
+        public static readonly string[] HairNames = { "Light", "Messy layers" };
+
+        /// <summary>The recipe hairstyle for a player pick.</summary>
+        public static HairStyle ToHairStyle(PlayerHair h) => h == PlayerHair.Messy ? HairStyle.Messy : HairStyle.Light;
 
         public static FaceCustomization Load()
         {
@@ -197,6 +208,8 @@ namespace LightMMORPG.Characters
             f = f.Sanitized();
             var head = recipe.toonHead = recipe.toonHead?.Clone() ?? new ToonHeadSettings();
             head.eyeStyle = f.eyeStyle;
+            recipe.hairStyle = ToHairStyle(f.hair);
+            recipe.hairColor = recipe.hairTipColor = ToonHair.LitColor(recipe.hairStyle);
             for (int i = 0; i < FaceSliders.Count; i++)
             {
                 var d = Sliders[i];

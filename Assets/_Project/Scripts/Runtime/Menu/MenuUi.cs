@@ -175,7 +175,7 @@ namespace LightMMORPG.Menu
             return Mathf.Min((p - e0).magnitude, (p - e1).magnitude);
         }
 
-        public enum IconKind { Friends, Settings, Quit, Diamond, Crystal, Eye, Head, Jaw, Nose, Ear, Dice, Undo, Check, Plus, Minus }
+        public enum IconKind { Friends, Settings, Quit, Diamond, Crystal, Eye, Head, Jaw, Nose, Ear, Dice, Undo, Check, Plus, Minus, Hair }
 
         private static float Poly(Vector2 p, params Vector2[] pts)
         {
@@ -244,6 +244,14 @@ namespace LightMMORPG.Menu
                     return Stroke(d);
                 },
                 IconKind.Check => (x, y) => Stroke(Poly(new Vector2(x, y), new Vector2(22, 48), new Vector2(40, 30), new Vector2(74, 66))),
+                IconKind.Hair => (x, y) =>
+                {
+                    // head outline with three spikes rising off the top
+                    var p = new Vector2(x, y);
+                    float d = Arc(p, new Vector2(48, 40), 24f, 200f, 340f);
+                    d = Mathf.Min(d, Poly(p, new Vector2(24, 44), new Vector2(26, 78), new Vector2(40, 60), new Vector2(50, 86), new Vector2(58, 62), new Vector2(74, 76), new Vector2(72, 44)));
+                    return Stroke(d);
+                },
                 IconKind.Plus => (x, y) => Stroke(Mathf.Min(Seg(new Vector2(x, y), new Vector2(24, 48), new Vector2(72, 48)), Seg(new Vector2(x, y), new Vector2(48, 24), new Vector2(48, 72)))),
                 _ => (x, y) => Stroke(Seg(new Vector2(x, y), new Vector2(24, 48), new Vector2(72, 48))),
             };

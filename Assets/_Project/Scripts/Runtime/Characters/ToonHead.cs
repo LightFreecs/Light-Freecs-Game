@@ -194,7 +194,7 @@ namespace LightMMORPG.Characters
             return new Vector2(w * s, b * c);
         }
 
-        private static float JawY(ToonHeadShape H, float a)
+        public static float JawY(ToonHeadShape H, float a)
         {
             if (a <= H.JawA)
             {

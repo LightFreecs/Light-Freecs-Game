@@ -29,7 +29,7 @@ namespace LightMMORPG.Characters
 
         /// <summary>
         /// The base hero: orange cropped high-collar jacket with navy piping, black undershirt, charcoal shorts, laced slate
-        /// boots, black-to-crimson spikes, amber eyes. Head = the measured Toon Head with every slider at its default.
+        /// boots, the Light hair (Hair Bench, green-black), amber eyes. Head = the measured Toon Head with every slider at its default.
         /// </summary>
         public static CharacterRecipe Hero() => new()
         {
@@ -39,7 +39,7 @@ namespace LightMMORPG.Characters
             height = 2.28f, muscle = 0.75f, bulk = 0.95f, shoulderWidth = 1f, waist = 0.95f, headSize = 1.3f,
             jawPreset = JawPreset.Head1, chinPreset = ChinPreset.Head1, nosePreset = NosePreset.Head1, earPreset = EarPreset.Head1,
             skinTone = new Color(1f, 0.85f, 0.72f),
-            hairStyle = HairStyle.SpikyUp, hairColor = new Color(0.07f, 0.06f, 0.09f), hairTipColor = new Color(0.72f, 0.1f, 0.1f),
+            hairStyle = HairStyle.Light, hairColor = new Color32(0x33, 0x50, 0x3b, 0xff), hairTipColor = new Color32(0x33, 0x50, 0x3b, 0xff),
             spikeCount = 20, spikeLength = 1.1f, spikeCurl = 0.2f,
             eyeShape = EyeShape.Big, eyeColor = new Color(0.9f, 0.52f, 0.1f), browAngle = 0.25f, browThickness = 0.85f, expression = Expression.Grin,
             outfit = OutfitType.CroppedJacket, outfitPrimary = new Color(1f, 0.5f, 0.12f), outfitSecondary = new Color(0.17f, 0.17f, 0.21f),

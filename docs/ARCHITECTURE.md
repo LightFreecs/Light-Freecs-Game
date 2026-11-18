@@ -497,3 +497,20 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
   column on the right whose content edge lines up with Random. Frameless text has sky-coloured drop shadows
   (`Shade`), the slider track and low/high labels are a bit brighter. No CUSTOMIZE title any more.
   - Verified: headless compile clean. Not run here (owner tests by hand).
+- Hair Bench styles in the game (owner: "ship hair 1 and 2", https://claude.ai/artifact/GEvJjo9jguhqtMwN4sXUxy).
+  - `Characters/ToonHair.cs`: port of the bench's hair generator — big flat blades (cubic curve, 8 sides × 10 rings,
+    tapering to a point, wide side out, roots inside the skull) + a base layer over the skull to the hairline that
+    carries on under the back of the head (from the head mesh's own rows, cut straight across behind the neck).
+    `HairStyle.Light` = the owner's Blockbench hair (`ToonHairLightModel.cs`, generated from the bench's `LIGHT_HAIR`:
+    the right-half spikes mirrored, each moved rigidly onto this skull) + fill blades top/front/sides + spiky back,
+    green-black; `HairStyle.Messy` = Messy layers (dome, bangs to the eyes, locks over the ears to the jaw, jagged nape),
+    blue-black, and the head is built without ears. The bench head has eyes at 0.5 (game: ~0.38), so bench heights go
+    through `Fit`: front = mouth / eyes / brows / crown landmarks, sides + back = nape / ear / crown, blended by angle.
+    Not ported: the bench's front-view morph and its hair shader (zig-zag highlight band); the hair uses the usual
+    Hair slot (toon lit, gradient texture with root = tip colour, outline).
+  - Builder: `Hair()` → `ToonHairMesh` for these styles (rigid on Head, `HeadToModel`); `Head()` skips the ear
+    triangles when `ToonHair.HidesEars`.
+  - Player pick: `FaceCustomization.hair` (`PlayerHair` Light / Messy, default Light; travels with the face JSON),
+    `PlayerAppearance.Apply` sets `hairStyle` + colours. `Hero()` defaults to Light. Customize: sixth tab HAIR
+    (new `IconKind.Hair`) with two style tiles. Old spiky styles stay for the test recipes.
+  - Tests: `ToonHairTests` (both styles → valid mesh, crown faces out, choice applies / round-trips / sanitizes).

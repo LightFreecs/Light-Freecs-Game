@@ -345,6 +345,7 @@ namespace LightMMORPG.Characters
             private const float HeadUnit = 0.287f, ChinHL = -0.027f, AxisZ = -0.019f;
             private readonly ToonHeadShape _toon;
             private int _faceStart = -1;
+            private ToonHead.MeshData _toonMesh;
             private readonly List<Vector4> _faceData = new();
             private Vector3 _craniumC, _craniumR;
             private float _hairDy;
@@ -593,7 +594,10 @@ namespace LightMMORPG.Characters
                     float front = hp.z > 0f && n.z > 0.05f ? Mathf.SmoothStep(0f, 1f, (n.z - 0.05f) / 0.25f) : 0f;
                     _faceData.Add(new Vector4(fc.x, fc.y, fc.z, front));
                 }
-                foreach (int t in mesh.Triangles) tris.Add(start + t);
+                // hair that covers the ears (Messy layers): the head is built without them
+                int count = ToonHair.HidesEars(_r.hairStyle) ? mesh.HeadTriangleCount * 3 : mesh.Triangles.Count;
+                for (int i = 0; i < count; i++) tris.Add(start + mesh.Triangles[i]);
+                _toonMesh = mesh;
             }
 
             // ---------------------------------------------------------- hands
@@ -1033,6 +1037,23 @@ namespace LightMMORPG.Characters
             }
 
             // ---------------------------------------------------------- hair
+            /// <summary>Hair Bench styles (<see cref="ToonHair"/>): built in head units on the Toon Head, rigid on the Head bone.</summary>
+            private void ToonHairMesh(int slot)
+            {
+                var mesh = ToonHair.Build(_toon, _toonMesh ?? ToonHead.BuildMesh(_toon), _r.hairStyle);
+                int start = _buf.Positions.Count;
+                var tris = _buf.Slot(slot);
+                var bw = new BoneWeight { boneIndex0 = (int)B.Head, weight0 = 1f };
+                for (int i = 0; i < mesh.Positions.Count; i++)
+                {
+                    _buf.Positions.Add(HeadToModel(mesh.Positions[i]));
+                    _buf.Normals.Add(mesh.Normals[i]);
+                    _buf.Uvs.Add(new Vector2(0.5f, mesh.Along[i]));
+                    _buf.Weights.Add(bw);
+                }
+                foreach (int t in mesh.Triangles) tris.Add(start + t);
+            }
+
             private Vector3 Scalp(Vector3 u) => _craniumC + Vector3.Scale(u, _craniumR);
             private bool InHairRegion(Vector3 s) => s.y - _hairDy > 0.16f + 0.9f * (s.z - 0.115f) && s.y - _hairDy > -0.03f;
 
@@ -1040,6 +1061,7 @@ namespace LightMMORPG.Characters
             {
                 var r = _r;
                 int hair = Slot("hair", r.hairColor, SlotKind.Hair, r.hairTipColor);
+                if (ToonHair.IsToonHair(r.hairStyle)) { ToonHairMesh(hair); return; }
                 // scalp cap fills the gaps between clumps
                 var cap = new SdfPart("HairCap", 0.012f, hair) { GroupK = 0.02f, Weights = new SkinWeightSource((int)B.Head) };
                 cap.Add(SdfPrim.Ellipsoid(HL(0f, _craniumC.y + 0.002f, _craniumC.z), (_craniumR + Vector3.one * 0.011f) * _hs, (int)B.Head, 0.02f, 0));

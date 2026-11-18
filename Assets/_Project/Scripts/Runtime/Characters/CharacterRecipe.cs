@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace LightMMORPG.Characters
 {
-    public enum HairStyle { SpikyUp, SweptBack, Wild, LongSpiky, Short }
+    public enum HairStyle { SpikyUp, SweptBack, Wild, LongSpiky, Short, Light, Messy }
     public enum EyeShape { Sharp, Round, Narrow, Fierce, Big }
     public enum Expression { Serious, Grin, Smirk }
     public enum OutfitType { Gi, ArmoredSuit, JacketPants, CroppedJacket }
