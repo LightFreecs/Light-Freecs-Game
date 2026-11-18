@@ -93,7 +93,7 @@ code{font-family:var(--f-mono);font-size:12.5px}
   <section class="anim">
     <div>
       <h2>Expression</h2>
-      <p class="lede" style="margin-bottom:8px">The brows rest in their drawn shape. An expression bends them for a moment (the nose ends knot down for Angry, tilt up for Sad, the arch lifts for Happy and Surprised), then the face relaxes back. Turn on Hold to study one.</p>
+      <p class="lede" style="margin-bottom:8px">The brows rest level. An expression tilts and bends them for a moment, the way anime faces do: a firm tilt to the nose for Determined, a hard V pressed onto the eyes for Angry, an inverted V for Sad, high and round for Surprised, a soft arch for Happy, and eyes squeezed into arcs for Joy. Then the face relaxes back. Turn on Hold to study one.</p>
       <div class="row" role="group" aria-label="Expression" id="pick-expr"></div>
     </div>
     <div class="row">
@@ -113,8 +113,8 @@ code{font-family:var(--f-mono);font-size:12.5px}
     <h2>One thing to settle from the drawing</h2>
     <p>Your drawing shows one eye on its own, so I can't tell which side the nose is on. That flips the whole look, so pick the one you meant:</p>
     <div class="row" role="group" aria-label="Which end is near the nose" id="pick-nose">
-      <button class="chip" data-v="point" aria-pressed="true">Pointed ends near the nose (fierce, brows slope down to the nose)</button>
-      <button class="chip" data-v="thick" aria-pressed="false">Thick brow end near the nose (cool, slopes down outward)</button>
+      <button class="chip" data-v="point" aria-pressed="true">Pointed ends near the nose</button>
+      <button class="chip" data-v="thick" aria-pressed="false">Thick brow end near the nose</button>
     </div>
   </section>
 
@@ -154,7 +154,7 @@ code{font-family:var(--f-mono);font-size:12.5px}
 
   <section>
     <h2>Every pairing</h2>
-    <p class="lede" style="margin-bottom:10px">Tap one to look at it big. The Sharp brow rests on the eye the way it does in your drawing: when an eye reaches higher than the Sharp eye, the brow moves up just enough to keep the same gap, so it never cuts into a lid.</p>
+    <p class="lede" style="margin-bottom:10px">Tap one to look at it big. Every brow rests a fixed gap above whichever eye is picked, so it never cuts into a lid. Sharp and Block are turned level at rest (your references were angry faces); the expressions bring the tilt back.</p>
     <div class="pairs" id="pairs"></div>
   </section>
 
@@ -187,7 +187,7 @@ code{font-family:var(--f-mono);font-size:12.5px}
       <li><b>Static face texture.</b> Eye whites, lid shading, lid lines and the mouth are painted once into the 1024 face texture, only when the player changes a style, colour or slider. A spare mask channel marks the eye white (minus the lid lines), so the shader knows where an iris may show. This page does the same with two still layers, under and over the iris.</li>
       <li><b>Iris and blink in the face shader.</b> Each frame the C# side sends a look offset per eye (u, v in eye widths, already clamped to that eye's travel), the iris size and the two lid amounts as material values. The shader draws the iris, its dark top and shine inside the white mask, then slides the skin lid over it. The face texture is never repainted while playing.</li>
       <li><b>Brows as separate patches.</b> Each brow is a small mesh over the face built from the measured outline. Size, angle, height and spacing are a transform; expressions bend the mesh's vertices (lift the nose end or outer end, bow the middle, pull in, thicken) along the brow's length, so the shape changes, not just its place.</li>
-      <li><b>Expressions are blended value sets.</b> Neutral, Angry, Surprised, Sad and Happy each hold brow bends and offsets plus lid amounts, iris size and a gaze nudge, added on top of the player's sliders and blended over 0.25 s. The face rests on Neutral; emotes or combat play an expression for a moment and it relaxes back. Look-at and blinking run on top.</li>
+      <li><b>Expressions are blended value sets.</b> Neutral, Determined, Angry, Sad, Surprised, Happy and Joy each hold brow bends and offsets plus lid amounts, iris size and a gaze nudge, added on top of the player's sliders and blended over 0.25 s. The face rests on Neutral; emotes or combat play an expression for a moment and it relaxes back. Look-at and blinking run on top.</li>
     </ul>
   </section>
 </main>
@@ -293,7 +293,20 @@ const BLOCK_BROW_DRAWN = {
   gap: -0.05,
 };
 BLOCK_BROW_DRAWN.under = BLOCK_BROW_DRAWN.edges.slice(1);
-const BROW_SHAPES = { sharp: SHARP_BROW_DRAWN, peak: PEAK_BROW_DRAWN, block: BLOCK_BROW_DRAWN };
+// The references were angry faces, so the measured Sharp and Block brows are tilted down toward the nose. At rest they are
+// levelled: the outline is turned about its middle until its long axis (principal axis of the outline points) is horizontal;
+// the shape itself is untouched, and expressions bring the tilt back. Peak's two ends already sit level, so it stays as drawn.
+// The tracing check still shows the drawn (tilted) outlines.
+function levelShape(D, underIdx, gap) {
+  const pts = D.edges.flat(), n = pts.length;
+  let cx = 0, cy = 0; for (const p of pts) { cx += p[0]; cy += p[1]; } cx /= n; cy /= n;
+  let sxx = 0, syy = 0, sxy = 0; for (const [x, y] of pts) { sxx += (x - cx) ** 2; syy += (y - cy) ** 2; sxy += (x - cx) * (y - cy); }
+  const ang = 0.5 * Math.atan2(2 * sxy, sxx - syy), ca = Math.cos(-ang), sa = Math.sin(-ang);
+  const edges = D.edges.map(e => e.map(([x, y]) => [cx + (x - cx) * ca - (y - cy) * sa, cy + (x - cx) * sa + (y - cy) * ca]));
+  return { edges, under: underIdx.map(i => edges[i]), gap, levelledBy: ang * 180 / Math.PI };
+}
+// gap: how far each rests above the picked eye's upper lid, in eye widths
+const BROW_SHAPES = { sharp: levelShape(SHARP_BROW_DRAWN, [2], 0.12), peak: PEAK_BROW_DRAWN, block: levelShape(BLOCK_BROW_DRAWN, [1, 2, 3], 0.06) };
 // brow units: (u − 0.5, v − 0.935) × 0.17 head units from (EyeX, BrowY) — at default sliders that puts it where the drawing has it over the Sharp eye
 const BROW_SCALE = 0.17, BROW_DV = 0.935;
 const BROWS = { classic: { label: "Classic" }, sharp: { label: "Sharp", isNew: true }, peak: { label: "Peak", isNew: true }, block: { label: "Block", isNew: true } };
@@ -463,11 +476,6 @@ function poke(H, ES, B) {
 }
 function browLift(st, ES) {
   const H0 = shapeOf({ ...st, browH: 0 });   // fit at the default brow height, then the slider moves it on top
-  if (st.brow === "sharp") {
-    // sits on the eye the way the drawing has it over the Sharp eye; only moves up for eyes that reach higher
-    const B = browShape("sharp", st), ref = poke(shapeOf({ ...st, browH: 0, eyeSize: 1 }), ownerEye("sharp", st), B);
-    return Math.max(0, poke(H0, ES, B) - ref);
-  }
   if (BROW_SHAPES[st.brow] && BROW_SHAPES[st.brow].gap !== undefined) {
     // rests a fixed gap (in eye widths; negative = overlaps the lid) above whichever eye is picked, as in the reference picture
     const B = browShape(st.brow, st);
@@ -665,20 +673,26 @@ for (const b of Object.keys(BROWS)) for (const e of Object.keys(EYES)) {
 //   lidTop / lidBot (how far the upper lid comes down / the lower lid comes up, 0..1), iris (iris size, × 1 + iris),
 //   lookY (gaze nudge, −1 down … 1 up)
 const EXPRS = {
-  neutral:   { label: "Neutral",   v: { inner: 0,     outer: 0,     arch: 0,     pinch: 0,    thick: 0,     thickIn: 0,
-                                         angle: 0, h: 0,      x: 0,      size: 0,    lidTop: 0,    lidBot: 0,    iris: 0,     lookY: 0 } },
-  // nose ends knot down over the eyes and bunch up, the outer ends kick up
-  angry:     { label: "Angry",     v: { inner: -0.10, outer: 0.06,  arch: 0.06,  pinch: 0.04, thick: 0.08,  thickIn: 0.4,
-                                         angle: 0, h: -0.004, x: 0,      size: 0,    lidTop: 0.2,  lidBot: 0.1,  iris: -0.05, lookY: 0.1 } },
-  // high, round, thinned out
-  surprised: { label: "Surprised", v: { inner: 0.04,  outer: -0.03, arch: 0.13,  pinch: 0,    thick: -0.18, thickIn: 0,
-                                         angle: 0, h: 0.022,  x: 0,      size: 0.04, lidTop: 0,    lidBot: 0,    iris: -0.2,  lookY: 0 } },
-  // nose ends tilt up and crease, outer ends droop
-  sad:       { label: "Sad",       v: { inner: 0.20,  outer: -0.07, arch: -0.05, pinch: 0.03, thick: 0,     thickIn: 0.18,
-                                         angle: 0, h: 0.002,  x: 0,      size: 0,    lidTop: 0.26, lidBot: 0,    iris: 0,     lookY: -0.45 } },
-  // soft raised arch
-  happy:     { label: "Happy",     v: { inner: 0.04,  outer: -0.02, arch: 0.11,  pinch: 0,    thick: -0.06, thickIn: 0,
-                                         angle: 0, h: 0.008,  x: 0,      size: 0,    lidTop: 0.1,  lidBot: 0.42, iris: 0,     lookY: 0.05 } },
+  neutral:    { label: "Neutral",    v: { angle: 0,   inner: 0,     outer: 0,     arch: 0,     pinch: 0,    thick: 0,     thickIn: 0,
+                                           h: 0,      x: 0, size: 0,    lidTop: 0,    lidBot: 0,    iris: 0,     lookY: 0 } },
+  // the shonen hero's set face: a firm tilt toward the nose, a little lower and heavier at the nose end
+  determined: { label: "Determined", v: { angle: 8,   inner: -0.04, outer: 0.02,  arch: 0.02,  pinch: 0.02, thick: 0.04,  thickIn: 0.15,
+                                           h: -0.004, x: 0, size: 0,    lidTop: 0.12, lidBot: 0.04, iris: -0.03, lookY: 0 } },
+  // sharp V: tilted hard toward the nose, pressed down onto the eyes, the nose ends knotted thick and pulled in
+  angry:      { label: "Angry",      v: { angle: 16,  inner: -0.08, outer: 0.04,  arch: 0.04,  pinch: 0.05, thick: 0.08,  thickIn: 0.32,
+                                           h: -0.008, x: 0, size: 0,    lidTop: 0.22, lidBot: 0.1,  iris: -0.06, lookY: 0.1 } },
+  // inverted V: the nose ends tilt up and crease, the middle sags, the outer ends droop
+  sad:        { label: "Sad",        v: { angle: -12, inner: 0.10,  outer: -0.04, arch: -0.06, pinch: 0.03, thick: 0,     thickIn: 0.15,
+                                           h: 0.004,  x: 0, size: 0,    lidTop: 0.28, lidBot: 0,    iris: 0,     lookY: -0.45 } },
+  // shot up high, round and thinned out, eyes wide with small irises
+  surprised:  { label: "Surprised",  v: { angle: 0,   inner: 0.04,  outer: -0.02, arch: 0.14,  pinch: 0,    thick: -0.18, thickIn: 0,
+                                           h: 0.03,   x: 0, size: 0.04, lidTop: 0,    lidBot: 0,    iris: -0.22, lookY: 0 } },
+  // soft raised arch, cheeks push the lower lids up
+  happy:      { label: "Happy",      v: { angle: -3,  inner: 0.03,  outer: -0.01, arch: 0.10,  pinch: 0,    thick: -0.06, thickIn: 0,
+                                           h: 0.01,   x: 0, size: 0,    lidTop: 0.1,  lidBot: 0.42, iris: 0,     lookY: 0.05 } },
+  // brows raised and round, eyes squeezed shut into arcs
+  joy:        { label: "Joy",        v: { angle: -4,  inner: 0.05,  outer: -0.01, arch: 0.12,  pinch: 0,    thick: -0.05, thickIn: 0,
+                                           h: 0.016,  x: 0, size: 0,    lidTop: 1,    lidBot: 0.5,  iris: 0,     lookY: 0 } },
 };
 const EXPR_HOLD_MS = 2600;   // how long a picked expression plays before the face relaxes to Neutral
 const EXPR_KEYS = Object.keys(EXPRS.neutral.v);
@@ -786,7 +800,8 @@ function frame(now) {
   // an expression plays, then the face relaxes back to Neutral
   if (!state.hold && state.expr !== "neutral" && now - exprT0 > EXPR_HOLD_MS) setExpr("neutral");
   // expression blend (instant under reduced motion)
-  const p = rm ? 1 : smooth(clamp01((now - exprT0) / 250)), to = EXPRS[state.expr].v;
+  // snappy, with a small overshoot the way anime expressions pop (the lids are clamped below)
+  const q = clamp01((now - exprT0) / 280), p = rm ? 1 : 1 + 2.2 * (q - 1) ** 3 + 1.2 * (q - 1) ** 2, to = EXPRS[state.expr].v;
   for (const k of EXPR_KEYS) exprNow[k] = exprFrom[k] + (to[k] - exprFrom[k]) * p;
   // blink: 60 ms down, 110 ms up, every 2.5–5.5 s, now and then a double blink
   let b = 0;
@@ -797,7 +812,8 @@ function frame(now) {
   }
   // where the eyes look
   const target = state.look === "pointer" ? ptr : state.look === "wander" && !rm ? wanderAt(now) : null;
-  const A = { look: [], iris: 1 + exprNow.iris, lidTop: exprNow.lidTop + (1 - exprNow.lidTop) * b, lidBot: exprNow.lidBot,
+  const lt = clamp01(exprNow.lidTop), lb = clamp01(exprNow.lidBot);
+  const A = { look: [], iris: 1 + exprNow.iris, lidTop: lt + (1 - lt) * b, lidBot: lb,
               angle: exprNow.angle, h: exprNow.h, x: exprNow.x, size: exprNow.size,
               inner: exprNow.inner, outer: exprNow.outer, arch: exprNow.arch, pinch: exprNow.pinch, thick: exprNow.thick, thickIn: exprNow.thickIn };
   const f = 1 - Math.exp(-dt / 0.055);
@@ -809,6 +825,8 @@ function frame(now) {
     gaze[i][0] += (w[0] - gaze[i][0]) * f; gaze[i][1] += (w[1] - gaze[i][1]) * f;
     A.look.push([e.side * gaze[i][0] * e.ru, gaze[i][1] * e.rv]);   // u points outward on both sides
   });
+  // the brows follow the gaze a little: up when looking up, down when looking down
+  A.h += 0.005 * (gaze[0][1] + gaze[1][1]) / 2;
   // redraw only when something moved
   const key = [A.iris, A.lidTop, A.lidBot, A.angle, A.h, A.x, A.size, A.inner, A.outer, A.arch, A.pinch, A.thick, A.thickIn, ...A.look.flat()].map(v => v.toFixed(4)).join();
   if (stageDirty || key !== lastKey) { stageDirty = false; lastKey = key; drawStage(A); }
