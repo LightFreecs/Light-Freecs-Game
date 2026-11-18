@@ -25,10 +25,13 @@ body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:1
 *{box-sizing:border-box}
 button{font:inherit;color:inherit;cursor:pointer}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
 .stage{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;height:clamp(320px,56svh,640px);overflow:hidden;border-bottom:1px solid var(--line);
   background:radial-gradient(120% 90% at 50% 20%,var(--stage-b),var(--stage-a))}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--stage-a)}
 .stage canvas{display:block;width:100%;height:100%;touch-action:none}
+.stage canvas.overlay{position:absolute;inset:0;pointer-events:none}   /* behind the 3D canvas: the speed lines sit in the background, like the clip */
+.stage canvas#c{position:relative}
 .hud{position:absolute;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .hud.tl{top:10px;left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px))}
 .hud.bl{bottom:10px;left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px))}
@@ -68,11 +71,11 @@ th{color:var(--muted);font-weight:600}
 td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums;text-align:right}
 ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
 .status{color:var(--muted);font-size:13px}
-[hidden]{display:none!important}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
 
 <div class="stage">
+  <canvas id="lines" class="overlay" aria-hidden="true"></canvas>
   <canvas id="c" aria-label="3D view of the fighter and a training dummy. Drag to turn the camera, pinch or scroll to zoom. Tap to attack."></canvas>
   <div class="loading" id="loading">Loading the fighter…</div>
   <div class="hud tl">
@@ -81,8 +84,8 @@ ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
   </div>
   <div class="hud bl">
     <div class="views" role="group" aria-label="Camera view">
-      <button id="v-three" aria-pressed="true">¾</button>
-      <button id="v-side" aria-pressed="false">Side</button>
+      <button id="v-side" aria-pressed="true">Side</button>
+      <button id="v-three" aria-pressed="false">¾</button>
       <button id="v-behind" aria-pressed="false">Game camera</button>
       <button id="v-front" aria-pressed="false">Front</button>
     </div>
@@ -92,7 +95,7 @@ ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
 <main class="panel">
   <div style="display:flex;flex-direction:column;gap:6px">
     <h1>Attack Bench</h1>
-    <p class="lede">The basic 4-hit combo, rebuilt in a shonen fight style: a quick wind-up, a snap to the hit with almost no in-between frames, a frozen impact frame, follow-through, then back to guard. This is the game's own body and 42-bone skeleton, posed by the same rig maths the game uses, so what you see here is what goes in.</p>
+    <p class="lede">The basic 4-hit combo, redone after your clip: a rush of straight punches that shoot out in a couple of frames and hold, the other fist tight at the chest, then a thrusting kick to finish. Moving limbs get ink speed lines over a pale stretched copy of the limb, hits get yellow sparks, and the finisher gets a speed-line background. The body stays solid: no spins, small turns. This is the game's own body and skeleton, posed by the same rig maths the game uses.</p>
   </div>
 
   <section style="display:flex;flex-direction:column;gap:12px">
@@ -119,8 +122,10 @@ ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
     <section>
       <h2>Show</h2>
       <div class="row" role="group" aria-label="Effects">
-        <button class="chip" id="t-smear" aria-pressed="true">Smear trails</button>
-        <button class="chip" id="t-impact" aria-pressed="true">Impact frames</button>
+        <button class="chip" id="t-streaks" aria-pressed="true">Speed lines on limbs</button>
+        <button class="chip" id="t-impact" aria-pressed="true">Sparks and freeze</button>
+        <button class="chip" id="t-bglines" aria-pressed="true">Speed-line background</button>
+        <button class="chip" id="t-shake" aria-pressed="true">Camera shake</button>
         <button class="chip" id="t-dummy" aria-pressed="true">Training dummy</button>
       </div>
     </section>
@@ -129,15 +134,15 @@ ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
   <section class="card">
     <h2>Timing</h2>
     <div class="tablewrap"><table id="timing"></table></div>
-    <p class="status" style="margin-top:8px">Every hit lands before 0.25 s, the game's fastest repeat, so pressing Attack always feels instant. The impact freeze uses the game's own hit-stop: 60 ms for normal hits, 110 ms for the finisher.</p>
+    <p class="status" style="margin-top:8px">Every hit lands within 0.16 s of the press, well before the game's 0.25 s repeat, so mashing Attack chains the punches like the rush in your clip. The freeze on impact uses the game's own hit-stop: 60 ms for normal hits, 110 ms for the finisher.</p>
   </section>
 
   <section class="card">
     <h2>What goes into the game once you're happy</h2>
     <ul>
-      <li>These four moves replace today's light combo (jab, jab, kick, double punch) for every fighter, scaled to each hero's height.</li>
+      <li>These four moves replace today's light combo for every fighter, scaled to each hero's height.</li>
       <li>A fighting guard between hits; the fighter relaxes back to the normal stance when the combo ends.</li>
-      <li>Smear trails and impact flashes on the strike. No sound yet.</li>
+      <li>Speed lines on the striking limb, yellow sparks, the hit freeze and camera shake; the finisher's speed-line background as a screen overlay. No sound yet.</li>
       <li>Heavy attack later, as you asked.</li>
     </ul>
   </section>
@@ -182,7 +187,6 @@ const AA = (deg, axis) => new THREE.Quaternion().setFromAxisAngle(axis.clone().n
 const QI = () => new THREE.Quaternion();
 const mul = (...qs) => qs.reduce((a, b) => a.clone().multiply(b));
 const rot = (q, v) => v.clone().applyQuaternion(q);
-const fromTo = (a, b) => new THREE.Quaternion().setFromUnitVectors(a.clone().normalize(), b.clone().normalize());
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // rotation taking the frame (x along the bone, y = hinge axis) of the bind pose to the target one
 // (in Unity: Quaternion.LookRotation(xT, yT') * Inverse(Quaternion.LookRotation(xB, yB')) with y' made perpendicular to x)
@@ -206,7 +210,6 @@ class Rig {
   resetPose() { for (let i = 0; i < NB; i++) { this.model[i] = QI(); this.local[i] = QI(); this.localPos[i] = this.bindLocal[i].clone(); } }
   setModel(i, q) { const p = parentOf(i); const pm = p < 0 ? QI() : this.model[p]; this.model[i] = q.clone(); this.local[i] = pm.clone().invert().multiply(q); }
   inherit(i) { const p = parentOf(i); this.setModel(i, p < 0 ? QI() : this.model[p]); }
-  bindPos(i) { let p = V(0, 0, 0); for (let k = i; k >= 0; k = parentOf(k)) p.add(this.bindLocal[k]); return p; }
   // NEW (goes into CharacterRig): posed model-space position of a joint
   modelPos(i) { const p = parentOf(i); if (p < 0) return this.localPos[i].clone(); return this.modelPos(p).add(rot(this.model[p], this.localPos[i])); }
   setFingerCurl(side, curl) {
@@ -235,8 +238,7 @@ class Rig {
   }
   // NEW: two-bone IK from the joint's posed position (the game's SolveTwoBone uses the bind position, wrong once the torso turns).
   // Both bones are aimed with ONE shared hinge axis (from the pole), so the middle joint bends like a hinge and the two bones
-  // never roll against each other (shortest-arc aiming per bone did, and wrung the skin at elbows and knees).
-  // bindPole: where the middle joint sticks out in the bind pose (elbows back, knees forward).
+  // never roll against each other. bindPole: where the middle joint sticks out in the bind pose (elbows back, knees forward).
   solveTwoBone(upper, target, pole, weight, bindPole) {
     if (weight <= 0) return;
     const mid = upper + 1, end = upper + 2;
@@ -263,17 +265,18 @@ class Rig {
   }
 }
 
-// ================================================================== poses and moves (all in "attack space" = the fighter's facing, metres of the 2.3 m design body;
-// the game scales positions by rig.Height / 2.3). Limb targets are world (attack-space) points, so planted feet stay planted while the body turns.
+// ================================================================== poses and moves (all in "attack space" = the fighter's facing, metres of the
+// 2.3 m design body; the game scales positions by rig.Height / 2.3). Limb targets are attack-space points, so planted feet stay planted.
+// Turns are kept small (root ≤ 26°, chest ≤ 12° on top) so the skin never wrings: the body reads as one solid piece, like the clip.
 const GUARD = {
-  root: { p: [0, 0, 0], yaw: 0, pitch: 0, roll: 0 },
-  hips: { p: [0, -0.07, 0], yaw: 22, pitch: 4, roll: 0 },
-  torso: { yaw: 8, pitch: 8, roll: 0 },
+  root: { p: [0, 0, 0], yaw: 12, pitch: 0, roll: 0 },
+  hips: { p: [0, -0.06, 0], yaw: 6, pitch: 3, roll: 0 },
+  torso: { yaw: 4, pitch: 6, roll: 0 },
   head: { yaw: 0, pitch: -6 },
-  armL: { t: [-0.10, 1.60, 0.36], twist: 0 },
-  armR: { t: [0.14, 1.56, 0.20], twist: 0 },
-  legL: { t: [-0.20, 0.105, 0.26], yaw: 20, pitch: 0 },
-  legR: { t: [0.24, 0.105, -0.24], yaw: 40, pitch: 0 },
+  armL: { t: [-0.07, 1.55, 0.32], twist: -20 },
+  armR: { t: [0.12, 1.49, 0.20], twist: 20 },
+  legL: { t: [-0.18, 0.105, 0.22], yaw: 14, pitch: 0 },
+  legR: { t: [0.22, 0.105, -0.22], yaw: 34, pitch: 0 },
 };
 const merge = (base, over) => {
   if (over === undefined) return structuredClone(base);
@@ -282,64 +285,58 @@ const merge = (base, over) => {
   for (const k of Object.keys(over)) o[k] = merge(base[k], over[k]);
   return o;
 };
-// ease of the segment that ARRIVES at a key: snap = the strike (most travel in the first frames), smooth, in = accelerate
-const EASE = { snap: u => 1 - Math.pow(1 - u, 4), smooth: u => 0.5 - 0.5 * Math.cos(Math.PI * u), in: u => u * u, hold: u => 0 };
+// ease of the segment that ARRIVES at a key: snap = the strike (most of the travel in the first frame or two, like the clip), smooth, in
+const EASE = { snap: u => 1 - Math.pow(1 - u, 5), smooth: u => 0.5 - 0.5 * Math.cos(Math.PI * u), in: u => u * u };
 
 const MOVES = [
-  { id: "jab", name: "Lead jab", note: "Left hand snaps straight out off a small shoulder dip. Quick and light: it starts the rush.",
-    limb: "handL", hit: 0.09, stop: 0.06, smear: [0.05, 0.13], length: 0.34,
+  { id: "left", name: "Left straight", note: "The lead fist shoots straight out from the chest and holds there, the right fist tucked at the ribs. The shoulders turn in; the body stays square and solid.",
+    limb: "handL", hit: 0.07, stop: 0.06, streak: [0.025, 0.11], length: 0.28,
     keys: [
       { t: 0, pose: {} },
-      { t: 0.05, ease: "smooth", pose: { hips: { p: [0, -0.08, 0] }, torso: { yaw: 3 }, armL: { t: [-0.14, 1.57, 0.27] } } },
-      { t: 0.09, ease: "snap", pose: { root: { p: [0, 0, 0.10] }, hips: { yaw: 30, p: [0, -0.08, 0] }, torso: { yaw: 22, pitch: 10 },
-        armL: { t: [-0.02, 1.60, 0.95], twist: -50 }, armR: { t: [0.12, 1.58, 0.22] }, legL: { t: [-0.20, 0.105, 0.40] } } },
-      { t: 0.18, ease: "smooth", pose: { root: { p: [0, 0, 0.10] }, hips: { yaw: 28, p: [0, -0.08, 0] }, torso: { yaw: 19, pitch: 10 },
-        armL: { t: [-0.04, 1.60, 0.86], twist: -45 }, armR: { t: [0.12, 1.58, 0.22] }, legL: { t: [-0.20, 0.105, 0.40] } } },
-      { t: 0.34, ease: "smooth", pose: {} },
+      { t: 0.03, ease: "smooth", pose: { root: { yaw: 14 }, armL: { t: [-0.10, 1.52, 0.25] } } },
+      { t: 0.07, ease: "snap", pose: { root: { yaw: 26, p: [0, 0, 0.06] }, hips: { yaw: 6, pitch: 7 }, torso: { yaw: 6, pitch: 15 },
+        armL: { t: [-0.02, 1.55, 1.00], twist: -60 }, armR: { t: [0.14, 1.46, 0.12], twist: 20 }, legL: { t: [-0.18, 0.105, 0.30] } } },
+      { t: 0.15, ease: "smooth", pose: { root: { yaw: 25, p: [0, 0, 0.06] }, hips: { yaw: 6, pitch: 7 }, torso: { yaw: 6, pitch: 15 },
+        armL: { t: [-0.03, 1.55, 0.94], twist: -55 }, armR: { t: [0.14, 1.46, 0.12], twist: 20 }, legL: { t: [-0.18, 0.105, 0.30] } } },
+      { t: 0.28, ease: "smooth", pose: {} },
     ] },
-  { id: "cross", name: "Rear straight", note: "The hips whip round and the right fist drives through, back heel up. The weight shifts onto the front foot.",
-    limb: "handR", hit: 0.10, stop: 0.06, smear: [0.05, 0.14], length: 0.38,
+  { id: "right", name: "Right straight", note: "The other hand, same snap. The right shoulder drives through and the back heel lifts as the hips turn in.",
+    limb: "handR", hit: 0.07, stop: 0.06, streak: [0.025, 0.11], length: 0.28,
     keys: [
       { t: 0, pose: {} },
-      { t: 0.05, ease: "smooth", pose: { hips: { yaw: 30 }, torso: { yaw: 16 }, armR: { t: [0.20, 1.50, 0.08] } } },
-      { t: 0.10, ease: "snap", pose: { root: { p: [0, 0, 0.16] }, hips: { yaw: -10, p: [0, -0.10, 0] }, torso: { yaw: -25, pitch: 14 },
-        armR: { t: [0.04, 1.58, 1.00], twist: 50 }, armL: { t: [-0.12, 1.58, 0.24] },
-        legR: { t: [0.20, 0.105, -0.05], yaw: -10, pitch: 25 }, legL: { t: [-0.20, 0.105, 0.40] } } },
-      { t: 0.22, ease: "smooth", pose: { root: { p: [0, 0, 0.16] }, hips: { yaw: -8, p: [0, -0.10, 0] }, torso: { yaw: -22, pitch: 13 },
-        armR: { t: [0.06, 1.58, 0.92], twist: 45 }, armL: { t: [-0.12, 1.58, 0.24] },
-        legR: { t: [0.20, 0.105, -0.05], yaw: -10, pitch: 25 }, legL: { t: [-0.20, 0.105, 0.40] } } },
-      { t: 0.38, ease: "smooth", pose: {} },
+      { t: 0.03, ease: "smooth", pose: { root: { yaw: 10 }, armR: { t: [0.15, 1.46, 0.12] } } },
+      { t: 0.07, ease: "snap", pose: { root: { yaw: -16, p: [0, 0, 0.08] }, hips: { yaw: -8, pitch: 7 }, torso: { yaw: -10, pitch: 15 },
+        armR: { t: [0.03, 1.56, 1.00], twist: 60 }, armL: { t: [-0.13, 1.47, 0.14], twist: -20 },
+        legR: { t: [0.20, 0.105, -0.14], yaw: 5, pitch: 20 }, legL: { t: [-0.18, 0.105, 0.28] } } },
+      { t: 0.15, ease: "smooth", pose: { root: { yaw: -15, p: [0, 0, 0.08] }, hips: { yaw: -8, pitch: 7 }, torso: { yaw: -10, pitch: 15 },
+        armR: { t: [0.04, 1.56, 0.94], twist: 55 }, armL: { t: [-0.13, 1.47, 0.14], twist: -20 },
+        legR: { t: [0.20, 0.105, -0.14], yaw: 5, pitch: 20 }, legL: { t: [-0.18, 0.105, 0.28] } } },
+      { t: 0.28, ease: "smooth", pose: {} },
     ] },
-  { id: "kick", name: "Roundhouse kick", note: "Knee chambers, the body pivots on the front foot and the shin whips round at head height, leaning away. Then it chambers back and lands.",
-    limb: "footR", hit: 0.15, stop: 0.06, smear: [0.07, 0.27], length: 0.50,
+  { id: "body", name: "Left body blow", note: "A quick dip and a straight left into the stomach, like the gut punch near the end of the clip.",
+    limb: "handL", hit: 0.08, stop: 0.06, streak: [0.03, 0.12], length: 0.30,
     keys: [
       { t: 0, pose: {} },
-      { t: 0.07, ease: "in", pose: { root: { yaw: -25 }, hips: { yaw: -10, roll: 6, p: [0, -0.03, 0] }, torso: { yaw: -5, pitch: -4, roll: 8 },
-        legR: { t: [0.30, 0.80, 0.10], yaw: -60, pitch: 40 }, legL: { yaw: 0 }, armR: { t: [0.30, 1.40, -0.05] }, armL: { t: [-0.18, 1.62, 0.30] } } },
-      { t: 0.15, ease: "snap", pose: { root: { yaw: -80, p: [0, 0, 0.05] }, hips: { yaw: 0, roll: 22, pitch: -6, p: [0, -0.02, 0] }, torso: { yaw: 0, pitch: -6, roll: 22 },
-        legR: { t: [0.05, 1.50, 0.98], yaw: -90, pitch: 60 }, legL: { yaw: -40 }, armR: { t: [0.45, 1.25, -0.35] }, armL: { t: [-0.15, 1.62, 0.30] } } },
-      { t: 0.25, ease: "smooth", pose: { root: { yaw: -110, p: [0, 0, 0.05] }, hips: { yaw: 0, roll: 18, pitch: -6, p: [0, -0.02, 0] }, torso: { yaw: 0, pitch: -4, roll: 18 },
-        legR: { t: [-0.30, 1.40, 0.80], yaw: -120, pitch: 60 }, legL: { yaw: -60 }, armR: { t: [0.50, 1.30, -0.10] }, armL: { t: [-0.10, 1.62, 0.30] } } },
-      { t: 0.36, ease: "smooth", pose: { root: { yaw: -50 }, hips: { yaw: 0, roll: 6, p: [0, -0.04, 0] }, torso: { yaw: 0, roll: 6 },
-        legR: { t: [0.25, 0.75, 0.15], yaw: -40, pitch: 30 }, legL: { yaw: -20 }, armR: { t: [0.30, 1.45, 0.05] } } },
-      { t: 0.50, ease: "smooth", pose: {} },
+      { t: 0.03, ease: "smooth", pose: { hips: { p: [0, -0.10, 0] }, armL: { t: [-0.12, 1.40, 0.22] } } },
+      { t: 0.08, ease: "snap", pose: { root: { yaw: 22, p: [0, 0, 0.08] }, hips: { yaw: 6, pitch: 8, p: [0, -0.15, 0] }, torso: { yaw: 6, pitch: 16 },
+        armL: { t: [-0.02, 1.20, 0.98], twist: -60 }, armR: { t: [0.12, 1.50, 0.16], twist: 20 }, legL: { t: [-0.18, 0.105, 0.34] } } },
+      { t: 0.16, ease: "smooth", pose: { root: { yaw: 21, p: [0, 0, 0.08] }, hips: { yaw: 6, pitch: 8, p: [0, -0.15, 0] }, torso: { yaw: 6, pitch: 16 },
+        armL: { t: [-0.03, 1.21, 0.92], twist: -55 }, armR: { t: [0.12, 1.50, 0.16], twist: 20 }, legL: { t: [-0.18, 0.105, 0.34] } } },
+      { t: 0.30, ease: "smooth", pose: {} },
     ] },
-  { id: "finisher", name: "Lunging power straight", note: "Finisher. A deep coil and a held beat, then the fighter dashes in and drives the right fist straight through the target.",
-    limb: "handR", hit: 0.22, stop: 0.11, smear: [0.14, 0.27], length: 0.62, big: true, shake: [0.08, 0.15, 0.007],
+  { id: "kick", name: "Thrust kick", note: "Finisher. The knee comes up, then the leg drives straight out sole-first into the target and holds. Speed lines fill the background and the target is knocked back.",
+    limb: "footR", hit: 0.16, stop: 0.11, streak: [0.07, 0.20], length: 0.56, big: true, bg: [0.10, 0.42],
     keys: [
       { t: 0, pose: {} },
-      { t: 0.08, ease: "smooth", pose: { root: { p: [0, 0, -0.08] }, hips: { yaw: 45, p: [0, -0.20, 0], pitch: 0 }, torso: { yaw: 38, pitch: -2 }, head: { pitch: -10 },
-        armR: { t: [0.38, 1.20, -0.36] }, armL: { t: [-0.02, 1.50, 0.62], twist: -30 }, legL: { t: [-0.22, 0.105, 0.30] }, legR: { t: [0.28, 0.105, -0.32] } } },
-      { t: 0.15, ease: "smooth", pose: { root: { p: [0, 0, -0.09] }, hips: { yaw: 47, p: [0, -0.21, 0], pitch: 0 }, torso: { yaw: 40, pitch: -2 }, head: { pitch: -10 },
-        armR: { t: [0.39, 1.19, -0.38] }, armL: { t: [-0.02, 1.50, 0.62], twist: -30 }, legL: { t: [-0.22, 0.105, 0.30] }, legR: { t: [0.28, 0.105, -0.32] } } },
-      { t: 0.22, ease: "snap", pose: { root: { p: [0, 0, 0.35] }, hips: { yaw: -25, p: [0, -0.15, 0], pitch: 8 }, torso: { yaw: -32, pitch: 20 },
-        armR: { t: [0.02, 1.55, 1.55], twist: 50 }, armL: { t: [-0.28, 1.28, 0.25] },
-        legL: { t: [-0.22, 0.105, 0.75], yaw: 10 }, legR: { t: [0.24, 0.105, -0.08], yaw: -20, pitch: 30 } } },
-      { t: 0.36, ease: "smooth", pose: { root: { p: [0, 0, 0.35] }, hips: { yaw: -22, p: [0, -0.15, 0], pitch: 8 }, torso: { yaw: -29, pitch: 18 },
-        armR: { t: [0.04, 1.55, 1.48], twist: 45 }, armL: { t: [-0.28, 1.28, 0.25] },
-        legL: { t: [-0.22, 0.105, 0.75], yaw: 10 }, legR: { t: [0.24, 0.105, -0.08], yaw: -20, pitch: 30 } } },
-      { t: 0.48, ease: "smooth", pose: { root: { p: [0, 0.04, 0.15] }, legL: { t: [-0.20, 0.105, 0.40] }, legR: { t: [0.24, 0.105, -0.12] } } },
-      { t: 0.62, ease: "smooth", pose: {} },
+      { t: 0.08, ease: "in", pose: { root: { yaw: 4 }, hips: { yaw: 0, pitch: -8, p: [0, -0.03, 0] }, torso: { yaw: 0, pitch: -6 },
+        legR: { t: [0.12, 0.74, 0.14], yaw: 0, pitch: 0 }, legL: { yaw: 4 }, armL: { t: [-0.12, 1.52, 0.26] }, armR: { t: [0.20, 1.34, 0.14] } } },
+      { t: 0.16, ease: "snap", pose: { root: { yaw: 0, p: [0, 0, 0.10] }, hips: { yaw: 0, pitch: -18, p: [0, -0.02, 0] }, torso: { yaw: 0, pitch: -10 },
+        legR: { t: [0.10, 1.08, 0.94], yaw: 0, pitch: 0 }, legL: { t: [-0.18, 0.105, 0.20], yaw: -6 }, armL: { t: [-0.14, 1.48, 0.28] }, armR: { t: [0.24, 1.30, 0.14] } } },
+      { t: 0.30, ease: "smooth", pose: { root: { yaw: 0, p: [0, 0, 0.10] }, hips: { yaw: 0, pitch: -17, p: [0, -0.02, 0] }, torso: { yaw: 0, pitch: -9 },
+        legR: { t: [0.10, 1.06, 0.89], yaw: 0, pitch: 0 }, legL: { t: [-0.18, 0.105, 0.20], yaw: -6 }, armL: { t: [-0.14, 1.48, 0.28] }, armR: { t: [0.24, 1.30, 0.14] } } },
+      { t: 0.42, ease: "smooth", pose: { root: { yaw: 6, p: [0, 0, 0.05] }, hips: { yaw: 2, pitch: -6, p: [0, -0.04, 0] }, torso: { yaw: 2, pitch: -2 },
+        legR: { t: [0.14, 0.55, 0.18], yaw: 10, pitch: 0 } } },
+      { t: 0.56, ease: "smooth", pose: {} },
     ] },
 ];
 for (const m of MOVES) for (const k of m.keys) k.full = merge(GUARD, k.pose);
@@ -364,13 +361,12 @@ function samplePose(move, t) {
 // pose → rig. Base (idle rest pose) blended to the attack pose by weight w, per bone in model space.
 const rootQ = P => mul(AA(P.root.yaw, UP), AA(P.root.pitch, RIGHT), AA(P.root.roll, FWD));
 function applyPose(rig, P, w) {
-  // base: the game's idle (rest pose, straight legs)
-  rig.applyRestPose();
+  rig.applyRestPose();   // base: the game's idle (rest pose, straight legs)
   const base = rig.model.map(q => q.clone()), baseHips = rig.localPos[0].clone();
   if (w > 0) {
     const RQ = rootQ(P), RQi = RQ.clone().invert(), RP = V(...P.root.p);
     const toModel = a => rot(RQi, V(...a).sub(RP));
-    // hips + torso chain
+    // hips + torso chain (the turn is spread over three spine bones)
     rig.localPos[0] = rig.bindLocal[0].clone().add(V(...P.hips.p));
     const H = mul(AA(P.hips.yaw, UP), AA(P.hips.pitch, RIGHT), AA(P.hips.roll, FWD));
     rig.setModel(B.Hips, H);
@@ -381,7 +377,7 @@ function applyPose(rig, P, w) {
     const headYaw = chestYaw + clamp(P.head.yaw - P.root.yaw - chestYaw, -55, 55);
     const Hd = mul(AA(headYaw, UP), AA(P.head.pitch, RIGHT));
     rig.setModel(B.Neck, rig.model[B.UpperChest].clone().slerp(Hd, 0.5)); rig.setModel(B.Head, Hd);
-    // arms: shoulders follow the chest, IK to the fist targets, then fist roll and curl
+    // arms: shoulders follow the chest, IK to the fist targets (elbows down and out), then fist roll and curl
     for (const side of [-1, 1]) {
       const A = side < 0 ? P.armL : P.armR, sh = sideBone(B.LeftShoulder, side), ua = sh + 1;
       rig.inherit(sh);
@@ -395,14 +391,14 @@ function applyPose(rig, P, w) {
       rig.setModel(ua + 2, mul(AA(A.twist * 0.5, fore), rig.model[ua + 1]));
       rig.setFingerCurl(side, 1);
     }
-    // legs: IK to the (planted) foot targets, knees towards the toes, then the foot's own yaw / pitch
+    // legs: IK to the foot targets, knees towards the toes
     for (const side of [-1, 1]) {
       const L = side < 0 ? P.legL : P.legR, ul = sideBone(B.LeftUpperLeg, side);
       rig.setModel(ul, H); rig.setModel(ul + 1, H); rig.setModel(ul + 2, H);
       const footT = toModel(L.t), fy = L.yaw - P.root.yaw;
       const pole = footT.clone().add(rot(AA(fy, UP), V(0, 0, 0.9))).add(V(0, 0.55, 0));
       rig.solveTwoBone(ul, footT, pole, 1, V(0, 0, 1));
-      // planted foot: flat, pointing its own way; lifted foot (a kick): follows the shin, toes pointed by `pitch`
+      // planted foot: flat, pointing its own way; lifted foot (a kick): square to the shin, sole first
       const planted = mul(AA(fy, UP), AA(L.pitch, RIGHT)), lifted = mul(rig.model[ul + 1], AA(L.pitch, RIGHT));
       const lift = EASE.smooth(clamp((L.t[1] - 0.2) / 0.25, 0, 1));
       rig.setModel(ul + 2, planted.slerp(lifted, lift));
@@ -423,38 +419,39 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 80);
 const controls = new OrbitControls(camera, canvas);
-controls.enableDamping = true; controls.target.set(0, 1.1, 0.5); controls.minDistance = 2; controls.maxDistance = 14;
-scene.add(new THREE.HemisphereLight(0xfff4ea, 0x6c7488, 1.2));
-const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(-3, 6, 4); scene.add(sun);
-// everything below lives in Unity coordinates; x is mirrored so it looks like the game (Unity is left-handed)
+controls.enableDamping = true; controls.minDistance = 1.2; controls.maxDistance = 14;
+scene.add(new THREE.HemisphereLight(0xfff4ea, 0x8a8fa2, 1.3));
+const sun = new THREE.DirectionalLight(0xffffff, 2.0); sun.position.set(-3, 6, 4); scene.add(sun);
+// everything below lives in Unity coordinates; x is mirrored so it looks like the game (Unity is left-handed, three.js right-handed;
+// three.js flips the face winding for mirrored objects, and the vertex normals computed here equal Unity's, so nothing else changes)
 const world = new THREE.Group(); world.scale.x = -1; scene.add(world);
 
-const grad = (() => { const d = new Uint8Array([90, 90, 90, 255, 200, 200, 200, 255, 255, 255, 255, 255]); const t = new THREE.DataTexture(d, 3, 1, THREE.RGBAFormat); t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true; return t; })();
+const grad = (() => { const d = new Uint8Array([120, 120, 120, 255, 205, 205, 205, 255, 255, 255, 255, 255]); const t = new THREE.DataTexture(d, 3, 1, THREE.RGBAFormat); t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true; return t; })();
 const toon = color => new THREE.MeshToonMaterial({ color, gradientMap: grad });
 const outline = (color, w) => {
   const m = new THREE.MeshBasicMaterial({ color, side: THREE.BackSide });
   m.onBeforeCompile = s => { s.vertexShader = s.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>\ntransformed += normalize(normal) * ${w.toFixed(4)};`); };
   return m;
 };
-const INK = 0x3a2420;
+const INK = 0x2a1a18;
 
 // floor
 const floor = new THREE.Mesh(new THREE.CircleGeometry(4.5, 64), toon(0xd9cfc4)); floor.rotation.x = -Math.PI / 2; world.add(floor);
 const rings = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.RingGeometry(1.2, 1.21, 48)), new THREE.LineBasicMaterial({ color: 0xb8aa9c }));
 rings.rotation.x = -Math.PI / 2; rings.position.y = 0.002; world.add(rings);
 
-// training dummy at the game's melee reach (hit centre 1.3 m ahead)
-const dummy = new THREE.Group(); dummy.position.set(0, 0, 1.2); world.add(dummy);
+// training dummy at punching distance
+const dummy = new THREE.Group(); dummy.position.set(0, 0, 1.05); world.add(dummy);
 const dummyTilt = new THREE.Group(); dummy.add(dummyTilt);
 {
-  const g = new THREE.CapsuleGeometry(0.26, 1.15, 6, 20); g.translate(0, 0.95, 0);
+  const g = new THREE.CapsuleGeometry(0.24, 1.15, 6, 20); g.translate(0, 0.95, 0);
   dummyTilt.add(new THREE.Mesh(g, toon(0xc98b5a)), new THREE.Mesh(g, outline(INK, 0.012)));
-  const hg = new THREE.SphereGeometry(0.2, 24, 16); hg.translate(0, 1.95, 0);
+  const hg = new THREE.SphereGeometry(0.19, 24, 16); hg.translate(0, 1.95, 0);
   dummyTilt.add(new THREE.Mesh(hg, toon(0xd9a06f)), new THREE.Mesh(hg, outline(INK, 0.012)));
   const base = new THREE.CylinderGeometry(0.34, 0.4, 0.12, 24); base.translate(0, 0.06, 0);
   dummy.add(new THREE.Mesh(base, toon(0x6b5a4c)));
 }
-const dummyState = { a: 0, v: 0, ax: 0, vx: 0 };
+const dummyState = { a: 0, v: 0 };
 
 // ================================================================== the fighter (loaded from the game's baked body)
 const fighter = new THREE.Group(); world.add(fighter);   // = Graphics/Model in the game (root offset / yaw)
@@ -464,7 +461,7 @@ function parseBody(buf) {
   const tag = String.fromCharCode(dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3)); o = 4;
   if (tag !== "LBB1") throw new Error("not LBB1");
   const nb = dv.getInt32(o, true); o += 4;
-  const chin = dv.getFloat32(o, true); o += 16;
+  o += 16;   // chin, neck z, trunks top / bottom
   const joints = [];
   for (let i = 0; i < nb; i++) { joints.push(V(dv.getFloat32(o, true), dv.getFloat32(o + 4, true), dv.getFloat32(o + 8, true))); o += 12; }
   const parts = [];
@@ -476,7 +473,7 @@ function parseBody(buf) {
     const tri = new Uint16Array(buf.slice(o, o + nt * 6)); o += nt * 6;
     parts.push({ pos, bi, bw, tri });
   }
-  return { chin, joints, parts };
+  return { joints, parts };
 }
 async function loadBody() {
   // published page: the body as base64 text beside the page; in the repo: the game's own file
@@ -500,87 +497,170 @@ function buildFighter(body) {
     g.setAttribute("skinWeight", new THREE.BufferAttribute(part.bw, 4));
     g.setIndex(new THREE.BufferAttribute(Uint32Array.from(part.tri), 1));
     g.computeVertexNormals();
-    // Unity winds front faces clockwise: the computed normals point inwards, so flip them
-    const n = g.attributes.normal.array; for (let i = 0; i < n.length; i++) n[i] = -n[i];
-    for (const mat of [toon(colours[k]), outline(INK, k === 0 ? 0.008 : 0.006)]) {
+    for (const mat of [toon(colours[k]), outline(INK, k === 0 ? 0.009 : 0.007)]) {
       const m = new THREE.SkinnedMesh(g, mat); m.frustumCulled = false; fighter.add(m); meshes.push(m);
     }
   });
-  // bind with the full world transform (including the mirror) in place
-  scene.updateMatrixWorld(true);
+  scene.updateMatrixWorld(true);   // bind with the full world transform (including the mirror) in place
   const skeleton = new THREE.Skeleton(bones);
   for (const m of meshes) m.bind(skeleton, m.matrixWorld);
-  // stand-in head on the Head bone (the game uses the Toon Head here): skull, hair cap, eyes to read where it looks
+  // stand-in head on the Head bone (the game uses the Toon Head here): skull, hair, eyes to read where it looks
   const head = bones[B.Head], hc = V(0, 0.155, 0.02);
   const skull = new THREE.SphereGeometry(1, 32, 20); skull.scale(0.15, 0.19, 0.165); skull.translate(hc.x, hc.y, hc.z);
-  head.add(new THREE.Mesh(skull, toon(0xffdcc8)), new THREE.Mesh(skull, outline(INK, 0.008)));
+  head.add(new THREE.Mesh(skull, toon(0xffdcc8)), new THREE.Mesh(skull, outline(INK, 0.009)));
   const hair = new THREE.SphereGeometry(1, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.58); hair.scale(0.165, 0.2, 0.18); hair.rotateX(-0.35); hair.translate(hc.x, hc.y + 0.02, hc.z - 0.01);
-  head.add(new THREE.Mesh(hair, toon(0x1d2238)), new THREE.Mesh(hair, outline(INK, 0.008)));
+  head.add(new THREE.Mesh(hair, toon(0x1d2238)), new THREE.Mesh(hair, outline(INK, 0.009)));
   for (const s of [-1, 1]) { const e = new THREE.SphereGeometry(1, 12, 8); e.scale(0.016, 0.03, 0.01); e.translate(hc.x + s * 0.055, hc.y - 0.02, hc.z + 0.158); head.add(new THREE.Mesh(e, new THREE.MeshBasicMaterial({ color: 0x15151c }))); }
 }
-function syncBones() {
-  for (let i = 0; i < NB; i++) { bones[i].quaternion.copy(rig.local[i]); bones[i].position.copy(rig.localPos[i]); }
+function syncBones() { for (let i = 0; i < NB; i++) { bones[i].quaternion.copy(rig.local[i]); bones[i].position.copy(rig.localPos[i]); } }
+
+// ================================================================== effects, after the clip
+const fx = new THREE.Group(); world.add(fx);
+const toAtk = p => p.applyQuaternion(fighter.quaternion).add(fighter.position);   // model space → attack space
+const rnd = (i, k) => { const x = Math.sin(i * 127.1 + k * 311.7) * 43758.5453; return x - Math.floor(x); };
+
+// the striking limb's lower segment (forearm / shin) as a frame in attack space: elbow/knee A, wrist/ankle B, two perpendiculars
+function limbFrame(name) {
+  const side = name.endsWith("L") ? -1 : 1, hand = name.startsWith("hand");
+  const lower = hand ? sideBone(B.LeftLowerArm, side) : sideBone(B.LeftLowerLeg, side), end = lower + 1;
+  const q = rig.model[lower], d = rig.bindLocal[end].clone().normalize();
+  let p1 = hand ? rig.palm(side) : V(1, 0, 0); p1.sub(d.clone().multiplyScalar(p1.dot(d))).normalize();
+  const v = rot(q, p1).applyQuaternion(fighter.quaternion), w = rot(q, d.clone().cross(p1)).applyQuaternion(fighter.quaternion);
+  return { A: toAtk(rig.modelPos(lower)), B: toAtk(rig.modelPos(end)), v, w, r: hand ? 0.05 : 0.065, ext: hand ? 1.42 : 1.12 };
+}
+function limbEnd(name) {
+  const f = limbFrame(name);
+  return f.A.clone().lerp(f.B, name.startsWith("hand") ? 1.3 : 1.05);
 }
 
-// ================================================================== effects: smear trail + impact flash (attack-space, under the fighter's parent)
-const fx = new THREE.Group(); world.add(fx);
-// smear = the limb stretched along its path (skin tone) with an ink edge, the way anime draws a smear frame
-const SMEAR_N = 48;
-function smearLayer(width, color, alpha, order, offset = 0) {
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(SMEAR_N * 2 * 3), 3));
-  g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(SMEAR_N * 2 * 4), 4));
-  const idx = []; for (let i = 0; i < SMEAR_N - 1; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } g.setIndex(idx);
-  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
-  m.frustumCulled = false; m.renderOrder = order; fx.add(m);
-  return { g, width, color, alpha, offset };
+// camera-facing strips (shared by the pale limb copy and the ink lines)
+class Strips {
+  constructor(count, len, order, depthTest) {
+    this.count = count; this.len = len;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(count * len * 2 * 3), 3));
+    g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(count * len * 2 * 4), 4));
+    const idx = [];
+    for (let s = 0; s < count; s++) for (let i = 0; i < len - 1; i++) { const a = (s * len + i) * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+    g.setIndex(idx);
+    this.g = g;
+    this.mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, depthTest, side: THREE.DoubleSide }));
+    this.mesh.frustumCulled = false; this.mesh.renderOrder = order; fx.add(this.mesh);
+  }
+  // pts: newest first, [{p, a (alpha), w (half width)}]
+  set(s, pts, color, camLocal) {
+    const pos = this.g.attributes.position.array, col = this.g.attributes.color.array;
+    for (let i = 0; i < this.len; i++) {
+      const k = Math.min(i, pts.length - 1), base = (s * this.len + i) * 2;
+      let p = V(0, -50, 0), side = V(0, 0, 0), a = 0;
+      if (pts.length > 1) {
+        const P = pts[k], prev = pts[Math.max(0, k - 1)].p, next = pts[Math.min(pts.length - 1, k + 1)].p;
+        const along = next.clone().sub(prev); if (along.lengthSq() < 1e-10) along.set(0, 0, 1);
+        side = along.cross(camLocal.clone().sub(P.p)).normalize().multiplyScalar(P.w);
+        p = P.p; a = i < pts.length ? P.a : 0;
+      }
+      pos.set([p.x + side.x, p.y + side.y, p.z + side.z, p.x - side.x, p.y - side.y, p.z - side.z], base * 3);
+      col.set([...color, a, ...color, a], base * 4);
+    }
+  }
+  done() { this.g.attributes.position.needsUpdate = true; this.g.attributes.color.needsUpdate = true; }
 }
-const INK3 = [0.2, 0.12, 0.12];
-const smearLayers = [
-  smearLayer(1.0, INK3, 0.95, 5),                 // ink edge
-  smearLayer(0.8, [1.0, 0.89, 0.83], 1.0, 6),     // the stretched limb
-  smearLayer(0.07, INK3, 0.85, 7, 1.25),          // speed streaks alongside
-  smearLayer(0.05, INK3, 0.7, 7, -1.4),
-];
-let smearPts = [];   // {p, age, width}
-function starTexture() {
+// pale stretched copy of the limb (two paths: the fist / foot and the elbow / knee) under ink speed lines across it
+const HIST = 16, SPAN = 0.09, STREAKS = 26;
+const ghost = new Strips(2, HIST, 5, true), ink = new Strips(STREAKS, HIST, 7, false);
+const streakDefs = Array.from({ length: STREAKS }, (_, i) => ({
+  s: 0.2 + 1.2 * rnd(i, 1), phi: Math.PI * 2 * rnd(i, 2), r: 0.35 + 0.75 * rnd(i, 3), len: 0.4 + 0.6 * rnd(i, 4),
+  white: rnd(i, 5) < 0.2, w: 0.0035 + 0.005 * rnd(i, 6),
+}));
+let limbHist = [], limbHead = null, sampleClock = 0, streakFade = 0, streakLimb = null;
+function updateStreaks() {
+  const camLocal = world.worldToLocal(camera.position.clone());
+  const H = limbHead ? [...limbHist, limbHead] : limbHist, n = H.length;
+  // ghost: fist / foot path and elbow / knee path
+  for (const [s, at, w] of [[0, null, 0], [1, 0.25, 0]]) {
+    const pts = [];
+    for (let k = n - 1; k >= 0 && pts.length < HIST; k--) {
+      const h = H[k], u = h.age / SPAN; if (u > 1) break;
+      const p = at === null ? h.A.clone().lerp(h.B, h.ext * 0.93) : h.A.clone().lerp(h.B, at);
+      pts.push({ p, a: (1 - u) * 0.55 * streakFade, w: h.r * (at === null ? 1.5 : 1.2) * (1 - 0.6 * u) });
+    }
+    ghost.set(s, pts, [1.0, 0.9, 0.85], camLocal);
+  }
+  streakDefs.forEach((d, s) => {
+    const pts = [], maxAge = SPAN * d.len;
+    for (let k = n - 1; k >= 0 && pts.length < HIST; k--) {
+      const h = H[k], u = h.age / maxAge; if (u > 1) break;
+      const off = h.v.clone().multiplyScalar(Math.cos(d.phi) * d.r * h.r).add(h.w.clone().multiplyScalar(Math.sin(d.phi) * d.r * h.r));
+      const p = h.A.clone().lerp(h.B, Math.min(d.s, h.ext)).add(off);
+      pts.push({ p, a: (1 - u) * (d.white ? 0.9 : 0.85) * streakFade, w: d.w });
+    }
+    ink.set(s, pts, d.white ? [1, 1, 1] : [0.13, 0.09, 0.1], camLocal);
+  });
+  ghost.done(); ink.done();
+}
+
+// yellow impact sparks (angular shards round a white core), like the clip's hit flashes
+function sparkTexture(seed) {
   const S = 256, cv = document.createElement("canvas"); cv.width = cv.height = S; const g = cv.getContext("2d");
   g.translate(S / 2, S / 2);
-  const spikes = 12;
-  g.beginPath();
-  for (let i = 0; i < spikes * 2; i++) { const r = i % 2 ? S * 0.12 : S * (0.36 + 0.12 * ((i * 7) % 5) / 4); const a = i / (spikes * 2) * Math.PI * 2; g.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
-  g.closePath(); g.fillStyle = "#ffffff"; g.fill(); g.lineWidth = 10; g.strokeStyle = "#1b1418"; g.stroke();
+  const n = 11;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + rnd(i, seed) * 0.5, r0 = 14 + 14 * rnd(i, seed + 1), r1 = 70 + 56 * rnd(i, seed + 2), wd = 0.06 + 0.07 * rnd(i, seed + 3);
+    g.beginPath(); g.moveTo(Math.cos(a - wd) * r0, Math.sin(a - wd) * r0); g.lineTo(Math.cos(a) * r1, Math.sin(a) * r1); g.lineTo(Math.cos(a + wd) * r0, Math.sin(a + wd) * r0); g.closePath();
+    g.fillStyle = i % 3 ? "#ffe45c" : "#fff7c4"; g.fill(); g.lineWidth = 2; g.strokeStyle = "#d99a1a"; g.stroke();
+  }
+  for (let i = 0; i < 7; i++) {
+    const a = rnd(i, seed + 7) * Math.PI * 2, r1 = 90 + 30 * rnd(i, seed + 8);
+    g.beginPath(); g.moveTo(Math.cos(a) * 30, Math.sin(a) * 30); g.lineTo(Math.cos(a) * r1, Math.sin(a) * r1); g.lineWidth = 2.5; g.strokeStyle = "#ffffff"; g.stroke();
+  }
+  const rg = g.createRadialGradient(0, 0, 0, 0, 0, 34); rg.addColorStop(0, "#ffffff"); rg.addColorStop(0.6, "rgba(255,255,230,0.95)"); rg.addColorStop(1, "rgba(255,240,150,0)");
+  g.fillStyle = rg; g.beginPath(); g.arc(0, 0, 34, 0, Math.PI * 2); g.fill();
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
-function linesTexture() {
-  const S = 256, cv = document.createElement("canvas"); cv.width = cv.height = S; const g = cv.getContext("2d");
-  g.translate(S / 2, S / 2); g.strokeStyle = "#1b1418"; g.lineCap = "round";
-  for (let i = 0; i < 22; i++) { const a = i / 22 * Math.PI * 2 + (i % 3) * 0.05, r0 = S * (0.3 + (i % 4) * 0.03); g.lineWidth = 3 + (i % 3) * 2; g.beginPath(); g.moveTo(Math.cos(a) * r0, Math.sin(a) * r0); g.lineTo(Math.cos(a) * S * 0.49, Math.sin(a) * S * 0.49); g.stroke(); }
-  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
-}
-const STAR = starTexture(), LINES = linesTexture();
+const SPARKS = [sparkTexture(1), sparkTexture(20), sparkTexture(40)];
 const impacts = [];
+let sparkSeed = 0;
 function spawnImpact(p, big) {
-  const star = new THREE.Sprite(new THREE.SpriteMaterial({ map: STAR, transparent: true, depthTest: false }));
-  const lines = new THREE.Sprite(new THREE.SpriteMaterial({ map: LINES, transparent: true, depthTest: false }));
-  star.position.copy(p); lines.position.copy(p); star.renderOrder = lines.renderOrder = 10;
-  fx.add(star, lines);
-  impacts.push({ star, lines, age: 0, big });
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: SPARKS[sparkSeed++ % SPARKS.length], transparent: true, depthTest: false }));
+  sp.position.copy(p); sp.renderOrder = 10; sp.material.rotation = rnd(sparkSeed, 3) * Math.PI * 2;
+  fx.add(sp);
+  impacts.push({ sp, age: 0, big });
+}
+
+// speed-line background (screen overlay; in the game a full-screen UI layer)
+const linesCanvas = document.getElementById("lines"), lctx = linesCanvas.getContext("2d");
+const bgLines = Array.from({ length: 70 }, (_, i) => ({ y: rnd(i, 11), x: rnd(i, 12), len: 0.18 + 0.4 * rnd(i, 13), sp: 1.8 + 2.2 * rnd(i, 14), w: 1 + 3 * rnd(i, 15), white: rnd(i, 16) < 0.55 }));
+let bgAmt = 0;
+function drawBgLines(dt) {
+  const W = linesCanvas.width, Hh = linesCanvas.height;
+  lctx.clearRect(0, 0, W, Hh);
+  if (bgAmt <= 0.01) return;
+  const ang = -0.38, ca = Math.cos(ang), sa = Math.sin(ang), D = Math.hypot(W, Hh);
+  lctx.save(); lctx.translate(W / 2, Hh / 2); lctx.rotate(ang); lctx.lineCap = "round";
+  for (const l of bgLines) {
+    if (!reduce) l.x = (l.x + l.sp * dt * (0.4 + 0.6 * state.speed)) % 1.6;
+    const x = (l.x - 0.3) * D - D / 2, y = (l.y - 0.5) * D;
+    lctx.globalAlpha = bgAmt * (l.white ? 0.85 : 0.4);
+    lctx.strokeStyle = l.white ? "#ffffff" : "#4f74a8"; lctx.lineWidth = l.w * (W / 900);
+    lctx.beginPath(); lctx.moveTo(x, y); lctx.lineTo(x - l.len * D * 0.5, y); lctx.stroke();
+  }
+  lctx.restore();
 }
 
 // ================================================================== playback state (game timing: CombatMath.LightAttackInterval 0.25 s, combo window 0.6 s)
-const state = { speed: 1, smear: true, impact: true, dummy: true, autoplay: false, view: "v-three" };
-try { Object.assign(state, JSON.parse(localStorage.getItem("attack-bench") || "{}")); } catch (e) {}
-const save = () => { try { localStorage.setItem("attack-bench", JSON.stringify(state)); } catch (e) {} };
-let clock = 0;                 // animation time (seconds, scaled by speed, frozen during hit-stop)
-let cur = null, curT = 0, from = null, fromT = 0, blendT = 1;   // current move, previous move for the 70 ms crossfade
-let weight = 0, freeze = 0, hitDone = false, guardHold = 0;
+const state = { speed: 1, streaks: true, impact: true, bglines: true, shake: true, dummy: true, autoplay: false, view: "v-side" };
+try { Object.assign(state, JSON.parse(localStorage.getItem("attack-bench-2") || "{}")); } catch (e) {}
+const save = () => { try { localStorage.setItem("attack-bench-2", JSON.stringify(state)); } catch (e) {} };
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let clock = 0;
+let cur = null, curT = 0, from = null, fromT = 0, blendT = 1;
+let weight = 0, freeze = 0, hitDone = false, guardHold = 0, shakeT = 0, shakeAmp = 0;
 let comboIdx = 0, lastPress = -9, nextAllowed = 0;
 let autoTimer = 0, autoStep = 0;
 
 function play(moveIndex) {
   if (cur) { from = cur; fromT = curT; blendT = 0; } else { from = null; blendT = 1; }
-  cur = MOVES[moveIndex]; curT = 0; hitDone = false; smearPts = [];
+  cur = MOVES[moveIndex]; curT = 0; hitDone = false; limbHist = []; limbHead = null; sampleClock = 0;
   document.getElementById("now").textContent = cur.name;
   for (const [i, el] of [...document.getElementById("moves").children].entries()) el.setAttribute("aria-pressed", String(i === moveIndex));
 }
@@ -593,46 +673,31 @@ function pressAttack() {
   [...document.getElementById("combo").children].forEach((s, i) => s.classList.toggle("on", i < (comboIdx === 0 ? 4 : comboIdx)));
 }
 
-function limbEnd(name) {
-  // fist / foot centre in attack space
-  const side = name.endsWith("L") ? -1 : 1;
-  let p;
-  if (name.startsWith("hand")) {
-    const w = rig.modelPos(sideBone(B.LeftHand, side)), e = rig.modelPos(sideBone(B.LeftLowerArm, side));
-    p = w.clone().add(w.clone().sub(e).normalize().multiplyScalar(0.08));
-  } else {
-    const a = rig.modelPos(sideBone(B.LeftFoot, side)), t = rig.modelPos(sideBone(B.LeftToes, side)), k = rig.modelPos(sideBone(B.LeftLowerLeg, side));
-    p = a.clone().lerp(k, 0.15).lerp(t, 0.3);
-  }
-  return p.applyQuaternion(fighter.quaternion).add(fighter.position);
-}
-
 function step(dt) {
   if (!rig) return;
-  // hit-stop: freeze the animation clock (effects keep playing)
-  if (freeze > 0) { freeze -= dt; dt = 0; }
+  const real = dt;
+  if (freeze > 0) { freeze -= dt; dt = 0; }   // hit-stop: the animation clock stops, effects keep going
   const adt = dt * state.speed;
   clock += adt;
   if (state.autoplay) {
     autoTimer -= adt;
-    if (autoTimer <= 0) { if (autoStep < 4) { if (autoStep === 0) { comboIdx = 0; lastPress = -9; } pressAttack(); autoStep++; autoTimer = autoStep === 4 ? 1.3 : [0.30, 0.32, 0.42][autoStep - 1]; } else { autoStep = 0; autoTimer = 0; } }
+    if (autoTimer <= 0) {
+      if (autoStep < 4) { if (autoStep === 0) { comboIdx = 0; lastPress = -9; } pressAttack(); autoStep++; autoTimer = autoStep === 4 ? 1.3 : [0.27, 0.27, 0.30][autoStep - 1]; }
+      else { autoStep = 0; autoTimer = 0; }
+    }
   }
   let P = GUARD;
   if (cur) {
-    curT += adt; blendT = Math.min(1, blendT + adt / 0.07);
+    curT += adt; blendT = Math.min(1, blendT + adt / 0.06);
     if (from) fromT += adt;
     P = samplePose(cur, curT);
     if (from && blendT < 1) P = lerpPose(samplePose(from, fromT), P, EASE.smooth(blendT));
-    // the held beat before a finisher trembles with power
-    if (cur.shake && curT >= cur.shake[0] && curT <= cur.shake[1]) {
-      P = structuredClone(P); const a = cur.shake[2];
-      P.root.p = [P.root.p[0] + Math.sin(clock * 260) * a, P.root.p[1] + Math.sin(clock * 197) * a * 0.5, P.root.p[2]];
-    }
     weight = Math.min(1, weight + adt / 0.05);
     if (!hitDone && curT >= cur.hit) {
       hitDone = true;
       if (state.impact) { freeze = cur.stop; spawnImpact(limbEnd(cur.limb), cur.big); }
-      if (state.dummy) { dummyState.v -= cur.big ? 7 : 4; dummyState.vx += (cur.limb === "footR" ? 3 : 0); }
+      if (state.shake) { shakeT = cur.big ? 0.22 : 0.12; shakeAmp = cur.big ? 0.05 : 0.02; }
+      if (state.dummy) dummyState.v -= cur.big ? 8 : 3.5;
     }
     if (curT >= cur.length) { cur = null; from = null; guardHold = 0.35; document.getElementById("now").textContent = "Guard"; }
   } else {
@@ -640,75 +705,78 @@ function step(dt) {
     if (guardHold <= 0) weight = Math.max(0, weight - adt / 0.3);
   }
   applyPose(rig, P, EASE.smooth(weight));
-  const RQ = rootQ(P);
   fighter.position.set(...P.root.p).multiplyScalar(EASE.smooth(weight));
-  fighter.quaternion.copy(QI().slerp(RQ, EASE.smooth(weight)));
+  fighter.quaternion.copy(QI().slerp(rootQ(P), EASE.smooth(weight)));
   syncBones();
   fighter.updateMatrixWorld(true);
-  // smear trail
-  const inSmear = cur && state.smear && curT >= cur.smear[0] && curT <= cur.smear[1];
-  if (inSmear && adt > 0) smearPts.push({ p: limbEnd(cur.limb), age: 0, w: cur.limb === "footR" ? 0.16 : (cur.big ? 0.17 : 0.12) });
-  for (const s of smearPts) s.age += adt;   // animation time: the trail holds during the impact freeze and stretches in slow motion
-  smearPts = smearPts.filter(s => s.age < 0.12).slice(-SMEAR_N);
-  updateSmear();
-  // impacts
+  // limb history for the speed lines (animation time, so they hold during the freeze and stretch in slow motion)
+  const active = cur && curT >= cur.streak[0] && curT <= cur.streak[1];
+  if (active && state.streaks) streakLimb = cur.limb;
+  streakFade = clamp(streakFade + (active && state.streaks ? 1 : -1) * adt / 0.03, 0, 1);
+  for (const h of limbHist) h.age += adt;
+  sampleClock += adt;
+  if (streakLimb && (active || streakFade > 0) && adt > 0) {
+    // samples every 1/120 s of animation time (same trail length at any playback speed) plus a live head on the limb
+    limbHead = { ...limbFrame(streakLimb), age: 0 };
+    if (sampleClock >= 1 / 120 || !limbHist.length) { limbHist.push({ ...limbHead }); sampleClock = 0; }
+  }
+  limbHist = limbHist.filter(h => h.age <= SPAN).slice(-HIST);
+  updateStreaks();
+  // sparks: one bright frame, then shrink and fade
   for (const im of impacts) {
-    im.age += dt;
-    const life = im.big ? 0.3 : 0.2, u = im.age / life, sz = (im.big ? 0.85 : 0.42) * (0.4 + 0.9 * Math.sqrt(Math.min(1, u * 3)));
-    im.star.scale.set(sz, sz, 1); im.lines.scale.set(sz * (im.big ? 2.2 : 1.8), sz * (im.big ? 2.2 : 1.8), 1);
-    im.star.material.opacity = im.lines.material.opacity = Math.max(0, 1 - u * u);
-    im.star.material.rotation = im.age * 2;
+    im.age += real;
+    const life = im.big ? 0.22 : 0.14, u = im.age / life, sz = (im.big ? 1.3 : 0.8) * (u < 0.15 ? 1.15 : 1 - 0.35 * u);
+    im.sp.scale.set(sz, sz, 1); im.sp.material.opacity = Math.max(0, 1 - u * u);
   }
-  for (let i = impacts.length - 1; i >= 0; i--) if (impacts[i].age > (impacts[i].big ? 0.3 : 0.2)) { fx.remove(impacts[i].star, impacts[i].lines); impacts.splice(i, 1); }
-  // dummy spring
-  dummyState.v += (-dummyState.a * 120 - dummyState.v * 9) * dt; dummyState.a += dummyState.v * dt;
-  dummyState.vx += (-dummyState.ax * 120 - dummyState.vx * 9) * dt; dummyState.ax += dummyState.vx * dt;
-  dummyTilt.rotation.x = clamp(dummyState.a, -0.6, 0.6) * 0.5; dummyTilt.rotation.z = clamp(dummyState.ax, -0.5, 0.5) * 0.4;
+  for (let i = impacts.length - 1; i >= 0; i--) if (impacts[i].age > (impacts[i].big ? 0.22 : 0.14)) { fx.remove(impacts[i].sp); impacts.splice(i, 1); }
+  // speed-line background around the finisher
+  const bgOn = state.bglines && cur && cur.bg && curT >= cur.bg[0] && curT <= cur.bg[1];
+  bgAmt = clamp(bgAmt + (bgOn ? real / 0.06 : -real / 0.18), 0, 1);
+  drawBgLines(real);
+  // dummy springs back
+  dummyState.v += (-dummyState.a * 120 - dummyState.v * 9) * real; dummyState.a += dummyState.v * real;
+  dummyTilt.rotation.x = -clamp(dummyState.a, -0.6, 0.6) * 0.5;
   dummy.visible = state.dummy;
-}
-function updateSmear() {
-  const camLocal = world.worldToLocal(camera.position.clone());
-  const n = smearPts.length;
-  for (const L of smearLayers) {
-    const pos = L.g.attributes.position.array, col = L.g.attributes.color.array;
-    for (let i = 0; i < SMEAR_N; i++) {
-      const k = Math.min(n - 1, Math.max(0, i - (SMEAR_N - n)));
-      let a = 0, p = V(0, -10, 0), side = V(0, 0, 0);
-      if (n > 1) {
-        const s = smearPts[k], prev = smearPts[Math.max(0, k - 1)].p, next = smearPts[Math.min(n - 1, k + 1)].p;
-        const along = next.clone().sub(prev); if (along.lengthSq() < 1e-8) along.set(0, 0, 1);
-        side = along.cross(camLocal.clone().sub(s.p)).normalize();
-        const fade = 1 - s.age / 0.12, along01 = k / Math.max(1, n - 1);
-        a = Math.min(1, Math.max(0, fade) * 1.6) * (0.35 + 0.65 * along01) * L.alpha;
-        const half = s.w * (0.2 + 0.8 * along01) / 2;
-        p = s.p.clone().add(side.clone().multiplyScalar(half * L.offset)); side.multiplyScalar(half * L.width);
-      }
-      pos.set([p.x + side.x, p.y + side.y, p.z + side.z, p.x - side.x, p.y - side.y, p.z - side.z], i * 6);
-      col.set([...L.color, a, ...L.color, a], i * 8);
-    }
-    L.g.attributes.position.needsUpdate = true; L.g.attributes.color.needsUpdate = true;
-  }
+  shakeT = Math.max(0, shakeT - real);
 }
 
 // ================================================================== camera views (Unity coords; the world group mirrors x)
-const VIEWS = { "v-three": [3.7, 1.8, -1.9], "v-side": [4.6, 1.3, 0.6], "v-behind": [0.9, 2.2, -3.9], "v-front": [2.4, 1.6, 4.6] };
+const VIEWS = {
+  "v-side": [[3.9, 1.45, 0.45], [0, 1.15, 0.5]],
+  "v-three": [[3.3, 1.75, -1.7], [0, 1.2, 0.45]],
+  "v-behind": [[0.9, 2.2, -3.6], [0, 1.25, 0.6]],
+  "v-front": [[2.3, 1.6, 4.2], [0, 1.2, 0.4]],
+};
+let camAnim = null;
 function setView(id, instant) {
   state.view = id; save();
   for (const k of Object.keys(VIEWS)) document.getElementById(k).setAttribute("aria-pressed", String(k === id));
-  const [x, y, z] = VIEWS[id];
-  const p = world.localToWorld(V(x, y, z));
-  camAnim = { from: camera.position.clone(), to: p, t: instant ? 1 : 0 };
-  controls.target.copy(world.localToWorld(V(0, 1.15, 0.55)));
+  const [p, t] = VIEWS[id];
+  camAnim = { from: camera.position.clone(), to: world.localToWorld(V(...p)), tFrom: controls.target.clone(), tTo: world.localToWorld(V(...t)), t: instant ? 1 : 0 };
+  if (instant) { camera.position.copy(camAnim.to); controls.target.copy(camAnim.tTo); camAnim = null; }
 }
-let camAnim = null;
 for (const id of Object.keys(VIEWS)) document.getElementById(id).addEventListener("click", () => setView(id));
 
 function resize() {
   const r = canvas.getBoundingClientRect();
   renderer.setSize(r.width, r.height, false);
   camera.aspect = r.width / Math.max(1, r.height); camera.updateProjectionMatrix();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  linesCanvas.width = Math.round(r.width * dpr); linesCanvas.height = Math.round(r.height * dpr);
 }
 new ResizeObserver(resize).observe(canvas);
+
+function render() {
+  // camera shake on hits (offset only for this frame)
+  let off = null;
+  if (shakeT > 0 && !reduce) {
+    const k = shakeAmp * (shakeT / 0.22);
+    off = V((Math.random() - 0.5) * 2 * k, (Math.random() - 0.5) * 2 * k, 0).applyQuaternion(camera.quaternion);
+    camera.position.add(off);
+  }
+  renderer.render(scene, camera);
+  if (off) camera.position.sub(off);
+}
 
 // ================================================================== UI
 const movesEl = document.getElementById("moves");
@@ -725,44 +793,43 @@ for (const [v, l] of SPEEDS) {
   b.addEventListener("click", () => { state.speed = v; save(); syncToggles(); });
   speedsEl.appendChild(b);
 }
-const tog = (id, key) => document.getElementById(id).addEventListener("click", () => { state[key] = !state[key]; save(); syncToggles(); });
-tog("t-smear", "smear"); tog("t-impact", "impact"); tog("t-dummy", "dummy");
-document.getElementById("autoplay").addEventListener("click", () => { state.autoplay = !state.autoplay; autoStep = 0; autoTimer = 0; save(); syncToggles(); });
+const TOGGLES = [["t-streaks", "streaks"], ["t-impact", "impact"], ["t-bglines", "bglines"], ["t-shake", "shake"], ["t-dummy", "dummy"], ["autoplay", "autoplay"]];
+for (const [id, key] of TOGGLES) document.getElementById(id).addEventListener("click", () => { state[key] = !state[key]; if (key === "autoplay") { autoStep = 0; autoTimer = 0; } save(); syncToggles(); });
 function syncToggles() {
   for (const b of speedsEl.children) b.setAttribute("aria-pressed", String(+b.dataset.v === state.speed));
   document.getElementById("speed-pill").textContent = SPEEDS.find(s => s[0] === state.speed)?.[1] || "1×";
-  for (const [id, key] of [["t-smear", "smear"], ["t-impact", "impact"], ["t-dummy", "dummy"], ["autoplay", "autoplay"]]) document.getElementById(id).setAttribute("aria-pressed", String(state[key]));
+  for (const [id, key] of TOGGLES) document.getElementById(id).setAttribute("aria-pressed", String(state[key]));
 }
-document.getElementById("attack").addEventListener("click", () => { state.autoplay = false; syncToggles(); pressAttack(); });
-addEventListener("keydown", e => { if (e.key === "j" || e.key === "J") { state.autoplay = false; syncToggles(); pressAttack(); } });
-// tap the stage (a tap, not a drag) to attack
-let down = null;
+const attackNow = () => { state.autoplay = false; syncToggles(); pressAttack(); };
+document.getElementById("attack").addEventListener("click", attackNow);
+addEventListener("keydown", e => { if (e.key === "j" || e.key === "J") attackNow(); });
+let down = null;   // tap the stage (a tap, not a drag) to attack
 canvas.addEventListener("pointerdown", e => { down = [e.clientX, e.clientY, performance.now()]; });
-canvas.addEventListener("pointerup", e => { if (down && Math.hypot(e.clientX - down[0], e.clientY - down[1]) < 6 && performance.now() - down[2] < 300) { state.autoplay = false; syncToggles(); pressAttack(); } down = null; });
+canvas.addEventListener("pointerup", e => { if (down && Math.hypot(e.clientX - down[0], e.clientY - down[1]) < 6 && performance.now() - down[2] < 300) attackNow(); down = null; });
 
-// timing table
-{
+{ // timing table
   const rows = MOVES.map((m, i) => {
-    const wind = m.keys.find(k => k.ease === "snap");
-    const prev = m.keys[m.keys.indexOf(wind) - 1];
-    return `<tr><td>${i + 1}. ${m.name}</td><td class="num">${Math.round(prev.t * 1000)}</td><td class="num">${Math.round((wind.t - prev.t) * 1000)}</td><td class="num">${Math.round(m.hit * 1000)}</td><td class="num">${Math.round(m.stop * 1000)}</td><td class="num">${Math.round(m.length * 1000)}</td></tr>`;
+    const strike = m.keys.find(k => k.ease === "snap"), prev = m.keys[m.keys.indexOf(strike) - 1];
+    return `<tr><td>${i + 1}. ${m.name}</td><td class="num">${Math.round(prev.t * 1000)}</td><td class="num">${Math.round((strike.t - prev.t) * 1000)}</td><td class="num">${Math.round(m.hit * 1000)}</td><td class="num">${Math.round(m.stop * 1000)}</td><td class="num">${Math.round(m.length * 1000)}</td></tr>`;
   });
-  document.getElementById("timing").innerHTML = `<thead><tr><th>Hit</th><th>Wind-up (ms)</th><th>Snap (ms)</th><th>Lands at (ms)</th><th>Freeze (ms)</th><th>Back in guard (ms)</th></tr></thead><tbody>${rows.join("")}</tbody>`;
+  document.getElementById("timing").innerHTML = `<thead><tr><th>Hit</th><th>Wind-up (ms)</th><th>Strike (ms)</th><th>Lands at (ms)</th><th>Freeze (ms)</th><th>Back in guard (ms)</th></tr></thead><tbody>${rows.join("")}</tbody>`;
 }
 
 // ================================================================== go
 syncToggles();
 resize();
-camera.position.set(-2.6, 1.5, 3.4);
-setView(state.view in VIEWS ? state.view : "v-three", true);
-const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+setView(state.view in VIEWS ? state.view : "v-side", true);
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  if (camAnim) { camAnim.t = Math.min(1, camAnim.t + dt / (reduce ? 0.01 : 0.35)); camera.position.lerpVectors(camAnim.from, camAnim.to, EASE.smooth(camAnim.t)); if (camAnim.t >= 1) camAnim = null; }
+  if (camAnim) {
+    camAnim.t = Math.min(1, camAnim.t + dt / (reduce ? 0.01 : 0.35)); const e = EASE.smooth(camAnim.t);
+    camera.position.lerpVectors(camAnim.from, camAnim.to, e); controls.target.lerpVectors(camAnim.tFrom, camAnim.tTo, e);
+    if (camAnim.t >= 1) camAnim = null;
+  }
   step(dt);
   controls.update();
-  renderer.render(scene, camera);
+  render();
   requestAnimationFrame(frame);
 }
 loadBody().then(body => {
@@ -771,12 +838,13 @@ loadBody().then(body => {
   if (state.autoplay) { autoStep = 0; autoTimer = 0.4; }
 }).catch(e => { document.getElementById("loading").textContent = "Couldn't load the fighter's body (" + e.message + ")."; });
 requestAnimationFrame(frame);
-// debugging: freeze move i at time t (seconds)
-window.__bench = { MOVES, GUARD, play, get rig() { return rig; }, state,
+
+// for checking the bench: freeze move i at time t, or step the animation in 60 fps steps and render
+window.__bench = {
+  MOVES, GUARD, play, state, get rig() { return rig; },
   freezeAt(i, t) { play(i); curT = t; from = null; blendT = 1; weight = 1; hitDone = true; state.speed = 0; },
-  get curT() { return cur ? curT : -1; },
-  smearLayers: () => smearLayers, render: () => renderer.render(scene, camera),
-  cam(px, py, pz, tx, ty, tz) { camAnim = null; camera.position.copy(world.localToWorld(V(px, py, pz))); controls.target.copy(world.localToWorld(V(tx, ty, tz))); controls.update(); renderer.render(scene, camera); },
-  get smearDebug() { const L = smearLayers[1].g.attributes; return { pos: Array.from(L.position.array.slice(-12)), col: Array.from(L.color.array.slice(-8)), pts: smearPts.slice(-3).map(s => [s.p.x, s.p.y, s.p.z, s.age]) }; }, get smearCount() { return smearPts.length; }, get impactCount() { return impacts.length; },
-  advance(seconds) { for (let t = 0; t < seconds; t += 1 / 60) step(1 / 60); if (camAnim) { camera.position.copy(camAnim.to); camAnim = null; } controls.update(); renderer.render(scene, camera); return cur ? curT : -1; } };
+  advance(seconds) { for (let t = 0; t < seconds; t += 1 / 60) step(1 / 60); if (camAnim) { camera.position.copy(camAnim.to); controls.target.copy(camAnim.tTo); camAnim = null; } controls.update(); render(); return cur ? curT : -1; },
+  get fxDebug() { const a = ink.g.attributes.color.array; let n = 0; for (let i = 3; i < a.length; i += 4) if (a[i] > 0.05) n++; return { inkVerts: n, hist: limbHist.length, fade: streakFade, limb: streakLimb, curT: cur ? curT : -1 }; },
+  cam(px, py, pz, tx, ty, tz) { camAnim = null; camera.position.copy(world.localToWorld(V(px, py, pz))); controls.target.copy(world.localToWorld(V(tx, ty, tz))); controls.update(); render(); },
+};
 </script>
