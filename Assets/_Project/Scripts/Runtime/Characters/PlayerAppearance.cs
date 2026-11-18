@@ -71,6 +71,8 @@ namespace LightMMORPG.Characters
     {
         public ToonEyeStyle eyeStyle;
         public PlayerHair hair;
+        /// <summary>Index into <see cref="PlayerAppearance.HairColors"/>; any colour goes with any hairstyle.</summary>
+        public int hairColor;
         public FaceSliders sliders;
 
         /// <summary>Copy with every slider clamped to -1..1 and a valid eye style (values can come from other players).</summary>
@@ -84,6 +86,7 @@ namespace LightMMORPG.Characters
             }
             if (!Enum.IsDefined(typeof(ToonEyeStyle), f.eyeStyle)) f.eyeStyle = ToonEyeStyle.Drawn;
             if (!Enum.IsDefined(typeof(PlayerHair), f.hair)) f.hair = PlayerHair.Light;
+            if (f.hairColor < 0 || f.hairColor >= PlayerAppearance.HairColors.Length) f.hairColor = 0;
             return f;
         }
     }
@@ -136,6 +139,21 @@ namespace LightMMORPG.Characters
 
         /// <summary>Names of the hairstyles for the Customize screen, in <see cref="PlayerHair"/> order.</summary>
         public static readonly string[] HairNames = { "Light", "Messy layers" };
+
+        /// <summary>Hair colours for the Customize screen (the first two are the Hair Bench colours of Light and Messy layers).</summary>
+        public static readonly (string name, Color color)[] HairColors =
+        {
+            ("Moss black", new Color32(0x33, 0x50, 0x3b, 0xff)),
+            ("Ink blue", new Color32(0x2d, 0x34, 0x48, 0xff)),
+            ("Black", new Color32(0x1e, 0x1c, 0x22, 0xff)),
+            ("Chestnut", new Color32(0x5a, 0x34, 0x24, 0xff)),
+            ("Copper", new Color32(0xa3, 0x50, 0x2a, 0xff)),
+            ("Gold", new Color32(0xd9, 0xa9, 0x4a, 0xff)),
+            ("Silver", new Color32(0xb4, 0xb8, 0xc6, 0xff)),
+            ("Rose", new Color32(0xd9, 0x84, 0xa2, 0xff)),
+            ("Crimson", new Color32(0x8e, 0x26, 0x32, 0xff)),
+            ("Violet", new Color32(0x5b, 0x43, 0x90, 0xff)),
+        };
 
         /// <summary>The recipe hairstyle for a player pick.</summary>
         public static HairStyle ToHairStyle(PlayerHair h) => h == PlayerHair.Messy ? HairStyle.Messy : HairStyle.Light;
@@ -209,7 +227,7 @@ namespace LightMMORPG.Characters
             var head = recipe.toonHead = recipe.toonHead?.Clone() ?? new ToonHeadSettings();
             head.eyeStyle = f.eyeStyle;
             recipe.hairStyle = ToHairStyle(f.hair);
-            recipe.hairColor = recipe.hairTipColor = ToonHair.LitColor(recipe.hairStyle);
+            recipe.hairColor = recipe.hairTipColor = HairColors[f.hairColor].color;
             for (int i = 0; i < FaceSliders.Count; i++)
             {
                 var d = Sliders[i];

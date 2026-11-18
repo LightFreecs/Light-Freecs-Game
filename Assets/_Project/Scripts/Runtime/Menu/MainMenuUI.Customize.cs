@@ -59,6 +59,10 @@ namespace LightMMORPG.Menu
         private readonly List<CustButton> _custButtons = new();
         private readonly List<CustButton> _eyeTiles = new();
         private readonly List<CustButton> _hairTiles = new();
+        private readonly List<CustButton> _hairColorTiles = new();
+        private readonly List<Image> _hairPreviews = new();
+        private Texture2D[] _hairTex;
+        private string _hairPreviewKey;
         private readonly List<Image> _eyePreviews = new();
         private readonly List<CustButton> _tabButtons = new();
         private readonly List<Image> _tabDots = new();
@@ -164,7 +168,7 @@ namespace LightMMORPG.Menu
                 {
                     SectionHead(page, "STYLE", y);
                     y -= 32f;
-                    const float hg = 14f, hh = 96f;
+                    const float hg = 14f, hh = 210f;
                     int n = PlayerAppearance.HairNames.Length;
                     float hw = (CustW - hg * (n - 1)) / n;
                     for (int i = 0; i < n; i++)
@@ -172,8 +176,13 @@ namespace LightMMORPG.Menu
                         var hair = (PlayerHair)i;
                         var b = CustomButton(page, "Hair_" + PlayerAppearance.HairNames[i], new Vector2(i * (hw + hg), y), new Vector2(hw, hh), 10,
                             () => { _face.hair = hair; RefreshCust(); FaceChanged(); }, () => _face.hair == hair);
-                        var name = MenuUi.Label(b.rt, "Name", PlayerAppearance.HairNames[i], T.bodyFont, 20, Color.white, TextAnchor.MiddleCenter, 0.06f);
-                        name.rectTransform.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(hw, 30f));
+                        var pic = MenuUi.Img(b.rt, "Preview", null, Color.white);
+                        pic.preserveAspect = true;
+                        pic.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -10f), new Vector2(hw - 24f, 156f));
+                        pic.enabled = false;
+                        _hairPreviews.Add(pic);
+                        var name = MenuUi.Label(b.rt, "Name", PlayerAppearance.HairNames[i], T.bodyFont, 18, Color.white, TextAnchor.MiddleCenter, 0.06f);
+                        name.rectTransform.Place(new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 12f), new Vector2(hw, 24f));
                         b.ink.Add((name, 1f));
                         var badge = MenuUi.Img(b.rt, "Badge", null, Color.white);
                         badge.rectTransform.Place(new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-8f, -8f), new Vector2(24f, 24f));
@@ -185,6 +194,30 @@ namespace LightMMORPG.Menu
                         _hairTiles.Add(b);
                     }
                     y -= hh + 22f;
+                    SectionHead(page, "COLOUR", y);
+                    y -= 32f;
+                    const float cg = 12f;
+                    int nc = PlayerAppearance.HairColors.Length;
+                    float cw = (CustW - cg * (nc - 1)) / nc;
+                    for (int i = 0; i < nc; i++)
+                    {
+                        int ci = i;
+                        var b = CustomButton(page, "HairColour_" + PlayerAppearance.HairColors[i].name, new Vector2(i * (cw + cg), y), new Vector2(cw, cw), 7,
+                            () => { _face.hairColor = ci; RefreshCust(); FaceChanged(); }, () => _face.hairColor == ci);
+                        var sw = MenuUi.Img(b.rt, "Swatch", MenuUi.RoundedRect(3), PlayerAppearance.HairColors[i].color, true);
+                        sw.rectTransform.Fill(9f);
+                        var ring = MenuUi.Img(b.rt, "Ring", MenuUi.RoundedRectOutline(3, 1.2f), A(Color.white, 0.35f), true);
+                        ring.rectTransform.Fill(9f);
+                        var badge = MenuUi.Img(b.rt, "Badge", null, Color.white);
+                        badge.rectTransform.Place(new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-4f, -4f), new Vector2(20f, 20f));
+                        Bind(p => badge.color = p.accent);
+                        var check = MenuUi.Img(badge.transform, "Check", MenuUi.Icon(MenuUi.IconKind.Check), Color.white);
+                        check.rectTransform.Fill(3f);
+                        Bind(p => { var d = p.dialog; d.a = 1f; check.color = d; });
+                        b.extra = _ => badge.gameObject.SetActive(_face.hairColor == ci);
+                        _hairColorTiles.Add(b);
+                    }
+                    y -= cw + 22f;
                     continue;
                 }
                 else SectionHead(page, CustTabs[t].name.ToUpperInvariant(), y);
@@ -403,7 +436,7 @@ namespace LightMMORPG.Menu
         {
             for (int t = 0; t < _tabDots.Count; t++)
             {
-                bool changed = (t == 0 && _face.eyeStyle != ToonEyeStyle.Drawn) || (t == HairTab && _face.hair != PlayerHair.Light);
+                bool changed = (t == 0 && _face.eyeStyle != ToonEyeStyle.Drawn) || (t == HairTab && (_face.hair != PlayerHair.Light || _face.hairColor != 0));
                 foreach (int i in CustTabs[t].rows) changed |= _face.sliders[i] != 0f;
                 _tabDots[t].gameObject.SetActive(changed);
             }
@@ -413,6 +446,7 @@ namespace LightMMORPG.Menu
         {
             _custTab = (t + CustTabs.Length) % CustTabs.Length;
             for (int i = 0; i < _tabPages.Count; i++) _tabPages[i].SetActive(i == _custTab);
+            RefreshHairPreviews();
             RebuildCustNav();
             RefreshCust();
             if (select && EventSystem.current != null) EventSystem.current.SetSelectedGameObject(_tabButtons[_custTab].sel.gameObject);
@@ -433,8 +467,9 @@ namespace LightMMORPG.Menu
             var tab = _tabButtons[_custTab].sel;
             Selectable eye = _eyeTiles[(int)_face.eyeStyle].sel;
             Selectable hair = _hairTiles[(int)_face.hair].sel;
+            Selectable colour = _hairColorTiles[_face.hairColor].sel;
             Selectable first = _custTab == 0 ? eye : _custTab == HairTab ? hair : rows[0].s;
-            Selectable last = rows.Count > 0 ? rows[^1].s : _custTab == HairTab ? hair : tab;
+            Selectable last = rows.Count > 0 ? rows[^1].s : _custTab == HairTab ? colour : tab;
             for (int i = 0; i < _tabButtons.Count; i++)
                 Nav(_tabButtons[i].sel, _custRandom.sel, first, i > 0 ? _tabButtons[i - 1].sel : null, i < _tabButtons.Count - 1 ? _tabButtons[i + 1].sel : null);
             Nav(_custRandom.sel, null, tab, null, null);
@@ -443,7 +478,10 @@ namespace LightMMORPG.Menu
                     Nav(_eyeTiles[i].sel, tab, rows[0].s, i > 0 ? _eyeTiles[i - 1].sel : null, i < _eyeTiles.Count - 1 ? _eyeTiles[i + 1].sel : null);
             if (_custTab == HairTab)
                 for (int i = 0; i < _hairTiles.Count; i++)
-                    Nav(_hairTiles[i].sel, tab, _custDone.sel, i > 0 ? _hairTiles[i - 1].sel : null, i < _hairTiles.Count - 1 ? _hairTiles[i + 1].sel : null);
+                    Nav(_hairTiles[i].sel, tab, colour, i > 0 ? _hairTiles[i - 1].sel : null, i < _hairTiles.Count - 1 ? _hairTiles[i + 1].sel : null);
+            if (_custTab == HairTab)
+                for (int i = 0; i < _hairColorTiles.Count; i++)
+                    Nav(_hairColorTiles[i].sel, hair, _custDone.sel, i > 0 ? _hairColorTiles[i - 1].sel : null, i < _hairColorTiles.Count - 1 ? _hairColorTiles[i + 1].sel : null);
             for (int k = 0; k < rows.Count; k++)
             {
                 Selectable up = k > 0 ? rows[k - 1].s : _custTab == 0 ? eye : tab;
@@ -461,6 +499,7 @@ namespace LightMMORPG.Menu
         {
             _face.eyeStyle = (ToonEyeStyle)UnityEngine.Random.Range(0, PlayerAppearance.EyeNames.Length);
             _face.hair = (PlayerHair)UnityEngine.Random.Range(0, PlayerAppearance.HairNames.Length);
+            _face.hairColor = UnityEngine.Random.Range(0, PlayerAppearance.HairColors.Length);
             for (int i = 0; i < FaceSliders.Count; i++) _face.sliders[i] = Mathf.Round(UnityEngine.Random.Range(-0.7f, 0.7f) * 100f) / 100f;
             SyncFaceControls();
             RebuildCustNav();
@@ -509,6 +548,7 @@ namespace LightMMORPG.Menu
         private void FaceChanged()
         {
             if (_fighter != null) _fighter.SetFace(_face);
+            RefreshHairPreviews();
         }
 
         private void OpenCustomize()
@@ -581,6 +621,38 @@ namespace LightMMORPG.Menu
                 r.handle.color = on ? accent : Color.white;
                 r.handle.rectTransform.parent.localScale = Vector3.one * (on ? 1.15f : 1f);
                 r.highlight.color = on ? A(Color.white, 0.06f) : Color.clear;
+            }
+        }
+
+        // ---------------- hair previews ----------------
+
+        /// <summary>
+        /// Redraws the hair tiles' portraits (the player's head, eyes and hair colour wearing each style) when the Hair tab
+        /// is showing and something they depend on has changed. Picking a hairstyle alone doesn't redraw them.
+        /// </summary>
+        private void RefreshHairPreviews()
+        {
+            if (_custTab != HairTab || _hairPreviews.Count == 0) return;
+            var keyFace = _face.Sanitized();
+            keyFace.hair = PlayerHair.Light;
+            string key = JsonUtility.ToJson(keyFace);
+            if (key == _hairPreviewKey) return;
+            _hairPreviewKey = key;
+            _hairTex ??= new Texture2D[_hairPreviews.Count];
+            if (keyFace.eyeStyle == ToonEyeStyle.HandMade) ToonEyeLayers.EnsureLoaded();
+            for (int i = 0; i < _hairPreviews.Count; i++)
+            {
+                try
+                {
+                    var f = keyFace;
+                    f.hair = (PlayerHair)i;
+                    var old = _hairTex[i];
+                    _hairTex[i] = HairPreview.Render(PlayerAppearance.Apply(CharacterPresets.Hero(), f), old);
+                    if (_hairPreviews[i].sprite == null || old != _hairTex[i])
+                        _hairPreviews[i].sprite = Sprite.Create(_hairTex[i], new Rect(0, 0, HairPreview.Width, HairPreview.Height), new Vector2(0.5f, 0.5f), 100f);
+                    _hairPreviews[i].enabled = true;
+                }
+                catch (Exception e) { Debug.LogWarning("[Menu] Hair preview " + (PlayerHair)i + " failed: " + e.Message); }
             }
         }
 

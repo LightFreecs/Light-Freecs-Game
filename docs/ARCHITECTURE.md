@@ -513,4 +513,9 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
   - Player pick: `FaceCustomization.hair` (`PlayerHair` Light / Messy, default Light; travels with the face JSON),
     `PlayerAppearance.Apply` sets `hairStyle` + colours. `Hero()` defaults to Light. Customize: sixth tab HAIR
     (new `IconKind.Hair`) with two style tiles. Old spiky styles stay for the test recipes.
+  - Hair colour: `FaceCustomization.hairColor` indexes `PlayerAppearance.HairColors` (10 swatches, 0 = moss black of
+    Light, 1 = ink blue of Messy); any colour on any style, sets `hairColor` and `hairTipColor`. COLOUR row on the HAIR tab.
+  - Hair tile portraits: `Menu/HairPreview.cs` draws the player's head (painted face, ears hidden for Messy) wearing each
+    style on the CPU: 3/4 view, 2x supersampled depth-buffer raster, two-band toon + shine, ink where depth jumps.
+    Redrawn only on the Hair tab when eyes / sliders / colour change (picking a style alone doesn't redraw).
   - Tests: `ToonHairTests` (both styles → valid mesh, crown faces out, choice applies / round-trips / sanitizes).

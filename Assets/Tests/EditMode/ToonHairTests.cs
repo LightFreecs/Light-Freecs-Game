@@ -58,5 +58,32 @@ namespace LightMMORPG.Tests
             var bad = new FaceCustomization { hair = (PlayerHair)99 }.Sanitized();
             Assert.AreEqual(PlayerHair.Light, bad.hair);
         }
+
+        [Test]
+        public void HairColour_AnyColourOnAnyStyle()
+        {
+            for (int c = 0; c < PlayerAppearance.HairColors.Length; c++)
+                foreach (var h in new[] { PlayerHair.Light, PlayerHair.Messy })
+                {
+                    var r = PlayerAppearance.ForPalette(0, new FaceCustomization { hair = h, hairColor = c });
+                    Assert.AreEqual(PlayerAppearance.HairColors[c].color, r.hairColor);
+                    Assert.AreEqual(PlayerAppearance.HairColors[c].color, r.hairTipColor);
+                }
+            Assert.AreEqual(3, PlayerAppearance.FromJson(PlayerAppearance.ToJson(new FaceCustomization { hairColor = 3 })).hairColor);
+            Assert.AreEqual(0, new FaceCustomization { hairColor = 99 }.Sanitized().hairColor);
+        }
+
+        [Test]
+        public void HairPreview_DrawsBothStyles()
+        {
+            foreach (var h in new[] { PlayerHair.Light, PlayerHair.Messy })
+            {
+                var tex = LightMMORPG.Menu.HairPreview.Render(PlayerAppearance.ForPalette(0, new FaceCustomization { hair = h, hairColor = 5 }), null);
+                int solid = 0;
+                foreach (var p in tex.GetPixels()) if (p.a > 0.5f) solid++;
+                Assert.Greater(solid, tex.width * tex.height / 6, "the portrait covers a good part of the tile");
+                Object.DestroyImmediate(tex);
+            }
+        }
     }
 }
