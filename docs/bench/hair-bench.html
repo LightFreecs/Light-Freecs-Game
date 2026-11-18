@@ -590,6 +590,46 @@ function buildShell(G, st) {
       const a = rows[r][j], b = rows[r][(j + 1) % N], c = rows[r + 1][(j + 1) % N], d = rows[r + 1][j];
       G.idx.push(a, d, c, a, c, b);
     }
+  buildUnderside(G);
+}
+
+// Underside of the skull: behind the ears and round the back, the head curves under from the jaw / nape ring into the
+// neck. The base layer carries on over that underside, built from the head mesh's own rows, and ends exactly at the
+// neck line (the top row of the neck).
+const HEAD_NORMALS = (() => {
+  const n = new Float32Array(head.pos.length), P = i => [head.pos[i * 3], head.pos[i * 3 + 1], head.pos[i * 3 + 2]];
+  for (let t = 0; t < head.idx.length; t += 3) {
+    const a = head.idx[t], b = head.idx[t + 1], c = head.idx[t + 2], pa = P(a);
+    const f = vcross(vadd(P(b), vmul(pa, -1)), vadd(P(c), vmul(pa, -1)));
+    for (const i of [a, b, c]) { n[i * 3] += f[0]; n[i * 3 + 1] += f[1]; n[i * 3 + 2] += f[2]; }
+  }
+  return n;
+})();
+function buildUnderside(G, off = 0.024) {
+  const N = LAYOUT.cols, jaw = LAYOUT.craniumRows + LAYOUT.faceRows - 1;   // rows: 0 = first under the crown
+  const r0 = jaw - 3, r1 = jaw + 4;                                         // a little above the jaw ring … top of the neck
+  const vid = (r, j) => 1 + r * N + j;
+  const deg = j => { const i = vid(jaw, j); return Math.abs(Math.atan2(head.pos[i * 3], head.pos[i * 3 + 2])) * 180 / Math.PI; };
+  const fade = j => smooth((deg(j) - 112) / 14);          // starts behind the ear, full from ~126° round the back
+  const ids = [];
+  for (let r = r0; r <= r1; r++) {
+    const row = [];
+    for (let j = 0; j < N; j++) {
+      const fj = fade(j);
+      if (fj <= 0) { row.push(-1); continue; }
+      const i = vid(r, j), p = [head.pos[i * 3], head.pos[i * 3 + 1], head.pos[i * 3 + 2]];
+      const n = vnorm([HEAD_NORMALS[i * 3], HEAD_NORMALS[i * 3 + 1], HEAD_NORMALS[i * 3 + 2]]);
+      const o = off * fj * (r === r1 ? 0.35 : 1);
+      row.push(G.push(vadd(p, vmul(n, o)), head.morph[i * 3], r === r1 ? 0.5 : 1));
+    }
+    ids.push(row);
+  }
+  for (let r = 0; r < ids.length - 1; r++)
+    for (let j = 0; j < N; j++) {
+      const a = ids[r][j], b = ids[r][(j + 1) % N], c = ids[r + 1][(j + 1) % N], d = ids[r + 1][j];
+      if (a < 0 || b < 0 || c < 0 || d < 0) continue;
+      G.idx.push(a, d, c, a, c, b);
+    }
 }
 // One clean hairline for every style: [degrees around from the front, height]. Straight across the forehead, corners
 // at the temples, sideburns down in front of the ears, over the ears, behind them and down to the nape.
@@ -719,6 +759,8 @@ function spikyBack(G) {
   }
   spike(G, 180, 0.62, { len: 0.44, w: 0.42, up: -0.3, back: 1, out: 0.45 });
   spike(G, 180, 0.42, { len: 0.38, w: 0.38, up: -0.75, back: 0.6, out: 0.35 });
+  // short spikes growing from the underside of the skull, pointing down, ending at the neck line
+  for (const th of [-160, -135, 135, 160, 180]) spike(G, th, 0.3, { len: 0.16, w: 0.28, up: -1, back: 0.35, out: 0.25, depth: 0.08 });
 }
 
 // the Light hair model, imported (16 spikes + back shell), refitted to this head
