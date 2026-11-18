@@ -530,7 +530,8 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     A-pose (rotation about the shoulder joint, by weight). Trunks (6 mm out, 0.996–1.276 m) and waistband (9.5 mm out) are
     clipped copies of the body surface with interpolated weights. Output ~1.1 MB; the source FBX isn't in the repo.
     Waist fill (owner: the flanks dipped in "like bad nutrition"): before weighting, the torso sides between 1.22 and 1.47 m
-    are pushed out towards a straight rib-to-hip line (85 % of the gap; 0.144 → 0.164 m half width at 1.37 m), weighted
+    are pushed halfway towards a straight rib-to-hip line (50 % of the gap; 0.144 → 0.156 m half width at 1.37 m; the owner
+    found a straight side too much, so a soft waist curve stays), weighted
     by |x|² so the middle of the front and back stays put.
   - `Characters/BaseBody.cs`: loads/parses `Resources/Bodies/BaseBody.bytes` ("LBB1": chin, neck z, trunks range, joints,
     body / trunks / band parts). `EnsureLoaded` runs on the main thread wherever `ToonEyeLayers.EnsureLoaded` does.
