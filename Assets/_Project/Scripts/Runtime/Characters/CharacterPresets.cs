@@ -11,7 +11,7 @@ namespace LightMMORPG.Characters
         /// <summary>Number of player slots / palettes (0 orange, 1 blue, 2 green, 3 purple).</summary>
         public const int PaletteCount = 4;
 
-        /// <summary>Jacket colour per player slot (orange, blue, green, purple), matching the fighter palette materials.</summary>
+        /// <summary>Slot colour per player (orange, blue, green, purple), matching the fighter palette materials: the trunks' waistband (and the jacket on procedural bodies).</summary>
         public static readonly Color[] PaletteColors =
         {
             new(1f, 0.5f, 0.12f), new(0.16f, 0.42f, 1f), new(0.22f, 0.75f, 0.32f), new(0.6f, 0.28f, 0.92f),
@@ -28,15 +28,18 @@ namespace LightMMORPG.Characters
         }
 
         /// <summary>
-        /// The base hero: orange cropped high-collar jacket with navy piping, black undershirt, charcoal shorts, laced slate
-        /// boots, the Light hair (Hair Bench, green-black), amber eyes. Head = the measured Toon Head with every slider at its default.
+        /// The base hero: the owner's anime base mesh body (<see cref="BaseBody"/>) in navy trunks with a waistband in the
+        /// player slot colour, the Light hair (Hair Bench, green-black), amber eyes. Head = the measured Toon Head with every
+        /// slider at its default; body sliders at 1 = the base mesh as modelled. Clothes come later (the old jacket / shorts /
+        /// boots fields below only apply to the procedural body).
         /// </summary>
         public static CharacterRecipe Hero() => new()
         {
             displayName = "Fighter",
             toonHead = new ToonHeadSettings(),
             seed = 101,
-            height = 2.28f, muscle = 0.75f, bulk = 0.95f, shoulderWidth = 1f, waist = 0.95f, headSize = 1.3f,
+            body = BodyModel.BaseMesh, trunksColor = new Color(0.17f, 0.18f, 0.27f),
+            height = 2.28f, muscle = 1f, bulk = 1f, shoulderWidth = 1f, waist = 1f, headSize = 1.3f,
             jawPreset = JawPreset.Head1, chinPreset = ChinPreset.Head1, nosePreset = NosePreset.Head1, earPreset = EarPreset.Head1,
             skinTone = new Color(1f, 0.85f, 0.72f),
             hairStyle = HairStyle.Light, hairColor = new Color32(0x33, 0x50, 0x3b, 0xff), hairTipColor = new Color32(0x33, 0x50, 0x3b, 0xff),

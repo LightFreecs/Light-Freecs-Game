@@ -9,6 +9,8 @@ namespace LightMMORPG.Characters
     public enum OutfitType { Gi, ArmoredSuit, JacketPants, CroppedJacket }
     public enum LegWear { Pants, Shorts }
     public enum Accessory { None, Scarf, ShoulderPads }
+    /// <summary>Procedural = the implicit-surface body with outfits (test fighters); BaseMesh = the owner's anime base mesh in trunks.</summary>
+    public enum BodyModel { Procedural, BaseMesh }
 
     /// <summary>
     /// Serializable description of a procedural fighter. <see cref="ProceduralCharacterBuilder"/> turns it into a
@@ -22,6 +24,8 @@ namespace LightMMORPG.Characters
         public int seed = 1;
 
         [Header("Body")]
+        [Tooltip("BaseMesh: the anime base mesh (BaseBody) in trunks; muscle / bulk / shoulders / waist reshape it around 1 = as modelled.")]
+        public BodyModel body = BodyModel.Procedural;
         [Range(1.6f, 3f)] public float height = 2.3f;
         [Tooltip("Muscle definition / size (pecs, abs, deltoids, arms, calves).")]
         [Range(0.6f, 1.5f)] public float muscle = 1f;
@@ -81,6 +85,8 @@ namespace LightMMORPG.Characters
         public Expression expression = Expression.Serious;
 
         [Header("Outfit")]
+        [Tooltip("BaseMesh body: colour of the trunks (the waistband takes outfitPrimary, the player slot colour).")]
+        public Color trunksColor = new(0.17f, 0.18f, 0.27f);
         public OutfitType outfit = OutfitType.Gi;
         public Color outfitPrimary = new(1f, 0.5f, 0.1f);
         public Color outfitSecondary = new(0.15f, 0.2f, 0.45f);

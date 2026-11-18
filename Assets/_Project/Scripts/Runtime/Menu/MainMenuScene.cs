@@ -30,7 +30,7 @@ namespace LightMMORPG.Menu
         private float _t0;
         private MenuFighter _fighter;
         /// <summary>0 = normal menu framing, 1 = Customize close-up on the fighter's face.</summary>
-        private float _closeUp;
+        private float _closeUp, _bodyView;
         private bool _dragging;
 
         private void Awake()
@@ -78,6 +78,7 @@ namespace LightMMORPG.Menu
             float t = Time.time - _t0;
             bool customize = UI != null && UI.Current == MainMenuUI.State.Customize;
             _closeUp = Mathf.MoveTowards(_closeUp, customize ? 1f : 0f, Time.unscaledDeltaTime / 0.7f);
+            _bodyView = Mathf.MoveTowards(_bodyView, customize && UI.BodyTabOpen ? 1f : 0f, Time.unscaledDeltaTime / 0.5f);
             UpdateTurn(customize);
             UpdateCamera(t);
             if (_islandRoot != null)
@@ -93,10 +94,11 @@ namespace LightMMORPG.Menu
             Vector3 pos = _t.lookAt + offset, look = _t.lookAt;
             if (_closeUp > 0f && _fighter != null)
             {
-                // face close-up, head on the left third (the Customize panel is on the right)
-                Vector3 head = _fighter.HeadPosition + Vector3.up * 0.12f;
+                // face close-up, head on the left third (the Customize panel is on the right); the Body tab pulls back to the whole fighter
+                float bv = _bodyView * _bodyView * (3f - 2f * _bodyView);
+                Vector3 head = _fighter.HeadPosition + Vector3.up * Mathf.Lerp(0.12f, -0.95f, bv);
                 Vector3 fwd = _islandRoot.rotation * Quaternion.Euler(0f, _fighter.BaseYaw, 0f) * Vector3.forward;
-                const float dist = 2.3f;
+                float dist = Mathf.Lerp(2.3f, 6.2f, bv);
                 Vector3 cPos = head + fwd * dist + Vector3.up * 0.08f;
                 Vector3 dir = (head - cPos).normalized;
                 Vector3 right = Vector3.Cross(Vector3.up, dir).normalized;

@@ -14,7 +14,7 @@ namespace LightMMORPG.Characters
     /// <c>LightMMORPG/ToonLit</c> except the head.
     /// Meshes are cached per recipe, so repeated spawns of the same hero are free.
     /// </summary>
-    public static class ProceduralCharacterBuilder
+    public static partial class ProceduralCharacterBuilder
     {
         public const float RefHeight = 2.3f;
         public const int VertexBudget = 90000;
@@ -87,6 +87,7 @@ namespace LightMMORPG.Characters
         public static System.Threading.Tasks.Task<GeneratedCharacter> GenerateAsync(CharacterRecipe recipe)
         {
             ToonEyeLayers.EnsureLoaded();
+            BaseBody.EnsureLoaded();
             var copy = recipe.Clone();
             return System.Threading.Tasks.Task.Run(() => GenerateData(copy));
         }
@@ -130,6 +131,7 @@ namespace LightMMORPG.Characters
             string key = recipe.CacheKey();
             if (Cache.TryGetValue(key, out var g) && g.Mesh != null && g.Face != null) return g;
             ToonEyeLayers.EnsureLoaded();
+            BaseBody.EnsureLoaded();
             System.Threading.Tasks.Task<GeneratedCharacter> pending;
             lock (Pending) Pending.TryGetValue(key, out pending);
             g = pending != null ? pending.Result : GenerateData(recipe);
@@ -145,6 +147,7 @@ namespace LightMMORPG.Characters
         public static void Prewarm(IEnumerable<CharacterRecipe> recipes)
         {
             ToonEyeLayers.EnsureLoaded();   // main thread: the hand-made eye's PNG layers
+            BaseBody.EnsureLoaded();        // and the baked base body
             foreach (var r in recipes)
             {
                 string key = r.CacheKey();
@@ -174,6 +177,7 @@ namespace LightMMORPG.Characters
         public static GeneratedCharacter Generate(CharacterRecipe recipe)
         {
             ToonEyeLayers.EnsureLoaded();
+            BaseBody.EnsureLoaded();
             var g = GenerateData(recipe);
             Upload(g);
             return g;
@@ -335,7 +339,7 @@ namespace LightMMORPG.Characters
 
         // ------------------------------------------------------------------ generation context
 
-        private sealed class Ctx
+        private sealed partial class Ctx
         {
             private readonly CharacterRecipe _r;
             private readonly float _m, _w, _sw, _hs;
@@ -364,6 +368,7 @@ namespace LightMMORPG.Characters
                 _sw = r.shoulderWidth;
                 _hs = r.headSize;
                 _rnd = new System.Random(r.seed * 7919 + 17);
+                _mesh = r.body == BodyModel.BaseMesh;
                 _toon = ToonHead.Apply(r.toonHead);
                 // the hair's scalp ellipsoid follows the toon skull (same as the old one for the base head)
                 float crown = ChinHL + _toon.Top * HeadUnit;
@@ -399,6 +404,7 @@ namespace LightMMORPG.Characters
             // ---------------------------------------------------------- skeleton
             public void Bones()
             {
+                if (_mesh) { MeshBones(); return; }
                 Set(B.Hips, 0f, 1.13f, 0f);
                 Set(B.Spine, 0f, 1.25f, 0f);
                 Set(B.Chest, 0f, 1.40f, -0.01f);
@@ -453,6 +459,7 @@ namespace LightMMORPG.Characters
 
             public void Body()
             {
+                if (_mesh) { MeshBody(); return; }
                 float m = _m, w = _w, sw = _sw, wa = _r.waist;
                 // torso
                 AddBody(SdfPrim.Ellipsoid(new Vector3(0f, 1.07f, -0.012f), new Vector3(0.158f * w, 0.11f, 0.115f), (int)B.Hips, 0.04f, GTorso, TPelvis));
@@ -603,6 +610,7 @@ namespace LightMMORPG.Characters
             // ---------------------------------------------------------- hands
             public void Hands()
             {
+                if (_mesh) return;   // the base mesh has its own hands
                 int skin = Slot("skin", _r.skinTone, SlotKind.Skin);
                 for (int side = -1; side <= 1; side += 2)
                 {
@@ -678,6 +686,7 @@ namespace LightMMORPG.Characters
 
             public void Outfit()
             {
+                if (_mesh) { Trunks(); return; }
                 var r = _r;
                 switch (r.outfit)
                 {

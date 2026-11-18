@@ -519,3 +519,30 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     style on the CPU: 3/4 view, 2x supersampled depth-buffer raster, two-band toon + shine, ink where depth jumps.
     Redrawn only on the Hair tab when eyes / sliders / colour change (picking a style alone doesn't redraw).
   - Tests: `ToonHairTests` (both styles → valid mesh, crown faces out, choice applies / round-trips / sanitizes).
+- Base mesh body (owner's pick from the Body Bench, https://claude.ai/artifact/8wYh2n1SzmuJDm45Wbtxoa: "It looks perfect").
+  The hero's body is now the owner's anime base mesh (used with its author's permission), rigged to the same 42-bone
+  `CharacterBone` skeleton, in trunks. Clothes are next; until then fighters wear only the trunks.
+  - Bake: `tools/bake_base_body.py "character base.fbx" Assets/_Project/Resources/Bodies/BaseBody.bytes` (numpy; reads the
+    binary FBX itself). Scales the mesh to chin 1.83 m / feet 0, faces +Z, removes its head with a slanted cut under the
+    jaw (1.80 m front, 1.84 m back, inside the Toon Head's neck), measured joints for every bone (fingers + thumb included),
+    skin weights = nearest bone segment within body regions (arm / leg / torso / hand: fingers by position across the
+    hand, thumb at the front) then 14 rounds of mesh smoothing, top 4. Arms re-posed from the mesh's 14.6° to the rig's 40°
+    A-pose (rotation about the shoulder joint, by weight). Trunks (6 mm out, 0.996–1.276 m) and waistband (9.5 mm out) are
+    clipped copies of the body surface with interpolated weights. Output ~1.1 MB; the source FBX isn't in the repo.
+  - `Characters/BaseBody.cs`: loads/parses `Resources/Bodies/BaseBody.bytes` ("LBB1": chin, neck z, trunks range, joints,
+    body / trunks / band parts). `EnsureLoaded` runs on the main thread wherever `ToonEyeLayers.EnsureLoaded` does.
+  - `CharacterRecipe.body` (`BodyModel.Procedural` = the old SDF body + outfits, still used by the test recipes;
+    `BaseMesh` = this body; `Hero()` uses it), `trunksColor` (navy); the waistband takes `outfitPrimary` (player slot colour).
+  - Builder (`ProceduralCharacterBuilder.BaseMesh.cs`): bones = baked joints; Head bone placed so the Toon Head's chin sits
+    on the body's chin and its neck is centred on the body's neck. Sliders, 1 = as modelled: `bulk` scales every vertex
+    away from its weighted bone segments, `muscle` the arms / legs / chest front, `shoulderWidth` slides the arm chains
+    (and the chest edge) sideways by 0.22 m × (s − 1), `waist` scales the torso around 1.30 m. The top of the neck is
+    squeezed into the Toon Head's neck ellipse (follows the head's neck-width slider). Hands() / SDF outfits are skipped.
+  - Player sliders: `FaceSliders` 22–25 = body Build / Muscle / Shoulders / Waist (`HeadCount` = 22 head sliders), saved and
+    synced with the face JSON. Customize: seventh tab BODY (`IconKind.Body`); on it the menu camera pulls back to the
+    whole fighter (`MainMenuUI.BodyTabOpen`, `MainMenuScene._bodyView`).
+  - Rig check (offline, Python LBS with the rig's rest pose): fists, bent elbows, a 70° knee lift and a spine twist deform
+    cleanly. Known: thumbs sit a little high in the fist (the `SetFingerCurl` thumb angles were made for the old hand);
+    trunks pinch at the hip crease on very high knees.
+  - Tests: `ProceduralCharacterTests` +2 (body sliders at −1/0/1 give valid meshes, chin meets the head, arm sides; soles on
+    feet / toes, hands on arm bones). Verified: headless compile clean only (owner tests by hand).

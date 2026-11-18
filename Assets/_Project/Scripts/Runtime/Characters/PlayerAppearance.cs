@@ -4,8 +4,8 @@ using UnityEngine;
 namespace LightMMORPG.Characters
 {
     /// <summary>
-    /// Player adjustments of the Toon Head (<see cref="ToonHeadSettings"/>), each -1..1 with 0 = the base head:
-    /// -1 / +1 reach the low / high end of the matching <see cref="ToonHeadSettings"/> slider.
+    /// Player adjustments of the Toon Head (<see cref="ToonHeadSettings"/>, indices 0–21) and the body (22–25: build, muscle,
+    /// shoulders, waist), each -1..1 with 0 = the base head / base body: -1 / +1 reach the low / high end of the slider.
     /// Indexed in the order of <see cref="PlayerAppearance.Sliders"/>.
     /// </summary>
     [Serializable]
@@ -17,8 +17,11 @@ namespace LightMMORPG.Characters
         public float noseSize, noseHeight, mouthHeight;
         public float eyeSize, eyeHeight, eyeSpacing, browHeight;
         public float earSize, earHeight, earFlare, neckWidth;
+        public float bodyBuild, bodyMuscle, bodyShoulders, bodyWaist;
 
-        public const int Count = 22;
+        public const int Count = 26;
+        /// <summary>Indices below this drive the head; the rest drive the body.</summary>
+        public const int HeadCount = 22;
 
         public float this[int i]
         {
@@ -29,7 +32,8 @@ namespace LightMMORPG.Characters
                 8 => chinWidth, 9 => chinShape, 10 => chinForward,
                 11 => noseSize, 12 => noseHeight, 13 => mouthHeight,
                 14 => eyeSize, 15 => eyeHeight, 16 => eyeSpacing, 17 => browHeight,
-                18 => earSize, 19 => earHeight, 20 => earFlare, _ => neckWidth,
+                18 => earSize, 19 => earHeight, 20 => earFlare, 21 => neckWidth,
+                22 => bodyBuild, 23 => bodyMuscle, 24 => bodyShoulders, _ => bodyWaist,
             };
             set
             {
@@ -56,7 +60,11 @@ namespace LightMMORPG.Characters
                     case 18: earSize = value; break;
                     case 19: earHeight = value; break;
                     case 20: earFlare = value; break;
-                    default: neckWidth = value; break;
+                    case 21: neckWidth = value; break;
+                    case 22: bodyBuild = value; break;
+                    case 23: bodyMuscle = value; break;
+                    case 24: bodyShoulders = value; break;
+                    default: bodyWaist = value; break;
                 }
             }
         }
@@ -65,7 +73,7 @@ namespace LightMMORPG.Characters
     /// <summary>Hairstyles the player can pick (the Hair Bench styles), in Customize order.</summary>
     public enum PlayerHair { Light, Messy }
 
-    /// <summary>The player's choices from the Customize screen: any eye style, a hairstyle and the head sliders.</summary>
+    /// <summary>The player's choices from the Customize screen: any eye style, a hairstyle, the head sliders and the body sliders.</summary>
     [Serializable]
     public struct FaceCustomization
     {
@@ -99,7 +107,7 @@ namespace LightMMORPG.Characters
         // v4: sliders drive the Toon Head and the eye is a free pick, so older saves (old SDF face parts) are ignored
         public const string PrefKey = "profile.face.v4";
 
-        /// <summary>One Customize slider: labels and the <see cref="ToonHeadSettings"/> range it spans.</summary>
+        /// <summary>One Customize slider: labels and the range it spans (<see cref="ToonHeadSettings"/> field, or the recipe's body field).</summary>
         public readonly struct SliderDef
         {
             public readonly string Label, Low, High;
@@ -132,6 +140,11 @@ namespace LightMMORPG.Characters
             new("Ear height", "Low", "High", -0.06f, 0.06f),
             new("Ear angle", "Flat", "Out", -25f, 30f),
             new("Neck width", "Slim", "Thick", 0.75f, 1.35f),
+            // body (CharacterRecipe bulk / muscle / shoulderWidth / waist on the base mesh body, 1 = as modelled)
+            new("Build", "Slim", "Broad", 0.88f, 1.15f),
+            new("Muscle", "Lean", "Muscular", 0.6f, 1.4f),
+            new("Shoulders", "Narrow", "Wide", 0.9f, 1.12f),
+            new("Waist", "Narrow", "Wide", 0.86f, 1.15f),
         };
 
         /// <summary>Names of the eye styles for the Customize screen, in <see cref="ToonEyeStyle"/> order.</summary>
@@ -220,7 +233,7 @@ namespace LightMMORPG.Characters
             }
         }
 
-        /// <summary>Applies the eye style and the sliders to the recipe's Toon Head and returns the recipe.</summary>
+        /// <summary>Applies the eye style, hair and head sliders to the recipe's Toon Head, the body sliders to its body, and returns the recipe.</summary>
         public static CharacterRecipe Apply(CharacterRecipe recipe, FaceCustomization f)
         {
             f = f.Sanitized();
@@ -228,11 +241,16 @@ namespace LightMMORPG.Characters
             head.eyeStyle = f.eyeStyle;
             recipe.hairStyle = ToHairStyle(f.hair);
             recipe.hairColor = recipe.hairTipColor = HairColors[f.hairColor].color;
-            for (int i = 0; i < FaceSliders.Count; i++)
+            for (int i = 0; i < FaceSliders.HeadCount; i++)
             {
                 var d = Sliders[i];
                 SetHead(head, i, Adjust(GetHead(head, i), f.sliders[i], d.Min, d.Max));
             }
+            float Body(int i, float value) => Adjust(value, f.sliders[i], Sliders[i].Min, Sliders[i].Max);
+            recipe.bulk = Body(22, recipe.bulk);
+            recipe.muscle = Body(23, recipe.muscle);
+            recipe.shoulderWidth = Body(24, recipe.shoulderWidth);
+            recipe.waist = Body(25, recipe.waist);
             return recipe;
         }
 

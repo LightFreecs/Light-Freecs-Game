@@ -144,6 +144,58 @@ namespace LightMMORPG.Tests
         }
 
         [Test]
+        public void BaseMeshBody_SlidersAndRigStayValid([Values(-1f, 0f, 1f)] float v)
+        {
+            var f = new FaceCustomization();
+            for (int i = FaceSliders.HeadCount; i < FaceSliders.Count; i++) f.sliders[i] = v;
+            var recipe = PlayerAppearance.ForPalette(2, f);
+            Assert.AreEqual(BodyModel.BaseMesh, recipe.body);
+            var g = ProceduralCharacterBuilder.GenerateData(recipe);
+            Assert.Less(g.VertexCount, ProceduralCharacterBuilder.VertexBudget);
+            Assert.Greater(g.VertexCount, BaseBody.Get().Body.VertexCount, "body + trunks + head + hair");
+            float minY = float.MaxValue;
+            for (int i = 0; i < g.VertexCount; i++)
+            {
+                Vector3 p = g.Positions[i], n = g.Normals[i];
+                Assert.IsFalse(float.IsNaN(p.x + p.y + p.z) || float.IsNaN(n.x + n.y + n.z), "NaN at " + i);
+                Assert.AreEqual(1f, n.magnitude, 0.01f, "normal at " + i);
+                var w = g.Weights[i];
+                Assert.AreEqual(1f, w.weight0 + w.weight1 + w.weight2 + w.weight3, 1e-3f, "weights at " + i);
+                minY = Mathf.Min(minY, p.y);
+            }
+            Assert.AreEqual(0f, minY, 0.03f, "feet on the ground");
+            // the body's chin meets the Toon Head's chin, and the hands hang off the wrists
+            var bb = BaseBody.Get();
+            float s = recipe.height / ProceduralCharacterBuilder.RefHeight;
+            Assert.AreEqual(bb.ChinY * s, g.BonePositions[(int)CharacterBone.Head].y - 0.027f * recipe.headSize * s, 0.005f);
+            Assert.Less(g.BonePositions[(int)CharacterBone.RightIndexIntermediate].y, g.BonePositions[(int)CharacterBone.RightHand].y);
+            Assert.Greater(g.BonePositions[(int)CharacterBone.RightHand].x, 0.3f, "right arm on +X");
+        }
+
+        [Test]
+        public void BaseMeshBody_WeightsFollowTheirLimbs()
+        {
+            var bb = BaseBody.Get();
+            var body = bb.Body;
+            int hand = 0, foot = 0;
+            for (int v = 0; v < body.VertexCount; v++)
+            {
+                Vector3 p = body.Positions[v];
+                int b = body.BoneIndex[v * 4];
+                // the lowest points are feet / toes; the right hand hangs out at +X in the A-pose
+                if (p.y < 0.03f)
+                {
+                    var bone = (CharacterBone)b;
+                    Assert.IsTrue(bone == CharacterBone.LeftFoot || bone == CharacterBone.LeftToes || bone == CharacterBone.RightFoot || bone == CharacterBone.RightToes, "sole on " + bone + " at " + v);
+                    foot++;
+                }
+                if (p.x > 0.55f) { Assert.GreaterOrEqual(b, (int)CharacterBone.RightLowerArm, "right hand area at " + v); hand++; }
+            }
+            Assert.Greater(foot, 20);
+            Assert.Greater(hand, 20);
+        }
+
+        [Test]
         public void BoneParents_PrecedeChildren()
         {
             for (int i = 0; i < CharacterBones.Count; i++) Assert.Less(CharacterBones.Parent(i), i);

@@ -9,8 +9,8 @@ using UnityEngine.UI;
 namespace LightMMORPG.Menu
 {
     /// <summary>
-    /// Customize (Fighters item), design bench <c>docs/bench/customize-ui.html</c>, "Bevel" style with no panel: five
-    /// icon tabs floating along the top left, Random top right, and a frameless column on the right with (Eyes, Head, Jaw &amp; Chin, Nose &amp; Mouth, Ears &amp; Neck), eye-style tiles
+    /// Customize (Fighters item), design bench <c>docs/bench/customize-ui.html</c>, "Bevel" style with no panel: seven
+    /// icon tabs (five head tabs, Hair, Body) floating along the top left, Random top right, and a frameless column on the right with (Eyes, Head, Jaw &amp; Chin, Nose &amp; Mouth, Ears &amp; Neck), eye-style tiles
     /// showing the real painted eyes, slider rows with − / + buttons, a centred fill, a value tag and a per-row reset,
     /// and Random / Reset all / Done. Buttons are 9-sliced boxes with two cut corners (<see cref="MenuUi.BevelFill"/>).
     /// Keys: Z / C or LB / RB switch tabs, R / Y random, Backspace / X reset all, Enter / Start done, Esc / B done.
@@ -48,9 +48,13 @@ namespace LightMMORPG.Menu
             ("Nose & Mouth", MenuUi.IconKind.Nose, new[] { 11, 12, 13 }),
             ("Ears & Neck", MenuUi.IconKind.Ear, new[] { 18, 19, 20, 21 }),
             ("Hair", MenuUi.IconKind.Hair, new int[0]),
+            ("Body", MenuUi.IconKind.Body, new[] { 22, 23, 24, 25 }),
         };
 
-        private const int HairTab = 5;
+        private const int HairTab = 5, BodyTab = 6;
+
+        /// <summary>The Body tab is open on Customize (the menu camera pulls back to show the whole fighter).</summary>
+        public bool BodyTabOpen => Current == State.Customize && _custTab == BodyTab;
 
         private const float CustPW = 880f, CustPad = 40f, CustW = CustPW - CustPad * 2f, RowStep = 72f, RowH = 66f;
 
