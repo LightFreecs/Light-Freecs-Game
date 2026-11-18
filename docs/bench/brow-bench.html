@@ -83,20 +83,15 @@ code{font-family:var(--f-mono);font-size:12.5px}
 <main class="panel">
   <div style="display:flex;flex-direction:column;gap:6px">
     <h1>Brow Bench</h1>
-    <p class="lede">Brows and eyes are picked separately, so any brow goes with any eye. The new <b>Sharp</b> brow and <b>Sharp</b> eye are traced from your drawing. The face is painted the way the game paints it: same layout and numbers, at the game's texture size (1024 texels across the head).</p>
+    <p class="lede">Brows and eyes are picked separately, so any brow goes with any eye. The new <b>Sharp</b> brow and <b>Sharp</b> eye are measured from your drawing, line by line, then smoothed. The face is painted the way the game paints it: same layout and numbers, at the game's texture size (1024 texels across the head).</p>
   </div>
 
   <section class="card ask">
-    <h2>Two things to settle from the drawing</h2>
+    <h2>One thing to settle from the drawing</h2>
     <p>Your drawing shows one eye on its own, so I can't tell which side the nose is on. That flips the whole look, so pick the one you meant:</p>
     <div class="row" role="group" aria-label="Which end is near the nose" id="pick-nose">
       <button class="chip" data-v="point" aria-pressed="true">Pointed ends near the nose (fierce, brows slope down to the nose)</button>
       <button class="chip" data-v="thick" aria-pressed="false">Thick brow end near the nose (cool, slopes down outward)</button>
-    </div>
-    <p style="margin-top:12px">The iris sits at the pointed corner in the drawing. With both eyes mirrored that makes them look inward (or outward), so:</p>
-    <div class="row" role="group" aria-label="Iris position" id="pick-iris">
-      <button class="chip" data-v="drawn" aria-pressed="true">Iris as drawn</button>
-      <button class="chip" data-v="centre" aria-pressed="false">Iris centred</button>
     </div>
   </section>
 
@@ -138,8 +133,8 @@ code{font-family:var(--f-mono);font-size:12.5px}
     <h2>Tracing check</h2>
     <p class="lede" style="margin-bottom:10px">Your drawing with my trace on top in orange. This is the shape that goes into the game.</p>
     <div class="trace">
-      <figure><canvas id="t-eye" width="560" height="450"></canvas><figcaption>Sharp eye: lid lines and iris</figcaption></figure>
-      <figure><canvas id="t-brow" width="540" height="540"></canvas><figcaption>Sharp brow: outline</figcaption></figure>
+      <figure><canvas id="t-eye" width="560" height="450"></canvas><figcaption>Sharp eye: lid lines at their real thickness, iris dashed</figcaption></figure>
+      <figure><canvas id="t-brow" width="540" height="540"></canvas><figcaption>Sharp brow: the filled shape</figcaption></figure>
     </div>
   </section>
 
@@ -186,25 +181,33 @@ const EYES = {
     WhiteBottom: S2([0.0,0.030, 0.06,-0.150, 0.127,-0.290, 0.252,-0.360, 0.383,-0.382, 0.514,-0.356, 0.619,-0.320, 0.720,-0.240, 0.800,-0.160, 0.900,0.020]),
     WhiteRange: [0.0, 0.90], LidShade: S2([0.0,0.02, 0.5,0.06, 0.85,0.08]),
     IrisU: 0.383, IrisV: 0, IrisRx: 0.223, IrisRy: 0.252, IrisRing: 0.020, DarkTop: 0.45, Shine: S3([0.252,0.125,0.075]), LidShadeColor: "#c4c2c8" },
-  // traced from the owner's sketch (top drawing). As drawn, u 0 = the pointed corner (drawing x 900), u 1 = the tall flat edge (x 410); 490 px = 1 eye width
+  // measured from the owner's sketch (top drawing): each line found at its darkest point column by column, then smoothed.
+  // As drawn, u 0 = the pointed corner (drawing x 898), u 1 = the flat outer edge; 490 px = 1 eye width, v = (615 − y) / 490.
+  // Line weight ~5% of the eye width, as in both the sketch and the painted version.
   sharp: { label: "Sharp", isNew: true, Width: 0.17, Shift: -0.10,
-    Upper: S3([-0.010,0.072,0.012, 0.100,0.116,0.020, 0.250,0.176,0.026, 0.450,0.255,0.032, 0.700,0.355,0.038, 0.880,0.425,0.042, 0.962,0.455,0.044]),
-    Extra: [S3([0.962,0.462,0.044, 0.972,0.130,0.036, 0.982,-0.205,0.030])],
-    Lower: S3([0.982,-0.208,0.028, 0.800,-0.203,0.027, 0.550,-0.200,0.026, 0.300,-0.196,0.024, 0.170,-0.165,0.021, 0.075,-0.060,0.016, 0.000,0.068,0.008]),
-    WhiteTop: S2([0.0,0.068, 0.25,0.170, 0.45,0.249, 0.70,0.349, 0.88,0.418, 0.962,0.440]),
-    WhiteBottom: S2([0.0,0.068, 0.075,-0.055, 0.17,-0.160, 0.30,-0.190, 0.55,-0.194, 0.962,-0.197]),
-    WhiteRange: [0.0, 0.962], LidShade: S2([0.0,0.02, 0.5,0.06, 0.96,0.09]),
-    IrisU: 0.245, IrisV: 0, IrisRx: 0.110, IrisRy: 0.127, IrisRing: 0.020, DarkTop: 0.45, Shine: S3([0.215,0.045,0.032]), LidShadeColor: "#c4c2c8" },
+    Upper: S3([0,0.063,0.020, 0.057,0.088,0.034, 0.159,0.131,0.044, 0.282,0.183,0.048, 0.404,0.234,0.050, 0.527,0.286,0.050,
+               0.649,0.338,0.050, 0.771,0.390,0.050, 0.873,0.433,0.050, 0.929,0.4565,0.050]),
+    Extra: [S3([0.929,0.4565,0.050, 0.973,0.337,0.050, 1.000,0.194,0.050, 1.004,0.071,0.050, 0.985,-0.051,0.050, 0.933,-0.204,0.050])],
+    Lower: S3([0.933,-0.204,0.046, 0.812,-0.196,0.046, 0.690,-0.196,0.046, 0.567,-0.204,0.046, 0.445,-0.210,0.046, 0.322,-0.204,0.046,
+               0.220,-0.198,0.044, 0.149,-0.184,0.040, 0.098,-0.157,0.036, 0.057,-0.108,0.030, 0.024,-0.035,0.024, 0,0.063,0.018]),
+    WhiteTop: S2([0,0.063, 0.057,0.088, 0.159,0.131, 0.282,0.183, 0.404,0.234, 0.527,0.286, 0.649,0.338, 0.771,0.390, 0.873,0.433, 0.929,0.456, 0.973,0.337, 1.0,0.13]),
+    WhiteBottom: S2([0,0.063, 0.024,-0.035, 0.057,-0.108, 0.098,-0.157, 0.149,-0.184, 0.220,-0.198, 0.322,-0.204, 0.445,-0.210, 0.567,-0.204,
+                     0.690,-0.196, 0.812,-0.196, 0.933,-0.204, 0.985,-0.051, 1.0,0.0]),
+    WhiteRange: [0.0, 1.0], LidShade: S2([0.0,0.03, 0.5,0.07, 0.95,0.09]),
+    IrisU: 0.241, IrisV: 0, IrisRx: 0.110, IrisRy: 0.127, IrisRing: 0.020, DarkTop: 0.45, Shine: S3([0.215,0.04,0.030]), LidShadeColor: "#c4c2c8" },
 };
 const SHARP_EYE_DRAWN = EYES.sharp;
 
 // ================================================================== brows
-// Sharp brow traced from the owner's sketch (bottom drawing), in the Sharp eye's (u, v) as drawn: 405 px = 1 eye width,
-// u = (645 − x) / 405, v = 0.076 + (1272 − y) / 405. Three edges so the tip and both corners of the blunt end stay sharp.
+// Sharp brow measured from the owner's painted drawing (bottom), in the Sharp eye's (u, v) as drawn, anchored on the painted
+// eye's pointed corner: u = (650 − x) / 395, v = 0.063 + (1275 − y) / 395. Its lower edge under the iris (x 500–600) is hidden
+// in the drawing and continues the visible curve. Three edges so the tip and the blunt end's corners stay crisp.
 const SHARP_BROW_DRAWN = {
-  top: [[-0.042,0.056],[0.037,0.143],[0.160,0.266],[0.358,0.476],[0.605,0.711],[0.728,0.809],[0.877,0.896],[1.000,0.915],[1.086,0.883]],
-  end: [[1.086,0.883],[1.153,0.619]],
-  bottom: [[1.153,0.619],[0.901,0.562],[0.704,0.459],[0.506,0.355],[0.309,0.254],[0.111,0.148],[-0.042,0.056]],
+  top: [[-0.025,0.055],[0.051,0.111],[0.137,0.174],[0.213,0.235],[0.289,0.309],[0.365,0.387],[0.441,0.471],[0.516,0.554],[0.592,0.638],
+        [0.668,0.726],[0.744,0.8],[0.82,0.858],[0.896,0.901],[0.972,0.921],[1.048,0.924],[1.109,0.924]],
+  end: [[1.109,0.924],[1.144,0.883],[1.175,0.822],[1.19,0.759],[1.2,0.681],[1.195,0.625]],
+  bottom: [[1.195,0.625],[1.124,0.612],[1.048,0.607],[0.972,0.592],[0.896,0.544],[0.82,0.488],[0.744,0.44],[0.668,0.382],[0.592,0.324],
+           [0.516,0.258],[0.441,0.197],[0.365,0.147],[0.289,0.111],[0.213,0.088],[0.137,0.073],[0.051,0.06],[-0.025,0.055]],
 };
 // brow units: (u − 0.5, v − 0.935) × 0.17 head units from (EyeX, BrowY) — at default sliders that puts it where the drawing has it over the Sharp eye
 const BROW_SCALE = 0.17, BROW_DV = 0.935;
@@ -215,7 +218,6 @@ const flipPts = pts => pts.map(p => [1 - p[0], ...p.slice(1)]);
 const flipFn = pts => flipPts(pts).reverse();
 function sharpEye(st) {
   const e = { ...SHARP_EYE_DRAWN };
-  if (st.irisPos === "centre") { e.IrisU = 0.5; e.Shine = [[0.47, 0.045, 0.032]]; }
   if (st.nose === "thick") {
     Object.assign(e, { Upper: flipPts(e.Upper), Extra: e.Extra.map(flipPts), Lower: flipPts(e.Lower), WhiteTop: flipFn(e.WhiteTop), WhiteBottom: flipFn(e.WhiteBottom),
       WhiteRange: [1 - e.WhiteRange[1], 1 - e.WhiteRange[0]], LidShade: flipFn(e.LidShade), IrisU: 1 - e.IrisU, Shine: flipPts(e.Shine) });
@@ -308,7 +310,7 @@ function paintEye(g, H, ES, side, sz, iris) {
 // Sharp brow outline in head units for one side
 function sharpBrowPts(H, B, side, lift) {
   const P = p => [side * (H.EyeX + BROW_SCALE * (p[0] - 0.5)), H.BrowY + lift + BROW_SCALE * (p[1] - BROW_DV)];
-  return [...densify(B.top, 6), ...B.end.slice(1), ...densify(B.bottom, 6).slice(1)].map(P);
+  return [...densify(B.top, 6), ...densify(B.end, 6).slice(1), ...densify(B.bottom, 6).slice(1)].map(P);
 }
 // how far the eye's upper lid reaches above the Sharp brow's lower edge (right side, brow at lift 0)
 function poke(H, ES, B) {
@@ -396,9 +398,9 @@ function drawView(cv, view, dpr) {
 }
 
 // ================================================================== state + UI
-const state = { eye: "sharp", brow: "sharp", iris: "#c8741e", hair: "#1a1418", browH: 0, eyeSize: 1, nose: "point", irisPos: "drawn", view: "face" };
-try { const saved = JSON.parse(localStorage.getItem("brow-bench") || "null"); if (saved) Object.assign(state, saved); } catch (e) {}
-const save = () => { try { localStorage.setItem("brow-bench", JSON.stringify(state)); } catch (e) {} };
+const state = { eye: "sharp", brow: "sharp", iris: "#c8741e", hair: "#1a1418", browH: 0, eyeSize: 1, nose: "point", view: "face" };
+try { const saved = JSON.parse(localStorage.getItem("brow-bench-2") || "null"); if (saved) Object.assign(state, saved); } catch (e) {}
+const save = () => { try { localStorage.setItem("brow-bench-2", JSON.stringify(state)); } catch (e) {} };
 
 const HAIRS = { "#1a1418": "Black", "#5a3624": "Brown", "#d8b56a": "Blond", "#e8e6ee": "White", "#8e2a22": "Red", "#2a3a78": "Blue" };
 const IRISES = { "#c8741e": "Amber", "#7b5cc4": "Violet", "#2f9a95": "Teal", "#3f74c9": "Blue", "#4f9a4f": "Green", "#c23a3a": "Red", "#7b8390": "Grey" };
@@ -420,7 +422,7 @@ chips("pick-brow", Object.entries(BROWS).map(([k, v]) => [k, v.label, v.isNew]),
 chips("pick-eye", Object.entries(EYES).map(([k, v]) => [k, v.label, v.isNew]), "eye");
 chips("pick-hair", Object.entries(HAIRS), "hair", dot);
 chips("pick-iris-col", Object.entries(IRISES), "iris", dot);
-for (const [id, key] of [["pick-nose", "nose"], ["pick-iris", "irisPos"]])
+for (const [id, key] of [["pick-nose", "nose"]])
   for (const b of document.getElementById(id).children) b.addEventListener("click", () => { state[key] = b.dataset.v; update(); });
 const pressRow = (id, val) => { for (const b of document.getElementById(id).children) b.setAttribute("aria-pressed", String(b.dataset.v === val)); };
 
@@ -447,7 +449,7 @@ let queued = false;
 function update() {
   save();
   pressRow("pick-brow", state.brow); pressRow("pick-eye", state.eye); pressRow("pick-hair", state.hair); pressRow("pick-iris-col", state.iris);
-  pressRow("pick-nose", state.nose); pressRow("pick-iris", state.irisPos);
+  pressRow("pick-nose", state.nose);
   document.getElementById("v-face").setAttribute("aria-pressed", String(state.view === "face"));
   document.getElementById("v-close").setAttribute("aria-pressed", String(state.view === "close"));
   sBrow.value = state.browH; sEye.value = state.eyeSize;
@@ -480,20 +482,23 @@ sketch.onload = () => {
   const k = sketch.naturalWidth / 924;
   const crop = (cv, sx, sy) => { const g = cv.getContext("2d"); g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(sketch, sx * k, sy * k, cv.width * k, cv.height * k, 0, 0, cv.width, cv.height); g.setTransform(1, 0, 0, 1, -sx, -sy); return g; };
   const orange = "rgba(242,107,29,0.9)";
-  // eye: x = 900 − 490 u, y = 615 − 490 v
+  // eye: x = 898 − 490 u, y = 615 − 490 v; lid lines drawn at their real weight
   let g = crop(document.getElementById("t-eye"), 370, 340);
-  const Pe = p => [900 - 490 * p[0], 615 - 490 * p[1]];
-  g.strokeStyle = orange; g.lineWidth = 3; g.lineCap = g.lineJoin = "round";
+  const Pe = p => [898 - 490 * p[0], 615 - 490 * p[1]];
+  g.strokeStyle = orange; g.lineCap = g.lineJoin = "round"; g.globalAlpha = 0.55;
   for (const L of [SHARP_EYE_DRAWN.Upper, ...SHARP_EYE_DRAWN.Extra, SHARP_EYE_DRAWN.Lower]) {
-    const d = densify(L, 6).map(Pe); g.beginPath(); g.moveTo(...d[0]); for (const p of d.slice(1)) g.lineTo(...p); g.stroke();
+    const d = densify(L, 6);
+    for (let i = 1; i < d.length; i++) { g.lineWidth = d[i][2] * 490; g.beginPath(); g.moveTo(...Pe(d[i - 1])); g.lineTo(...Pe(d[i])); g.stroke(); }
   }
+  g.globalAlpha = 1; g.lineWidth = 3;
   const e = SHARP_EYE_DRAWN, c = Pe([e.IrisU, e.IrisV]);
   g.setLineDash([6, 5]); g.beginPath(); g.ellipse(c[0], c[1], e.IrisRx * 490, e.IrisRy * 490, 0, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
-  // brow: x = 645 − 405 u, y = 1272 − 405 (v − 0.076)
+  // brow: x = 650 − 395 u, y = 1275 − 395 (v − 0.063)
   g = crop(document.getElementById("t-brow"), 150, 890);
-  const Pb = p => [645 - 405 * p[0], 1272 - 405 * (p[1] - 0.076)], B = SHARP_BROW_DRAWN;
-  const out = [...densify(B.top, 6), ...B.end.slice(1), ...densify(B.bottom, 6).slice(1)].map(Pb);
-  g.strokeStyle = orange; g.lineWidth = 3; g.lineJoin = "round"; poly(g, out); g.stroke();
+  const Pb = p => [650 - 395 * p[0], 1275 - 395 * (p[1] - 0.063)], B = SHARP_BROW_DRAWN;
+  const out = [...densify(B.top, 6), ...densify(B.end, 6).slice(1), ...densify(B.bottom, 6).slice(1)].map(Pb);
+  g.fillStyle = "rgba(242,107,29,0.4)"; poly(g, out); g.fill();
+  g.strokeStyle = orange; g.lineWidth = 3; g.lineJoin = "round"; g.stroke();
 };
 sketch.src = "brow-sketch-sharp.png";
 
