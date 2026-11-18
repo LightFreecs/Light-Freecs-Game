@@ -212,67 +212,6 @@ namespace LightMMORPG.Characters
             }
 
             /// <summary>
-            /// One layer of hair all round the dome: from <paramref name="y0"/> (hidden under the layer above) down to a row
-            /// of pointed locks at <paramref name="edge"/>, each lock leaning back a little and lifting off the head toward its
-            /// tip (by <paramref name="lip"/>) so the layer below shows from under it. <paramref name="phase"/> 2 puts the points
-            /// between the points of a phase-0 layer. Where the hairline comes down past the edge the layer lies flat.
-            /// <para>The layer is a closed slab (a top side and an underside meeting at the pointed edge), like the blades:
-            /// the inverted-hull outline only draws round closed shapes, so an open sheet would melt into the hair under it.</para>
-            /// </summary>
-            private void Tier(float[][] hairline, float y0, float edge, float depth, float lip, int phase, float off, float lean = 12f)
-            {
-                const int N = 80, R = 12;   // 20 locks round the head
-                const float under = 0.012f; // the underside starts this far below the top side
-                static float Hash(float key)
-                {
-                    double v = Math.Sin(key * 12.9898) * 43758.5453;
-                    return (float)(v - Math.Floor(v));
-                }
-                var top = new List<int[]>();
-                var bot = new List<int[]>();
-                for (int i = 0; i <= R; i++)
-                {
-                    float s = i / (float)R;
-                    var rowT = new int[N];
-                    var rowB = new int[N];
-                    for (int j = 0; j < N; j++)
-                    {
-                        float deg0 = -180f + 360f * j / N, deg = deg0 + lean * s * Mathf.Sin(Rad(deg0));
-                        float hl = Hairline(hairline, deg);
-                        int k = (j + phase) % 4;
-                        float tooth = 1f - Mathf.Abs(k - 2) / 2f;
-                        float centre = Mathf.Abs(deg0 + 360f / N * (2 - k));
-                        if (centre > 180f) centre = 360f - centre;
-                        float tip = depth * (0.7f + 0.6f * Hash(Mathf.Round(centre) + edge * 100f));
-                        float h = Mathf.Max(hl, edge - tip * tooth), yt = Mathf.Max(y0, h + 0.03f), y = Lerp(yt, h, s);
-                        float room = Smooth((edge - hl) / (depth + 0.04f)), rise = lip * room;
-                        float along = 0.1f + 0.85f * s * room;   // where the layer lies flat it keeps the base colour
-                        rowT[j] = G.Push(S(deg, y, off + rise * s * s), along);
-                        // underside: shares the pointed edge (last row), elsewhere sits a little lower and rises late
-                        rowB[j] = i == R ? rowT[j] : G.Push(S(deg, y, off - under + (rise + under) * s * s * s * s), along);
-                    }
-                    top.Add(rowT);
-                    bot.Add(rowB);
-                }
-                var t = G.Triangles;
-                for (int r = 0; r < R; r++)
-                    for (int j = 0; j < N; j++)
-                    {
-                        int jn = (j + 1) % N;
-                        int a = top[r][j], b = top[r][jn], c = top[r + 1][jn], d = top[r + 1][j];
-                        t.AddRange(new[] { a, d, c, a, c, b });
-                        a = bot[r][j]; b = bot[r][jn]; c = bot[r + 1][jn]; d = bot[r + 1][j];
-                        t.AddRange(new[] { a, c, d, a, b, c });   // facing the head
-                    }
-                // close the top: the top side and the underside joined along the first row
-                for (int j = 0; j < N; j++)
-                {
-                    int jn = (j + 1) % N, a = top[0][j], b = top[0][jn], c = bot[0][jn], d = bot[0][j];
-                    t.AddRange(new[] { a, b, c, a, c, d });
-                }
-            }
-
-            /// <summary>
             /// The base layer carries on under the back of the skull (built from the head mesh's own rows) and ends in a
             /// straight line across, just behind the back of the neck.
             /// </summary>
@@ -515,11 +454,6 @@ namespace LightMMORPG.Characters
             public void Light()
             {
                 Shell(HairlineFull, 0.025f, 0f, 0f);
-                // three layers of pointed locks over the dome, each tucked under the one above
-                // (each layer starts a little further out than the one under it, so they never sit at the same height)
-                Tier(HairlineFull, 1f, 0.82f, 0.09f, 0.05f, 0, 0.048f);      // from the crown
-                Tier(HairlineFull, 0.88f, 0.64f, 0.1f, 0.05f, 2, 0.04f);     // middle, points between the ones above
-                Tier(HairlineFull, 0.72f, 0.44f, 0.1f, 0.055f, 0, 0.034f);   // the back, behind the ears
                 int from = G.Positions.Count;
                 Imported();
                 foreach (var (th, w) in new[] { (-26f, 0.4f), (0f, 0.44f), (26f, 0.4f) })
@@ -529,7 +463,11 @@ namespace LightMMORPG.Characters
                 KeepOffSkin(from, HairlineFull);
             }
 
-            /// <summary>Messy layers: smooth full dome, locks falling from the crown, bangs to the eyes, ears covered, long at the back.</summary>
+            /// <summary>
+            /// Messy layers: full dome, locks falling from the crown, bangs to the eyes, ears covered, long at the back, with
+            /// rows of lifted pointed locks over the top (fanning out from the crown) and down the back, each row tucked under
+            /// the one above, so no part of the dome reads as one smooth cap.
+            /// </summary>
             public void Messy()
             {
                 static float J(float a, float key)
@@ -565,6 +503,30 @@ namespace LightMMORPG.Characters
                 Lock(180f, 180f, 0.12f, 0.22f, 0.05f, 0.45f);
                 // shorter locks on the dome for the clump lines
                 foreach (float th in new[] { 24f, 52f, 80f, 108f, 136f, 164f }) Pair(th, th + J(8f, th), 0.66f + J(0.04f, th), 0.24f, 0.1f);
+                // layers: each row roots under the hair above it and lifts toward its points, so the top and the back read
+                // as rows of pointed locks instead of one smooth dome
+                void Layer(float th, float rootY, float tipY, float w, float lift, float root, float drift = 6f)
+                {
+                    float d = Mathf.Abs(th) >= 179f ? 0f : drift * Sgn(th);
+                    Strand(new[]
+                    {
+                        new[] { th, rootY, root }, new[] { th + d * 0.3f, Lerp(rootY, tipY, 0.3f), Mathf.Max(root, lift * 0.65f) },
+                        new[] { th + d * 0.7f, Lerp(rootY, tipY, 0.7f), lift }, new[] { th + d, tipY, lift * 0.95f },
+                    }, w, 0.3f, 0.95f);
+                }
+                void Row(float[] ths, float rootY, float tipY, float jit, float w, float lift, float root = -0.01f)
+                {
+                    foreach (float th in ths)
+                    {
+                        if (Mathf.Abs(th) >= 179f) { Layer(180f, rootY, tipY, w, lift, root); continue; }
+                        Layer(th, rootY, tipY + J(jit, th), w, lift, root);
+                        Layer(-th, rootY, tipY + J(jit, -th * 1.7f), w, lift, root);
+                    }
+                }
+                // the crown: locks fanning out from the top of the head, lying on the base layer from their roots up
+                Row(new[] { 15f, 45f, 75f, 105f, 135f, 165f }, 1f, 0.8f, 0.04f, 0.17f, 0.14f, 0.05f);
+                Row(new[] { 90f, 110f, 130f, 150f, 170f }, 0.8f, 0.47f, 0.06f, 0.17f, 0.12f);                 // upper back
+                Row(new[] { 100f, 120f, 140f, 160f, 180f }, 0.64f, 0.3f, 0.05f, 0.16f, 0.11f);                // lower back
                 // a small cowlick at the back of the crown and a little flick on each side
                 Spike(180f, 0.95f, Sp(0.2f, 0.15f, 0.75f, 0.8f, 0.3f));
                 for (int s = -1; s <= 1; s += 2) Spike(74f * s, 0.64f, Sp(0.13f, 0.1f, 0.15f, 0.3f, 1f, 0f, 0.02f));
