@@ -565,8 +565,8 @@ function newHair() {
   return G;
 }
 
-// back shell: a thin layer that hugs the back half of the skull, from the crown down to the nape (nothing at the front:
-// the forehead and the top are covered by the roots of the big blades, the way the Light hair model does it)
+// base layer: a thin layer on the skull down to the hairline. The big blades hide it; it only shows as the clean
+// hairline edge and in the gaps between blades, so no skin shows through the hair.
 function buildShell(G, st) {
   const N = 64, R = 20;
   const hairline = st.hairline;
@@ -591,8 +591,56 @@ function buildShell(G, st) {
       G.idx.push(a, d, c, a, c, b);
     }
 }
-// shell coverage: nothing at the front (rows collapse onto the crown), down to the ears at the sides, to the nape at the back
-const backHairline = (side, nape) => a => a < 0.4 ? 0.985 : a < 0.55 ? lerp(0.985, side, smooth((a - 0.4) / 0.15)) : lerp(side, nape, smooth((a - 0.55) / 0.45));
+// One clean hairline for every style: [degrees around from the front, height]. Straight across the forehead, corners
+// at the temples, sideburns down in front of the ears, over the ears, behind them and down to the nape.
+const HAIRLINE = [[0, 0.80], [30, 0.79], [50, 0.74], [64, 0.64], [74, 0.47], [84, 0.53], [100, 0.54], [115, 0.43], [135, 0.32], [180, 0.27]];
+function hairlineY(deg) {
+  deg = Math.min(180, Math.abs(deg));
+  let i = 0; while (i < HAIRLINE.length - 2 && deg > HAIRLINE[i + 1][0]) i++;
+  return lerp(HAIRLINE[i][1], HAIRLINE[i + 1][1], smooth((deg - HAIRLINE[i][0]) / (HAIRLINE[i + 1][0] - HAIRLINE[i][0])));
+}
+const fullHairline = a => hairlineY(a * 180);
+
+// this head's horizontal radius by direction and height, as a lookup table (2° × 0.01)
+const SKULL_R = (() => {
+  const NA = 180, NY = 101, T = new Float32Array(NA * NY), K = 720;
+  for (let iy = 0; iy < NY; iy++) {
+    const y = Math.min(0.999, iy / 100), pts = [];
+    for (let k = 0; k < K; k++) { const p = surface(-Math.PI + 2 * Math.PI * k / K, y); pts.push([Math.atan2(p[0], p[2]), Math.hypot(p[0], p[2])]); }
+    pts.sort((a, b) => a[0] - b[0]);
+    let m = 0;
+    for (let ia = 0; ia < NA; ia++) {
+      const a = -Math.PI + 2 * Math.PI * ia / NA;
+      while (m < K - 2 && pts[m + 1][0] < a) m++;
+      const [a0, r0] = pts[m], [a1, r1] = pts[m + 1];
+      T[iy * NA + ia] = a1 > a0 ? lerp(r0, r1, clamp01((a - a0) / (a1 - a0))) : r0;
+    }
+  }
+  return { T, NA, NY };
+})();
+function skullR(phi, y) {
+  const { T, NA, NY } = SKULL_R;
+  const fa = ((phi + Math.PI) / (2 * Math.PI)) * NA, fy = clamp01(y) * (NY - 1);
+  const a0 = Math.floor(fa) % NA, a1 = (a0 + 1) % NA, ta = fa - Math.floor(fa), y0 = Math.min(NY - 2, Math.floor(fy)), ty = fy - y0;
+  const v = (ia, iy) => T[iy * NA + ia];
+  return lerp(lerp(v(a0, y0), v(a1, y0), ta), lerp(v(a0, y0 + 1), v(a1, y0 + 1), ta), ty);
+}
+
+// Nothing may cut into the skin below the hairline: any blade vertex there that is inside the head is moved out to
+// just above the skin (so a blade that reaches below the hairline lies on the head like a sideburn instead).
+// Above the hairline the buried roots stay hidden under the base layer.
+function keepOffSkin(G, from) {
+  for (let i = from; i < G.pos.length / 3; i++) {
+    const x = G.pos[i * 3], y = G.pos[i * 3 + 1], z = G.pos[i * 3 + 2];
+    if (y > 0.97 || y < 0.27) continue;
+    const phi = Math.atan2(x, z);
+    if (y > hairlineY(phi * 180 / Math.PI) + 0.12) continue;
+    const r = Math.hypot(x, z), R = skullR(phi, y), want = R + 0.012;
+    if (r >= want) continue;
+    G.pos[i * 3] = Math.sin(phi) * want; G.pos[i * 3 + 2] = Math.cos(phi) * want;
+    G.morph[i * 3] = head.morphDX(Math.sin(phi) * R, y, Math.cos(phi) * R);
+  }
+}
 
 // one blade: a cubic curve P[0..3] swept with a flat oval that tapers to a point. Wide side faces away from the head.
 // Same build as the Light hair spikes: 8 sides, ~9 rings, wide at the root (about half the head's width), root buried in the skull.
@@ -647,23 +695,14 @@ function lightSkullR(phi, y) {
   return 1 / Math.hypot(Math.sin(phi) / w, Math.cos(phi) / d);
 }
 // this head's horizontal radius in direction phi at height y (sampled from the surface)
-function ourSkullR(phi, y) {
-  let best = 0, bestErr = 9;
-  for (let k = 0; k < 144; k++) {
-    const p = surface(-Math.PI + 2 * Math.PI * k / 144, y), a = Math.atan2(p[0], p[2]);
-    const e = Math.abs(Math.atan2(Math.sin(a - phi), Math.cos(a - phi)));
-    if (e < bestErr) { bestErr = e; best = Math.hypot(p[0], p[2]); }
-  }
-  return best;
-}
-const skullShift = (phi, y) => { y = Math.min(0.97, Math.max(0.2, y)); const d = ourSkullR(phi, y) - lightSkullR(phi, y); return [Math.sin(phi) * d, 0, Math.cos(phi) * d]; };
+const skullShift = (phi, y) => { y = Math.min(0.97, Math.max(0.2, y)); const d = skullR(phi, y) - lightSkullR(phi, y); return [Math.sin(phi) * d, 0, Math.cos(phi) * d]; };
 
-// Fill pieces (same blade build), mirrored on both sides so the hair stays even.
-// Temples: hair down the sides to the tops of the ears, so the head doesn't read wide from the front.
-function templeFill(G, w = 0.32) {
+// Sides (same blade build), mirrored so both sides match: a sideburn that follows the hairline down in front of the
+// ear, and a blade over the ear that ends just above it, pointing down and back.
+function sideFill(G, w = 0.3) {
   for (const s of [-1, 1]) {
-    strand(G, [[70 * s, 0.9, -0.12], [73 * s, 0.8, 0.07], [77 * s, 0.62, 0.05], [80 * s, 0.46, 0.04]], { w });
-    strand(G, [[55 * s, 0.92, -0.12], [57 * s, 0.84, 0.08], [60 * s, 0.72, 0.05], [63 * s, 0.6, 0.035]], { w: w * 0.8 });
+    strand(G, [[72 * s, 0.9, -0.1], [73 * s, 0.78, 0.05], [74 * s, 0.6, 0.03], [75 * s, 0.46, 0.022]], { w });
+    strand(G, [[95 * s, 0.92, -0.1], [97 * s, 0.8, 0.06], [101 * s, 0.66, 0.05], [107 * s, 0.53, 0.035]], { w: w * 1.1 });
   }
 }
 
@@ -691,7 +730,8 @@ function buildImported(G, M) {
     }
     G.push(p, dx, M.w[i]);
   }
-  for (const t of M.tris) G.idx.push(base + t);
+  // the model's own back shell (part 0) is replaced by the base layer, which also covers the sides and the nape
+  for (let t = 0; t < M.tris.length; t += 3) if (M.part[M.tris[t]]) G.idx.push(base + M.tris[t], base + M.tris[t + 1], base + M.tris[t + 2]);
   G.blades += M.roots.length - 1;
 }
 
@@ -700,29 +740,30 @@ const STYLES = [
     id: "light", label: "Light (your model)",
     note: "Your Blockbench hair: the 16 big flat spikes and back shell, refitted to this skull (it is deeper at the front than the one you modelled on), plus 9 matching blades, mirrored left and right, filling the top front, the temple corners and the sides down to the ears. Green-black, almost no shine.",
     colors: { lit: "#33503b", shade: "#121a14", rim: "#6a9a72", band: "#5a8463", line: "#070b08" }, band: 0, bandY: 0.9,
+    hairline: fullHairline, capOff: 0.025,
     build(G) {
+      buildShell(G, this);
+      const from = G.pos.length / 3;
       buildImported(G, LIGHT_HAIR);
       // fill the top front of the crown, where the imported spikes lift away from the scalp
-      // (blades that lie along the top front, then rise into spikes like the rest)
+      // (blades that start above the hairline, lie along the top front, then rise into spikes like the rest)
       for (const [th, w] of [[-26, 0.4], [0, 0.44], [26, 0.4]])
-        strand(G, [[th, 0.78, -0.1], [th, 0.88, 0.06], [th * 0.8, 0.97, 0.1], [th * 1.4, 1, 0.42]], { w });
+        strand(G, [[th, 0.86, -0.1], [th, 0.9, 0.06], [th * 0.8, 0.97, 0.1], [th * 1.4, 1, 0.42]], { w });
       // the very top: two fat spikes straight out of the crown
       for (const th of [-20, 30]) spike(G, th, 0.99, { len: 0.55, w: 0.46, up: 1, back: 0.35, out: 0, depth: 0.1 });
-      for (const s of [-1, 1]) {
-        // temple corners: short spikes sweeping up and back
-        spike(G, 64 * s, 0.82, { len: 0.38, w: 0.38, up: 0.55, back: 0.35, out: 0.8 });
-      }
-      templeFill(G);
+      sideFill(G);
+      keepOffSkin(G, from);
     },
   },
   {
     id: "messy", label: "Messy layers", seed: 23,
     note: "Choppy medium cut from the same big blades: wide, pointed bangs over the forehead (two dip between the eyes), layered blades flowing off the crown with their tips lifting, clumps over the ears and down to the nape. Blue-black with a soft highlight band.",
     colors: { lit: "#2d3448", shade: "#11131c", rim: "#5a6894", band: "#66769e", line: "#06070b" }, band: 0.75, bandY: 0.88,
-    hairline: backHairline(0.44, 0.26), capOff: 0.025,
+    hairline: fullHairline, capOff: 0.025,
     build(G, r) {
       const j = a => (r() * 2 - 1) * a;
       buildShell(G, this);
+      const from = G.pos.length / 3;
       // bangs: [angle, tip height, tilt, width] – wide at the root, uneven lengths, neighbours cross
       for (const [th, tip, tilt, w] of [[-50, 0.5, -5, 0.3], [-30, 0.6, 6, 0.34], [-11, 0.49, -6, 0.34], [8, 0.46, 5, 0.32], [27, 0.58, -5, 0.34], [47, 0.52, 6, 0.3]])
         strand(G, [[th * 0.4, 0.9, -0.12], [th * 0.7, 0.9, 0.12], [th * 0.95, 0.74, 0.09], [th + tilt, tip, 0.04]], { w, swell: 0.1 });
@@ -741,20 +782,21 @@ const STYLES = [
       spike(G, 165, 0.9, { len: 0.42, w: 0.3, up: 0.6, back: 0.8, out: 0.4 });
       spike(G, -140, 0.88, { len: 0.38, w: 0.28, up: 0.5, back: 0.8, out: 0.5 });
       spike(G, 20, 0.95, { len: 0.36, w: 0.26, up: 0.9, back: 0.4, out: 0.3 });
-      // fill: blades lying across the top, and the temples
+      // fill: blades lying across the top
       for (const th of [-60, -20, 20, 60])
         strand(G, [[th * 0.3, 0.9, -0.12], [th, 1.0, 0.07], [th + j(6), 0.93, 0.08], [th * 1.1, 0.8, 0.1]], { w: 0.42 });
-      templeFill(G, 0.3);
+      keepOffSkin(G, from);
     },
   },
   {
     id: "swept", label: "Swept back", seed: 37,
     note: "Big blades sweeping back off the crown and fanning out at the back, flicking down at the nape. Short spiky bangs, long pieces framing the face to the jaw, spikes sticking out above the ears. Pure black with a cool highlight band.",
     colors: { lit: "#2b2b35", shade: "#0d0d11", rim: "#5d6380", band: "#646b88", line: "#050506" }, band: 0.85, bandY: 0.9,
-    hairline: backHairline(0.46, 0.26), capOff: 0.025,
+    hairline: fullHairline, capOff: 0.025,
     build(G, r) {
       const j = a => (r() * 2 - 1) * a;
       buildShell(G, this);
+      const from = G.pos.length / 3;
       for (const [th, tip, tilt] of [[-22, 0.58, -4], [0, 0.55, 3], [20, 0.6, 5]])
         strand(G, [[th * 0.4, 0.9, -0.12], [th * 0.6, 0.9, 0.11], [th * 0.85, 0.72, 0.07], [th + tilt, tip, 0.035]], { w: 0.26 });
       for (const s of [-1, 1]) {
@@ -772,9 +814,9 @@ const STYLES = [
       for (const th of [-150, 180, 150]) spike(G, th + j(4), 0.55, { len: 0.5 * (1 + j(0.08)), w: 0.42, up: 0.05, back: 1, out: 0.55, side: 0.25 });
       // nape: pointing down
       for (const th of [-162, 162]) spike(G, th, 0.4, { len: 0.32, w: 0.3, up: -0.6, back: 0.6, out: 0.5 });
-      // fill: low blades swept back flat over the top, and the temples
+      // fill: low blades swept back flat over the top
       for (const th of [-50, 0, 50]) spike(G, th, 0.97, { len: 0.55, w: 0.46, up: 0.3, back: 1, out: 0.1, side: 0.1 });
-      templeFill(G, 0.3);
+      keepOffSkin(G, from);
     },
   },
 ];
