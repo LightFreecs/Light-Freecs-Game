@@ -280,6 +280,10 @@ def top4(W):
     idx = np.argsort(-W, 1)[:, :4]; w = np.take_along_axis(W, idx, 1)
     w = np.where(w < 0.01, 0, w); w /= w.sum(1, keepdims=True)
     return idx.astype(np.uint8), w.astype(np.float32)
+# the top of the shoulder (trapezius slope, cap over the joint) belongs to the collarbone, which the game turns part of the
+# way with the arm (tools/shoulder_weights.py; was applied to the shipped body as a post-process on 2026-11-18)
+from shoulder_weights import move_to_collarbone
+W = move_to_collarbone(g, W, J)
 WI, WW = top4(W)
 
 # ---------------------------------------------------------------- re-pose the arms to the rig's 40° A-pose (rotation about the shoulder joint)

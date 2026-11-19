@@ -18,8 +18,8 @@ MonoBehaviour:
   energyChargePerSecond: 30
   maxGuard: 100
   knockedOutDuration: 5
+  walkSpeed: 2.2
   runSpeed: 8
-  sprintSpeed: 13
   flySpeed: 11
   dashSpeed: 25
   dashDuration: 0.18

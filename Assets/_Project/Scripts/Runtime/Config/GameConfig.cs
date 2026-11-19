@@ -21,8 +21,8 @@ namespace LightMMORPG.Config
         public float knockedOutDuration = CombatConstants.KnockedOutDuration;
 
         [Header("Movement")]
-        public float runSpeed = CombatConstants.RunSpeed;
-        public float sprintSpeed = CombatConstants.SprintSpeed;
+        [Tooltip("Default movement speed (m/s).")] public float walkSpeed = CombatConstants.WalkSpeed;
+        [Tooltip("Speed while Run (Shift) is held (m/s).")] public float runSpeed = CombatConstants.RunSpeed;
         public float flySpeed = CombatConstants.FlySpeed;
         public float dashSpeed = CombatConstants.DashSpeed;
         public float dashDuration = CombatConstants.DashDuration;

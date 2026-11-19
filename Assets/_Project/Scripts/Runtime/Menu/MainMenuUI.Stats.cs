@@ -120,7 +120,7 @@ namespace LightMMORPG.Menu
             {
                 StatId.Power => "Damage " + Pct(n.DamageMultiplier),
                 StatId.Vitality => "Health " + n.MaxHealth(c.maxHealth).ToString("N0", inv),
-                StatId.Speed => "Run " + (c.runSpeed * n.SpeedMultiplier).ToString("0.0#", inv) + " · Sprint " + (c.sprintSpeed * n.SpeedMultiplier).ToString("0.0#", inv) + " m/s",
+                StatId.Speed => "Walk " + (c.walkSpeed * n.SpeedMultiplier).ToString("0.0#", inv) + " · Run " + (c.runSpeed * n.SpeedMultiplier).ToString("0.0#", inv) + " m/s",
                 StatId.Ki => "Energy " + n.MaxEnergy(c.maxEnergy).ToString("N0", inv) + " · Regen " + (c.energyRegenPerSecond * n.EnergyRegenMultiplier).ToString("0.0#", inv) + "/s",
                 _ => "Damage taken " + Pct(n.DamageTakenMultiplier) + " · Guard " + n.MaxGuard(c.maxGuard).ToString("N0", inv),
             };

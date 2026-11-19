@@ -9,9 +9,9 @@ namespace LightMMORPG.Core
         public const float EnergyRegenPerSecond = 4f;
         public const float EnergyChargePerSecond = 30f;
 
-        // Movement
+        // Movement: walking is the default, holding Run (Shift) runs (the Locomotion Bench gaits are made for these speeds)
+        public const float WalkSpeed = 2.2f;
         public const float RunSpeed = 8f;
-        public const float SprintSpeed = 13f;
         public const float FlySpeed = 11f;
         public const float DashSpeed = 25f;
         public const float DashDuration = 0.18f;

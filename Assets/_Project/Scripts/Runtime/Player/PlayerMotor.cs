@@ -10,7 +10,7 @@ namespace LightMMORPG.Player
 {
     /// <summary>
     /// Client-side predicted CharacterController movement (FishNet CharacterControllerPrediction demo pattern).
-    /// Run / sprint / jump, flight toggle with fly up/down, dash, flash step, block slow-down, charge = stand still.
+    /// Walk (default) / run (hold Shift) / jump, flight toggle with fly up/down, dash, flash step, block slow-down, charge = stand still.
     /// Movement is relative to the camera yaw sent in the replicate data.
     /// Server-only hooks for combat: <see cref="ServerApplyKnockback"/>, <see cref="ServerTeleport"/>,
     /// <see cref="ServerSetSpeedMultiplier"/>; their state is in the reconcile so clients get corrected.
@@ -70,6 +70,7 @@ namespace LightMMORPG.Player
         public bool IsFlying => _flying;
         public bool IsBlocking { get; private set; }
         public bool IsCharging { get; private set; }
+        /// <summary>Running (Run / Shift held while moving); otherwise the fighter walks.</summary>
         public bool IsSprinting { get; private set; }
         public bool IsDashing => _dashTimer > 0f;
         public bool IsStunned => _stunTimer > 0f;
@@ -175,7 +176,7 @@ namespace LightMMORPG.Player
             if (_input != null)
             {
                 rd.Move = _input.Move;
-                rd.Sprint = _input.Held(GameAction.Sprint);
+                rd.Sprint = _input.Run;
                 rd.FlyUp = _input.Held(GameAction.Jump);
                 rd.FlyDown = _input.Held(GameAction.FlyDown);
                 rd.Block = _input.Held(GameAction.Block);
@@ -272,7 +273,8 @@ namespace LightMMORPG.Player
             // ---- desired horizontal movement relative to camera yaw ----
             Vector2 move = Vector2.ClampMagnitude(rd.Move, 1f);
             Vector3 wish = Quaternion.Euler(0f, rd.CameraYaw, 0f) * new Vector3(move.x, 0f, move.y);
-            float speed = _flying ? _config.flySpeed : (IsSprinting ? _config.sprintSpeed : _config.runSpeed);
+            // walking is the default; holding Run (Shift) runs (IsSprinting = running)
+            float speed = _flying ? _config.flySpeed : (IsSprinting ? _config.runSpeed : _config.walkSpeed);
             speed *= SpeedScale;
             if (IsBlocking) speed *= _config.blockMoveMultiplier;
             if (IsCharging) speed = 0f;

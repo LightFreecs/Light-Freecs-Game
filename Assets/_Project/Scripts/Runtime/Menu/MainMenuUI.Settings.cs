@@ -27,7 +27,7 @@ namespace LightMMORPG.Menu
             (GameAction.Light, "Light attack"), (GameAction.Heavy, "Heavy attack"), (GameAction.Block, "Block"),
             (GameAction.Charge, "Charge energy"), (GameAction.Blast, "Energy Blast"), (GameAction.Beam, "Charged Beam"),
             (GameAction.Surge, "Power Surge"), (GameAction.Jump, "Jump / fly up"), (GameAction.FlyDown, "Fly down"),
-            (GameAction.ToggleFlight, "Toggle flight"), (GameAction.Sprint, "Sprint"), (GameAction.Dash, "Dash"),
+            (GameAction.ToggleFlight, "Toggle flight"), (GameAction.Sprint, "Run (hold)"), (GameAction.Dash, "Dash"),
             (GameAction.FlashStep, "Flash step"), (GameAction.LockOn, "Lock-on"),
         };
 

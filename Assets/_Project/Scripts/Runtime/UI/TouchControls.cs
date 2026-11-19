@@ -63,7 +63,7 @@ namespace LightMMORPG.UI
             Button(GameAction.LockOn, "LOCK", tr, new Vector2(-70f, -260f), 90f, new Color(1f, 1f, 1f), null);
             Button(GameAction.ToggleFlight, "FLY", tr, new Vector2(-180f, -260f), 90f, new Color(0.7f, 0.9f, 1f), null);
             Button(GameAction.FlyDown, "DOWN", tr, new Vector2(-290f, -260f), 90f, new Color(0.7f, 0.9f, 1f), null);
-            Button(GameAction.Sprint, "SPRINT", new Vector2(0f, 0f), new Vector2(90f, 330f), 90f, new Color(0.8f, 0.8f, 0.8f), null);
+            Button(GameAction.Sprint, "RUN", new Vector2(0f, 0f), new Vector2(90f, 330f), 90f, new Color(0.8f, 0.8f, 0.8f), null);
 
             _canvas.gameObject.SetActive(false);
         }

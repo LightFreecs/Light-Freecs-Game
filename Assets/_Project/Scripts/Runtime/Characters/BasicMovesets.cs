@@ -17,6 +17,8 @@ namespace LightMMORPG.Characters
         public float TorsoYaw, TorsoPitch, TorsoRoll;
         public float HeadYaw, HeadPitch;
         public Vector3 ArmL, ArmR; public float TwistL, TwistR;
+        /// <summary>Hands: 0 = fist (every attack), 1 = open flat hand (the run's arm thrown back).</summary>
+        public float OpenL, OpenR;
         public Vector3 LegL, LegR; public float FootYawL, FootYawR, FootPitchL, FootPitchR;
 
         public AttackPose Clone() => (AttackPose)MemberwiseClone();
@@ -33,10 +35,47 @@ namespace LightMMORPG.Characters
             o.HeadYaw = L(a.HeadYaw, b.HeadYaw); o.HeadPitch = L(a.HeadPitch, b.HeadPitch);
             o.ArmL = Vector3.LerpUnclamped(a.ArmL, b.ArmL, t); o.ArmR = Vector3.LerpUnclamped(a.ArmR, b.ArmR, t);
             o.TwistL = L(a.TwistL, b.TwistL); o.TwistR = L(a.TwistR, b.TwistR);
+            o.OpenL = L(a.OpenL, b.OpenL); o.OpenR = L(a.OpenR, b.OpenR);
             o.LegL = Vector3.LerpUnclamped(a.LegL, b.LegL, t); o.LegR = Vector3.LerpUnclamped(a.LegR, b.LegR, t);
             o.FootYawL = L(a.FootYawL, b.FootYawL); o.FootYawR = L(a.FootYawR, b.FootYawR);
             o.FootPitchL = L(a.FootPitchL, b.FootPitchL); o.FootPitchR = L(a.FootPitchR, b.FootPitchR);
             float L(float x, float y) => x + (y - x) * t;
+        }
+
+        /// <summary>o = wa·a + wb·b + wc·c + wd·d, field by field (spline weights; they sum to 1). o may not be one of the inputs.</summary>
+        public static void Combine(AttackPose a, AttackPose b, AttackPose c, AttackPose d, float wa, float wb, float wc, float wd, AttackPose o)
+        {
+            o.RootPos = a.RootPos * wa + b.RootPos * wb + c.RootPos * wc + d.RootPos * wd;
+            o.RootYaw = S(a.RootYaw, b.RootYaw, c.RootYaw, d.RootYaw); o.RootPitch = S(a.RootPitch, b.RootPitch, c.RootPitch, d.RootPitch);
+            o.RootRoll = S(a.RootRoll, b.RootRoll, c.RootRoll, d.RootRoll);
+            o.HipsPos = a.HipsPos * wa + b.HipsPos * wb + c.HipsPos * wc + d.HipsPos * wd;
+            o.HipsYaw = S(a.HipsYaw, b.HipsYaw, c.HipsYaw, d.HipsYaw); o.HipsPitch = S(a.HipsPitch, b.HipsPitch, c.HipsPitch, d.HipsPitch);
+            o.HipsRoll = S(a.HipsRoll, b.HipsRoll, c.HipsRoll, d.HipsRoll);
+            o.TorsoYaw = S(a.TorsoYaw, b.TorsoYaw, c.TorsoYaw, d.TorsoYaw); o.TorsoPitch = S(a.TorsoPitch, b.TorsoPitch, c.TorsoPitch, d.TorsoPitch);
+            o.TorsoRoll = S(a.TorsoRoll, b.TorsoRoll, c.TorsoRoll, d.TorsoRoll);
+            o.HeadYaw = S(a.HeadYaw, b.HeadYaw, c.HeadYaw, d.HeadYaw); o.HeadPitch = S(a.HeadPitch, b.HeadPitch, c.HeadPitch, d.HeadPitch);
+            o.ArmL = a.ArmL * wa + b.ArmL * wb + c.ArmL * wc + d.ArmL * wd; o.ArmR = a.ArmR * wa + b.ArmR * wb + c.ArmR * wc + d.ArmR * wd;
+            o.TwistL = S(a.TwistL, b.TwistL, c.TwistL, d.TwistL); o.TwistR = S(a.TwistR, b.TwistR, c.TwistR, d.TwistR);
+            o.OpenL = S(a.OpenL, b.OpenL, c.OpenL, d.OpenL); o.OpenR = S(a.OpenR, b.OpenR, c.OpenR, d.OpenR);
+            o.LegL = a.LegL * wa + b.LegL * wb + c.LegL * wc + d.LegL * wd; o.LegR = a.LegR * wa + b.LegR * wb + c.LegR * wc + d.LegR * wd;
+            o.FootYawL = S(a.FootYawL, b.FootYawL, c.FootYawL, d.FootYawL); o.FootYawR = S(a.FootYawR, b.FootYawR, c.FootYawR, d.FootYawR);
+            o.FootPitchL = S(a.FootPitchL, b.FootPitchL, c.FootPitchL, d.FootPitchL); o.FootPitchR = S(a.FootPitchR, b.FootPitchR, c.FootPitchR, d.FootPitchR);
+            float S(float x, float y, float z, float w) => x * wa + y * wb + z * wc + w * wd;
+        }
+
+        /// <summary>Left ↔ right: the same pose done by the other side (the second step of a walk or run cycle).</summary>
+        public AttackPose Mirrored()
+        {
+            static Vector3 M(Vector3 v) => new(-v.x, v.y, v.z);
+            return new AttackPose
+            {
+                RootPos = M(RootPos), RootYaw = -RootYaw, RootPitch = RootPitch, RootRoll = -RootRoll,
+                HipsPos = M(HipsPos), HipsYaw = -HipsYaw, HipsPitch = HipsPitch, HipsRoll = -HipsRoll,
+                TorsoYaw = -TorsoYaw, TorsoPitch = TorsoPitch, TorsoRoll = -TorsoRoll,
+                HeadYaw = -HeadYaw, HeadPitch = HeadPitch,
+                ArmL = M(ArmR), ArmR = M(ArmL), TwistL = -TwistR, TwistR = -TwistL, OpenL = OpenR, OpenR = OpenL,
+                LegL = M(LegR), LegR = M(LegL), FootYawL = -FootYawR, FootYawR = -FootYawL, FootPitchL = FootPitchR, FootPitchR = FootPitchL,
+            };
         }
     }
 
@@ -295,26 +334,30 @@ namespace LightMMORPG.Characters
             rig.SetModelRotation(CharacterBone.Neck, Quaternion.Slerp(chest, head, 0.5f));
             rig.SetModelRotation(CharacterBone.Head, head);
 
-            // arms: shoulders follow the chest, hinge IK to the fist (elbows down and out), fist roll over forearm + hand, fist
+            // arms: the collarbone follows the arm a little (CharacterRig.FollowArm), then hinge IK from it to the fist (elbows
+            // down and out), fist roll over forearm + hand, fist (or the open hand of the run's arm thrown back)
             for (int side = -1; side <= 1; side += 2)
             {
                 var sh = (CharacterBone)CharacterBones.Side(CharacterBone.LeftShoulder, side);
                 var ua = sh + 1;
                 rig.Inherit(sh);
-                rig.SetModelRotation(ua, chest); rig.SetModelRotation(ua + 1, chest); rig.SetModelRotation(ua + 2, chest);
+                Vector3 fist = KeepOutOfTorso(rig, ToModel(side < 0 ? P.ArmL : P.ArmR), hs);
+                rig.FollowArm(side, fist - rig.ModelPosition(ua));
+                Quaternion clavicle = rig.GetModelRotation(sh);
+                rig.SetModelRotation(ua, clavicle); rig.SetModelRotation(ua + 1, clavicle); rig.SetModelRotation(ua + 2, clavicle);
                 Vector3 shoulder = rig.ModelPosition(ua);
                 Vector3 pole = shoulder + chest * (new Vector3(side * 0.5f, -0.7f, -0.25f) * hs);
-                Vector3 fist = KeepOutOfTorso(rig, ToModel(side < 0 ? P.ArmL : P.ArmR), hs);
                 rig.SolveTwoBoneHinged(ua, fist, pole, 1f, Vector3.back);
                 float twist = side < 0 ? P.TwistL : P.TwistR;
                 Vector3 fore = (rig.ModelPosition(ua + 2) - rig.ModelPosition(ua + 1)).normalized;
                 Quaternion roll = Quaternion.AngleAxis(twist * 0.5f, fore);
                 rig.SetModelRotation(ua + 1, roll * rig.GetModelRotation(ua + 1));
                 rig.SetModelRotation(ua + 2, roll * rig.GetModelRotation(ua + 1));
-                rig.SetFingerCurl(side, 1f);
+                rig.SetFingerCurl(side, 1f - Mathf.Clamp01(side < 0 ? P.OpenL : P.OpenR));
             }
 
-            // legs: hinge IK to the foot targets, knees towards the toes; planted foot flat, lifted foot square to the shin
+            // legs: hinge IK to the foot targets, knees towards the toes; planted foot flat, lifted foot square to the shin;
+            // a planted foot up on its toes (pitch > 0, push-off) keeps the toes flat on the floor
             for (int side = -1; side <= 1; side += 2)
             {
                 var ul = (CharacterBone)CharacterBones.Side(CharacterBone.LeftUpperLeg, side);
@@ -327,8 +370,10 @@ namespace LightMMORPG.Characters
                 Quaternion planted = Quaternion.AngleAxis(fy, Vector3.up) * Quaternion.AngleAxis(fp, Vector3.right);
                 Quaternion lifted = rig.GetModelRotation(ul + 1) * Quaternion.AngleAxis(fp, Vector3.right);
                 float lift = AttackMove.Ease(KeyEase.Smooth, Mathf.Clamp01((t.y - 0.2f) / 0.25f));
-                rig.SetModelRotation(ul + 2, Quaternion.Slerp(planted, lifted, lift));
-                rig.Inherit(ul + 3);
+                Quaternion footRot = Quaternion.Slerp(planted, lifted, lift);
+                rig.SetModelRotation(ul + 2, footRot);
+                if (fp > 0f) rig.SetModelRotation(ul + 3, Quaternion.Slerp(Quaternion.AngleAxis(fy, Vector3.up), footRot, lift));
+                else rig.Inherit(ul + 3);
             }
         }
     }

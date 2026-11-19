@@ -182,6 +182,36 @@ namespace LightMMORPG.Characters
             SetModelRotation(end, _model[(int)mid] * Quaternion.Inverse(curM) * endModel);
         }
 
+        // the collarbone's share of a raised arm (FollowArm)
+        private const float ClavicleFollow = 0.25f, ClavicleMaxUp = 25f, ClavicleMaxForward = 14f, ClavicleMaxBack = 8f;
+
+        /// <summary>
+        /// Turns the collarbone (Left/RightShoulder) part of the way with the upper arm: a quarter of the arm's rise above the
+        /// A-pose lifts it (up to 25°), a real reach forward rolls it forward (up to 14°), an arm thrown back pulls it back
+        /// (up to 8°). Arms at or below the A-pose leave it with the chest, so the idle pose is unchanged. The skin on top of the
+        /// shoulder belongs to the collarbone (tools/shoulder_weights.py), so a punch lifts and rounds the shoulder instead of
+        /// folding it over a fixed joint. Call after the chest is posed, before the arm's IK (which then starts from the moved
+        /// shoulder). <paramref name="armDirModel"/>: where the upper arm should point, model space.
+        /// </summary>
+        public void FollowArm(int side, Vector3 armDirModel)
+        {
+            var sh = (CharacterBone)CharacterBones.Side(CharacterBone.LeftShoulder, side);
+            Quaternion chest = _model[CharacterBones.Parent((int)sh)];
+            if (armDirModel.sqrMagnitude < 1e-8f) { SetModelRotation(sh, chest); return; }
+            Vector3 want = (Quaternion.Inverse(chest) * armDirModel).normalized;
+            float elevBind = Mathf.Asin(Mathf.Clamp(-BindArmDir(side).y, -1f, 1f)), elevNow = Mathf.Asin(Mathf.Clamp(-want.y, -1f, 1f));
+            float up = Mathf.Clamp((elevBind - elevNow) * Mathf.Rad2Deg * ClavicleFollow, 0f, ClavicleMaxUp);
+            float fwd = ClavicleMaxForward * Smooth(0.35f, 0.95f, want.z) - ClavicleMaxBack * Smooth(0.35f, 0.95f, -want.z);
+            // the left collarbone points to -x: lifting it is a turn about +z by -angle, forward a turn about +y by +angle
+            SetModelRotation(sh, chest * Quaternion.AngleAxis(-side * fwd, Vector3.up) * Quaternion.AngleAxis(side * up, Vector3.forward));
+        }
+
+        private static float Smooth(float a, float b, float x)
+        {
+            float t = Mathf.Clamp01((x - a) / (b - a));
+            return t * t * (3f - 2f * t);
+        }
+
         /// <summary>Rotation taking the frame (x along the bone, y = hinge axis) of the bind pose to the target one.</summary>
         private static Quaternion AimFrame(Vector3 xBind, Vector3 yBind, Vector3 xTarget, Vector3 yTarget)
         {

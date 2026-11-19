@@ -45,7 +45,7 @@ Later sessions add to `ProjectBuilder` rather than writing a second builder.
 
 ## Gameplay rules (prototype)
 - Stats: MaxHP 1000, MaxEnergy 100, energy regen 4/s, charge (hold) +30/s while standing still.
-- Movement: run 8 m/s, sprint 13 m/s, jump; flight toggle (fly up/down, no gravity, 11 m/s); dash (burst 25 m/s for 0.18 s, 0.6 s cooldown);
+- Movement: walk 2.2 m/s (default), run 8 m/s (hold Shift; was run 8 / sprint 13 until 2026-11-18), jump; flight toggle (fly up/down, no gravity, 11 m/s); dash (burst 25 m/s for 0.18 s, 0.6 s cooldown);
   flash step (instant ~7 m teleport in move dir, 2.5 s cooldown). All tick-based inside prediction.
 - Melee: 4-hit light combo (damage 30/30/40/60, combo window 0.6 s after each hit, last hit knockback), heavy attack
   (110 dmg, launch/knockback, 1.2 s cooldown). Hit = sphere overlap 1.2 m radius at 1.3 m in front of attacker, server side.
@@ -89,7 +89,7 @@ Later sessions add to `ProjectBuilder` rather than writing a second builder.
 
 ## Input
 - Built in code (no .inputactions asset needed): `InputAction`s with keyboard/mouse + gamepad bindings.
-  PC: WASD move, mouse look, Shift sprint, Space jump/fly up, Ctrl fly down, F toggle flight, Q dash, E flash step,
+  PC: WASD move (walk), mouse look, Shift run (hold), Space jump/fly up, Ctrl fly down, F toggle flight, Q dash, E flash step,
   LMB light, RMB heavy, R block (hold), C charge (hold), 1 Energy Blast, 2 Charged Beam (hold+release), 3 Power Surge, Tab lock-on.
 - Mobile: runtime-built uGUI overlay (virtual joystick left, drag-to-look right half, action buttons) writes into a static
   `TouchInputState`; the player input reader merges it with Input System values. Shown when `Application.isMobilePlatform`
@@ -637,3 +637,43 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     fighters draw in front; removed again at the owner's request). Hit-stop and camera shake are the existing `CombatFx` ones. No sound yet.
   - Not done (owner, later): the inventory / equipping UI and syncing the chosen set; heavy attack rework.
   - Verified: headless compile only (owner tests by hand).
+- Walk / run + shoulders (2026-11-18): walking is the default, holding Run (Shift) runs; the run copies the owner's reference
+  clip (an anime sprint), the walk goes with it. Built on the Locomotion Bench (`docs/bench/locomotion-bench.html`,
+  https://claude.ai/artifact/LxGr1pGWyvjHQ75MTpnr5S); the owner asked for several running styles later.
+  - The clip (5 s screen recording, 24 fps anime on ones): a step every 0.17 s (6 steps/s), body leant ~50° and low, the back
+    leg thrown up straight level with the hips, one fist tucked under the chin, the other arm thrown straight back with the
+    hand open, gritted teeth. In the drawings a foot stays down ~90 % of the step (the background slides), which would skate
+    at game speed, so the run keeps the poses and the rhythm but a foot is down 45 % of the step and the rest is a short leap.
+  - Rules: `CombatConstants.WalkSpeed` 2.2 / `RunSpeed` 8 (old 8 run / 13 sprint gone: `GameConfig.walkSpeed` replaces
+    `sprintSpeed`); `PlayerMotor`: `IsSprinting` = running, speed = run when `ReplicateData.Sprint` else walk.
+    `PlayerInputReader.Run`: Sprint held (Shift), or a gamepad click of the Sprint button latches until the stick is let go,
+    or `TouchInputState.Move` pushed past 0.9 (touch stick at its edge; also makes `-autoattack` run). Touch button "RUN",
+    Controls row "Run (hold)", stats screen "Walk · Run".
+  - `Characters/LocomotionStyles.cs`: `GaitCycle` (speed, step length, stance in steps, touchdown z, keys for the right
+    foot's step; the left step = `AttackPose.Mirrored()`; Catmull-Rom through the keys via `AttackPose.Combine`; the planted
+    foot is laid on the ground exactly: z = touch − step × steps since touchdown; other speeds scale the stride by
+    √(v / speed), cadence takes the rest, so feet never skate), `LocomotionStyle` (Walk + Run), `LocomotionStyles` registry
+    (`Get(id)`, `All`, `DefaultId = "shonen"`): **Shonen Sprint** only. Adding a style = an entry in `All` (make it on the bench).
+  - `AttackPose`: `OpenL/OpenR` (0 fist, 1 open hand; solver curls 1 − open), `Combine` (weighted sum of four poses),
+    `Mirrored()`. Solver: planted feet up on their toes keep the toes flat.
+  - `PlayerProceduralAnimator`: `Locomotion` / `SetLocomotionStyle(id)` (set on every client when styles become a choice).
+    `UpdateLocomotion` (from the smoothed Graphics movement, same on every client): gait weight by speed, walk ↔ run by speed,
+    step phase advances with distance covered, direction of travel vs facing (lock-on strafing turns the steps, backing off
+    plays the cycle backwards), stride holds in the air (> 0.12 s off the ground) and during a dash; flying / stunned / down =
+    no steps. `PoseLocomotion` lays the gait over the rest (+ flight) pose in pose space (first quarter of the blend per bone
+    from the rest pose). `ApplyMove` now blends attacks in pose space from that base pose (turns, wrists, feet), so a punch
+    while walking or running keeps the legs going. The whole-model lean and step bob are gone for rigged fighters on the
+    ground (the gait has its own). Running holds the face's Determined expression.
+  - Shoulders (owner: "weird looking on the shoulders and on the basic attack"): the bake had the top of the shoulder
+    (trapezius slope, cap over the joint) 60-95 % on the upper arm and the collarbone never moved, so a raised arm swung that
+    skin backwards round the joint: the cap caved in, the arm looked like it came out of the chest. `tools/shoulder_weights.py`
+    (applied to `BaseBody.bytes`; `bake_base_body.py` now calls it too) moves the upper arm's weight there to the collarbone by
+    distance along the arm (all collarbone above −0.13 m, all arm past +0.05 m, the cap keeps 25 %), and re-solves the bind
+    positions with the bake's inverse skinning so the arms-down sculpt is unchanged (checked: error 3e-16). `CharacterRig.FollowArm`
+    turns the collarbone part of the way with the arm (25 % of the rise above the A-pose, ≤ 25° up; ≤ 14° forward on a real
+    reach, ≤ 8° back), called by the solver before each arm's IK; arms at or below the A-pose leave it alone. Seen on the bench
+    (old/new toggle): punches come out of a round shoulder, idle shoulders sit square instead of dropping, the guard lifts the
+    shoulders a little like a boxer's, the run's arm thrown back no longer kinks at the shoulder. The old SolveTwoBone users
+    (block, charge, heavy, menu) get the new weights but no collarbone motion.
+  - Verified: headless compile only (owner tests by hand). Not seen in a rendered match: the gait at network-smoothed speeds,
+    strafing / backwards steps, the shoulders with the Toon Head and outline shader.

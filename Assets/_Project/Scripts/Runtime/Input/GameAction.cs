@@ -4,7 +4,7 @@ namespace LightMMORPG.Input
     public enum GameAction
     {
         Jump,          // Space / South. Also "fly up" while flying (held).
-        Sprint,        // Shift / L3
+        Sprint,        // Run (walk otherwise): hold Shift / click L3
         FlyDown,       // Ctrl / D-pad down
         ToggleFlight,  // F / D-pad up
         Dash,          // Q / East

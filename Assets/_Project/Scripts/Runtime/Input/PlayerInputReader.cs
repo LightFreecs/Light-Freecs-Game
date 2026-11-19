@@ -39,8 +39,14 @@ namespace LightMMORPG.Input
         public Vector2 Move { get; private set; }
         /// <summary>x = yaw degrees, y = pitch degrees (positive = look up) for this frame.</summary>
         public Vector2 Look { get; private set; }
+        /// <summary>
+        /// Run instead of walk: Run (Shift) held; on a gamepad a click of the run button (left stick) runs until the stick is
+        /// let go; on touch, pushing the stick to its edge (or holding RUN).
+        /// </summary>
+        public bool Run { get; private set; }
 
         private bool _inputEnabled;
+        private bool _runLatched;
         private readonly bool[] _held = new bool[GameActions.Count];
         private readonly bool[] _pressed = new bool[GameActions.Count];
         private readonly bool[] _released = new bool[GameActions.Count];
@@ -144,13 +150,21 @@ namespace LightMMORPG.Input
                 _pressed[i] = !blocked && (devicePressed || touchPressed || (held && !wasHeld));
                 _released[i] = wasHeld && !held;
                 _held[i] = held;
+                if (a == GameAction.Sprint && devicePressed && !blocked && action.activeControl != null && action.activeControl.device is Gamepad)
+                    _runLatched = true;
             }
+
+            // Run: hold Shift; gamepad click latches until the stick comes back; touch: stick pushed to the edge
+            if (blocked || Move.sqrMagnitude < 0.04f) _runLatched = false;
+            Run = !blocked && (_held[(int)GameAction.Sprint] || _runLatched || TouchInputState.Move.sqrMagnitude > 0.81f);
         }
 
         private void Clear()
         {
             Move = Vector2.zero;
             Look = Vector2.zero;
+            Run = false;
+            _runLatched = false;
             for (int i = 0; i < GameActions.Count; i++)
             {
                 _released[i] = _held[i];

@@ -144,8 +144,8 @@ namespace LightMMORPG.EditorTools
             to.energyChargePerSecond = from.energyChargePerSecond;
             to.maxGuard = from.maxGuard;
             to.knockedOutDuration = from.knockedOutDuration;
+            to.walkSpeed = from.walkSpeed;
             to.runSpeed = from.runSpeed;
-            to.sprintSpeed = from.sprintSpeed;
             to.flySpeed = from.flySpeed;
             to.dashSpeed = from.dashSpeed;
             to.dashDuration = from.dashDuration;

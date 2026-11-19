@@ -45,21 +45,35 @@ namespace LightMMORPG.Player
         // procedural rig (when Graphics/Model has a ProceduralCharacter)
         private ProceduralCharacter _proc;
         private bool _flyingNow, _blockingNow, _chargingNow;
-        private float _speed01;
 
         // basic attacks from a moveset (Attack Bench): the equipped set's move for each combo hit, a guard between hits
         private string _movesetId = BasicMovesets.DefaultId;
         private AttackMove _move, _fromMove;
         private float _moveT, _fromT, _moveBlend = 1f, _moveWeight, _guardHold, _hs = 1f;
         private readonly AttackPose _pose = new(), _fromPose = new(), _blend = new();
-        private readonly Quaternion[] _baseRot = new Quaternion[CharacterBones.Count], _attackRot = new Quaternion[CharacterBones.Count];
         private Vector3 _rootOffset;
         private Quaternion _rootTurn = Quaternion.identity;
         private LimbSpeedLines _speedLines;
 
+        // walking / running from a locomotion style (Locomotion Bench): walk by default, run with Shift, blended by speed
+        private string _locomotionId = LocomotionStyles.DefaultId;
+        private float _gaitPhase, _locoW, _runBlend, _strideW = 1f, _strideR = 1f, _travelYaw, _airTime;
+        private bool _gaitBackwards, _gaitHold, _runFace;
+        private readonly AttackPose _gaitWalk = new(), _gaitRun = new(), _gaitPose = new(), _basePose = new();
+        private readonly Quaternion[] _restRot = new Quaternion[CharacterBones.Count];
+        private ToonFaceAnimator _face;
+        private float _faceLookup;
+
         /// <summary>The basic-attack moveset this fighter plays (default <see cref="BasicMovesets.DefaultId"/>; later picked from an inventory).</summary>
         public BasicMoveset Moveset => BasicMovesets.Get(_movesetId);
         public void SetMoveset(string id) => _movesetId = string.IsNullOrEmpty(id) ? BasicMovesets.DefaultId : id;
+
+        /// <summary>
+        /// How this fighter walks and runs (default <see cref="LocomotionStyles.DefaultId"/>). Several running styles are planned:
+        /// a style is an entry in <see cref="LocomotionStyles.All"/>; set it on every client, like the moveset and the appearance.
+        /// </summary>
+        public LocomotionStyle Locomotion => LocomotionStyles.Get(_locomotionId);
+        public void SetLocomotionStyle(string id) => _locomotionId = string.IsNullOrEmpty(id) ? LocomotionStyles.DefaultId : id;
 
         private void Awake()
         {
@@ -185,8 +199,8 @@ namespace LightMMORPG.Player
         }
 
         /// <summary>
-        /// Rough rig pose until the real animation pass: relaxed stance, run cycle swing, flight tuck, block guard,
-        /// power-up stance, and two-bone IK towards the attack targets (old capsule-space targets, scaled to the hero).
+        /// The rig's pose: relaxed stance, flight tuck, the walk / run of the locomotion style, block guard, power-up stance,
+        /// two-bone IK towards the older attack targets (heavy, blast, beam, surge), then the basic-attack moveset on top.
         /// </summary>
         private void PoseRig(Vector3 l, Vector3 r, Vector3 f, float wl, float wr, float wf)
         {
@@ -194,28 +208,26 @@ namespace LightMMORPG.Player
             if (rig == null) return;
             float hs = rig.Height / 2.3f;
             rig.ApplyRestPose();
-            float swing = Mathf.Sin(_phase) * _speed01 * (_flyingNow ? 0f : 1f);
             float fly = _flightBlend;
-            // legs: run swing about X, knee bends when the leg is behind; flight = trailing, bent knees
+            // flight = trailing legs with bent knees, arms back; a block bends the knees a little
             for (int side = -1; side <= 1; side += 2)
             {
                 var ul = (CharacterBone)CharacterBones.Side(CharacterBone.LeftUpperLeg, side);
-                float s = swing * -side;
-                Quaternion qThigh = Quaternion.AngleAxis(-s * 38f + fly * (side < 0 ? 12f : 28f), Vector3.right);
+                Quaternion qThigh = Quaternion.AngleAxis(fly * (side < 0 ? 12f : 28f), Vector3.right);
                 rig.SetModelRotation(ul, qThigh);
-                float knee = Mathf.Max(0f, s) * 55f * _speed01 + fly * (side < 0 ? 25f : 50f) + (_blockingNow ? 15f : 0f);
+                float knee = fly * (side < 0 ? 25f : 50f) + (_blockingNow ? 15f : 0f);
                 Quaternion qKnee = Quaternion.AngleAxis(knee, Vector3.right) * qThigh;
                 rig.SetModelRotation(ul + 1, qKnee);
                 rig.SetModelRotation(ul + 2, Quaternion.AngleAxis(fly * 30f, Vector3.right) * qKnee);
                 rig.Inherit(ul + 3);
-                // arms swing opposite to legs
+                if (fly <= 0f) continue;
                 var ua = (CharacterBone)CharacterBones.Side(CharacterBone.LeftUpperArm, side);
-                Quaternion qa = Quaternion.AngleAxis(s * 35f - fly * 25f, Vector3.right) * rig.GetModelRotation(ua);
-                rig.SetModelRotation(ua, qa);
-                rig.SetModelRotation(ua + 1, Quaternion.AngleAxis(s * 35f - fly * 25f, Vector3.right) * rig.GetModelRotation(ua + 1));
+                rig.SetModelRotation(ua, Quaternion.AngleAxis(-fly * 25f, Vector3.right) * rig.GetModelRotation(ua));
+                rig.SetModelRotation(ua + 1, Quaternion.AngleAxis(-fly * 25f, Vector3.right) * rig.GetModelRotation(ua + 1));
                 rig.SetModelRotation(ua + 2, rig.GetModelRotation(ua + 1));
                 rig.SetFingerCurl(side, 1f);
             }
+            PoseLocomotion(rig, hs);
             // guard / power-up stances (IK), then attacks on top
             Vector3 pole(int side) => new Vector3(side * 0.6f, 0.4f, -0.7f) * hs + Vector3.up * 1.2f * hs;
             if (_blockingNow)
@@ -258,7 +270,12 @@ namespace LightMMORPG.Player
             }
         }
 
-        /// <summary>Blends the current move (or the guard) over the base pose; legs keep the run / flight cycle while moving.</summary>
+        /// <summary>
+        /// Blends the current move (or the guard) over the base pose (stance, walk or run, flight), all in POSE space: the
+        /// body's turns from the base pose's own, the fists from its wrists, the feet from its feet. Every in-between pose is
+        /// solved and kept out of the torso (slerping arm rotations swept the fists through the body). While walking, running
+        /// or flying the legs keep going and only the upper body strikes.
+        /// </summary>
         private void ApplyMove(CharacterRig rig, float hs)
         {
             float w = AttackMove.Ease(KeyEase.Smooth, _moveWeight);
@@ -275,31 +292,130 @@ namespace LightMMORPG.Player
             }
             else AttackPose.Lerp(set.Guard, set.Guard, 0f, _pose);
 
-            for (int i = 0; i < CharacterBones.Count; i++) _baseRot[i] = rig.GetModelRotation((CharacterBone)i);
             Vector3 wristL = rig.ModelPosition(CharacterBone.LeftHand), wristR = rig.ModelPosition(CharacterBone.RightHand);
-            float legW = w * (1f - Mathf.Max(_speed01, _flightBlend));
-
-            // Blend in POSE space from the base stance (no turns, the base pose's own wrists), so every in-between pose is
-            // solved and kept out of the torso; slerping arm rotations instead swept the fists through the body.
+            float legW = w * (1f - Mathf.Max(_locoW, _flightBlend));
+            var bp = _basePose;
             var b = _blend;
-            AttackPose.Lerp(_pose, _pose, 0f, b);
+            AttackPose.Lerp(bp, _pose, w, b);
             b.RootPos = _pose.RootPos * w; b.RootYaw = _pose.RootYaw * w; b.RootPitch = _pose.RootPitch * w; b.RootRoll = _pose.RootRoll * w;
-            b.HipsPos = _pose.HipsPos * legW; b.HipsYaw = _pose.HipsYaw * w; b.HipsPitch = _pose.HipsPitch * w; b.HipsRoll = _pose.HipsRoll * w;
-            b.TorsoYaw = _pose.TorsoYaw * w; b.TorsoPitch = _pose.TorsoPitch * w; b.TorsoRoll = _pose.TorsoRoll * w;
-            b.HeadPitch = _pose.HeadPitch * w;
             Quaternion rq = b.RootRotation;
             Vector3 rp = b.RootPos * hs;
             Vector3 ToAttack(Vector3 m) => (rq * m + rp) / hs;
-            b.ArmL = Vector3.Lerp(ToAttack(wristL), _pose.ArmL, w); b.TwistL = _pose.TwistL * w;
-            b.ArmR = Vector3.Lerp(ToAttack(wristR), _pose.ArmR, w); b.TwistR = _pose.TwistR * w;
+            b.ArmL = Vector3.Lerp(ToAttack(wristL), _pose.ArmL, w);
+            b.ArmR = Vector3.Lerp(ToAttack(wristR), _pose.ArmR, w);
+            b.HipsPos = Vector3.Lerp(bp.HipsPos, _pose.HipsPos, legW);
+            b.LegL = Vector3.Lerp(ToAttack(bp.LegL * hs), _pose.LegL, legW);
+            b.LegR = Vector3.Lerp(ToAttack(bp.LegR * hs), _pose.LegR, legW);
+            b.FootYawL = Mathf.Lerp(bp.FootYawL + b.RootYaw, _pose.FootYawL, legW); b.FootPitchL = Mathf.Lerp(bp.FootPitchL, _pose.FootPitchL, legW);
+            b.FootYawR = Mathf.Lerp(bp.FootYawR + b.RootYaw, _pose.FootYawR, legW); b.FootPitchR = Mathf.Lerp(bp.FootPitchR, _pose.FootPitchR, legW);
             AttackPoseSolver.Apply(rig, b, hs);
-
-            // legs: the run / flight cycle stays in proportion to speed
-            for (int i = (int)CharacterBone.LeftUpperLeg; i <= (int)CharacterBone.RightToes; i++) _attackRot[i] = rig.GetModelRotation((CharacterBone)i);
-            for (int i = (int)CharacterBone.LeftUpperLeg; i <= (int)CharacterBone.RightToes; i++)
-                rig.SetModelRotation((CharacterBone)i, Quaternion.Slerp(_baseRot[i], _attackRot[i], legW));
             _rootOffset = rp;
             _rootTurn = rq;
+        }
+
+        // ------------------------------------------------------------------ walking / running (locomotion styles)
+
+        private static readonly AttackPose ZeroPose = new();
+
+        private static float Smooth01(float a, float b, float x)
+        {
+            float t = Mathf.Clamp01((x - a) / (b - a));
+            return t * t * (3f - 2f * t);
+        }
+
+        /// <summary>
+        /// Gait state from the smoothed movement (so it looks the same on every client): how much the fighter walks / runs
+        /// (<see cref="_locoW"/>), walk ↔ run by speed, the step phase (advances with the distance covered, so planted feet stay
+        /// put), the direction of travel relative to the facing (strafing, backing off while locked on). Mid-air and during a
+        /// dash the stride holds; flying, stunned or down = no steps.
+        /// </summary>
+        private void UpdateLocomotion(float dt, Vector3 local, float planar, bool flying, bool dashing, bool stunned)
+        {
+            if (_proc == null || _proc.Rig == null) { _locoW = 0f; return; }
+            float hs = _proc.Rig.Height / 2.3f;
+            var style = Locomotion;
+            bool grounded = _motor == null || _motor.IsGrounded;
+            _airTime = grounded || flying ? 0f : _airTime + dt;
+            bool airborne = _airTime > 0.12f || dashing;
+            bool down = _stats != null && _stats.IsDown.Value;
+            bool canStep = !flying && !stunned && !down;
+            float v = planar / hs;   // design metres per second
+            float target = canStep ? Smooth01(0.25f, 1f, v) : 0f;
+            if (airborne && canStep) target = _locoW;
+            _locoW = Mathf.Lerp(_locoW, target, 1f - Mathf.Exp(-14f * dt));
+            if (_locoW < 0.002f && target <= 0f) _locoW = 0f;
+            _runBlend = Smooth01(style.Walk.Speed * 1.15f, style.Run.Speed * 0.85f, v);
+            if (v > 0.3f)
+            {
+                float yaw = Mathf.Atan2(local.x, local.z) * Mathf.Rad2Deg;
+                _gaitBackwards = Mathf.Abs(yaw) > (_gaitBackwards ? 100f : 115f);
+                if (_gaitBackwards) yaw = Mathf.DeltaAngle(180f, yaw);
+                _travelYaw = Mathf.LerpAngle(_travelYaw, Mathf.Clamp(yaw, -75f, 75f), 1f - Mathf.Exp(-12f * dt));
+            }
+            _strideW = style.Walk.StrideScale(v);
+            _strideR = style.Run.StrideScale(v);
+            float step = Mathf.Lerp(style.Walk.StepLength * _strideW, style.Run.StepLength * _strideR, _runBlend);
+            _gaitHold = !canStep || airborne;
+            if (!_gaitHold) _gaitPhase = Mathf.Repeat(_gaitPhase + dt * v / step * (_gaitBackwards ? -1f : 1f), 2f);
+            UpdateRunFace();
+        }
+
+        /// <summary>Gritted-teeth "Determined" face while running, like the clip; back to neutral when the run ends.</summary>
+        private void UpdateRunFace()
+        {
+            if (_face == null && Time.time >= _faceLookup)
+            {
+                _face = _model.GetComponentInChildren<ToonFaceAnimator>();
+                _faceLookup = Time.time + 1f;
+            }
+            if (_face == null) return;
+            bool running = _locoW > 0.6f && _runBlend > 0.6f;
+            if (running == _runFace) return;
+            _runFace = running;
+            if (running) { if (!_face.Holding) _face.Play(ToonExpression.Determined, true); }
+            else if (_face.Holding && _face.Expression == ToonExpression.Determined) _face.Play(ToonExpression.Neutral);
+        }
+
+        /// <summary>
+        /// Lays the walk / run over the base pose (rest + flight) in pose space, from that pose's own wrists and ankles, and
+        /// keeps the result in <see cref="_basePose"/> for the basic attacks (their legs carry on stepping).
+        /// </summary>
+        private void PoseLocomotion(CharacterRig rig, float hs)
+        {
+            var bp = _basePose;
+            AttackPose.Lerp(ZeroPose, ZeroPose, 0f, bp);
+            bp.ArmL = rig.ModelPosition(CharacterBone.LeftHand) / hs; bp.ArmR = rig.ModelPosition(CharacterBone.RightHand) / hs;
+            bp.LegL = rig.ModelPosition(CharacterBone.LeftFoot) / hs; bp.LegR = rig.ModelPosition(CharacterBone.RightFoot) / hs;
+            if (_locoW <= 0f) return;
+            for (int i = 0; i < CharacterBones.Count; i++) _restRot[i] = rig.GetModelRotation((CharacterBone)i);
+            Vector3 restHips = rig[CharacterBone.Hips].localPosition;
+            var style = Locomotion;
+            style.Walk.Sample(_gaitPhase, _strideW, _gaitWalk);
+            style.Run.Sample(_gaitPhase, _strideR, _gaitRun);
+            AttackPose.Lerp(_gaitWalk, _gaitRun, _runBlend, _gaitPose);
+            TurnSteps(_gaitPose, _travelYaw);
+            AttackPose.Lerp(bp, _gaitPose, _locoW, bp);
+            AttackPoseSolver.Apply(rig, bp, hs);
+            // the first quarter of the blend goes per bone from the rest pose, so the IK's own elbows never pop the arms
+            float k = Mathf.Clamp01(_locoW * 4f);
+            if (k < 1f)
+            {
+                rig[CharacterBone.Hips].localPosition = Vector3.Lerp(restHips, rig[CharacterBone.Hips].localPosition, k);
+                for (int i = 0; i < CharacterBones.Count; i++)
+                    rig.SetModelRotation((CharacterBone)i, Quaternion.Slerp(_restRot[i], rig.GetModelRotation((CharacterBone)i), k));
+            }
+            bp.ArmL = rig.ModelPosition(CharacterBone.LeftHand) / hs; bp.ArmR = rig.ModelPosition(CharacterBone.RightHand) / hs;
+        }
+
+        /// <summary>Points the stride along the direction of travel (strafing while locked on); the body keeps facing ahead.</summary>
+        private static void TurnSteps(AttackPose p, float yaw)
+        {
+            if (Mathf.Abs(yaw) < 0.5f) return;
+            float s = Mathf.Sin(yaw * Mathf.Deg2Rad), c = Mathf.Cos(yaw * Mathf.Deg2Rad);
+            p.LegL = new Vector3(p.LegL.x + s * p.LegL.z, p.LegL.y, c * p.LegL.z);
+            p.LegR = new Vector3(p.LegR.x + s * p.LegR.z, p.LegR.y, c * p.LegR.z);
+            p.FootYawL += yaw; p.FootYawR += yaw;
+            p.HipsYaw += yaw * 0.35f; p.TorsoYaw -= yaw * 0.35f;
         }
 
         /// <summary>Forward lunge/punch pose (0..1 strength), decays quickly.</summary>
@@ -340,25 +456,28 @@ namespace LightMMORPG.Player
 
             _flightBlend = Mathf.MoveTowards(_flightBlend, flying ? 1f : 0f, dt * 3f);
             _flyingNow = flying; _blockingNow = blocking; _chargingNow = charging;
-            _speed01 = Mathf.Clamp01(planar / 9f);
             _stretch = Mathf.Lerp(_stretch, dashing ? 1f : 0f, 1f - Mathf.Exp(-(dashing ? 30f : 8f) * dt));
             _lunge = Mathf.MoveTowards(_lunge, 0f, dt * 5f);
             _recoil = Vector3.MoveTowards(_recoil, Vector3.zero, dt * 3f);
 
             _phase += dt * Mathf.Lerp(2.2f, 9f, Mathf.Clamp01(planar / 13f));
+            UpdateLocomotion(dt, local, planar, flying, dashing, stunned);
 
-            // Lean: forward with speed, sideways with strafing; flight leans more (superhero pose).
+            // Lean: forward with speed, sideways with strafing; flight leans more (superhero pose). With the rig the walk / run
+            // carries its own lean and bounce, so the whole-model lean and the step bob only remain in the air (and without a rig).
             float speed01 = Mathf.Clamp01(planar / 13f);
+            float gait = _proc != null ? _locoW * (1f - _flightBlend) : 0f;
             float leanMax = Mathf.Lerp(_maxLean, 40f, _flightBlend);
-            float pitch = Mathf.Clamp(local.z / 13f, -1f, 1f) * leanMax;
-            float roll = -Mathf.Clamp(local.x / 13f, -1f, 1f) * leanMax * 0.6f;
+            float pitch = Mathf.Clamp(local.z / 13f, -1f, 1f) * leanMax * (1f - gait);
+            float roll = -Mathf.Clamp(local.x / 13f, -1f, 1f) * leanMax * 0.6f * (1f - gait);
             pitch += _lunge * 18f;
             Vector3 recoilLocal = _graphics.InverseTransformDirection(_recoil);
             pitch -= recoilLocal.z * 25f;
             roll += recoilLocal.x * 25f;
 
-            // Bob: idle breathing on ground, slow hover float in the air, step bounce while running.
-            float bob = Mathf.Lerp(Mathf.Sin(_phase) * 0.04f, Mathf.Abs(Mathf.Sin(_phase)) * 0.12f, speed01 * (1f - _flightBlend));
+            // Bob: idle breathing on ground, slow hover float in the air, step bounce while running (capsule only).
+            float stepBob = _proc != null ? 0f : Mathf.Abs(Mathf.Sin(_phase)) * 0.12f;
+            float bob = Mathf.Lerp(Mathf.Sin(_phase) * 0.04f, stepBob, _proc != null ? _locoW : speed01 * (1f - _flightBlend));
             bob = Mathf.Lerp(bob, Mathf.Sin(Time.time * 2f) * 0.15f + 0.2f, _flightBlend);
             float crouch = blocking ? -0.12f : 0f;
 
