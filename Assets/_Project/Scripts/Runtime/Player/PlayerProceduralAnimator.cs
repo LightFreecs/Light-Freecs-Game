@@ -1,6 +1,7 @@
 using LightMMORPG.Characters;
 using LightMMORPG.Combat;
 using LightMMORPG.Config;
+using LightMMORPG.VFX;
 using UnityEngine;
 
 namespace LightMMORPG.Player
@@ -46,6 +47,20 @@ namespace LightMMORPG.Player
         private bool _flyingNow, _blockingNow, _chargingNow;
         private float _speed01;
 
+        // basic attacks from a moveset (Attack Bench): the equipped set's move for each combo hit, a guard between hits
+        private string _movesetId = BasicMovesets.DefaultId;
+        private AttackMove _move, _fromMove;
+        private float _moveT, _fromT, _moveBlend = 1f, _moveWeight, _guardHold, _hs = 1f;
+        private readonly AttackPose _pose = new(), _fromPose = new();
+        private readonly Quaternion[] _baseRot = new Quaternion[CharacterBones.Count], _attackRot = new Quaternion[CharacterBones.Count];
+        private Vector3 _rootOffset;
+        private Quaternion _rootTurn = Quaternion.identity;
+        private LimbSpeedLines _speedLines;
+
+        /// <summary>The basic-attack moveset this fighter plays (default <see cref="BasicMovesets.DefaultId"/>; later picked from an inventory).</summary>
+        public BasicMoveset Moveset => BasicMovesets.Get(_movesetId);
+        public void SetMoveset(string id) => _movesetId = string.IsNullOrEmpty(id) ? BasicMovesets.DefaultId : id;
+
         private void Awake()
         {
             _motor = GetComponent<PlayerMotor>();
@@ -55,6 +70,8 @@ namespace LightMMORPG.Player
             if (_graphics != null) _lastPos = _graphics.position;
             _stats = GetComponent<PlayerStats>();
             if (_model != null) _proc = _model.GetComponent<ProceduralCharacter>();
+            if (_proc != null && _graphics != null && !Application.isBatchMode && SystemInfo.graphicsDeviceType != UnityEngine.Rendering.GraphicsDeviceType.Null)
+                _speedLines = LimbSpeedLines.Create(_graphics);
             if (_model != null && _proc == null)
             {
                 var cfg = GameConfig.Load();
@@ -81,6 +98,19 @@ namespace LightMMORPG.Player
         /// <summary>Procedural punch/kick/cast: light combo = jab L, jab R, kick, double-fist finisher; heavy = big swing.</summary>
         public void PlayAttack(AttackKind kind, int index)
         {
+            if (kind == AttackKind.Light && _proc != null)
+            {
+                // basic attack: the moveset's move for this combo hit, cross-faded from the hit before
+                var m = Moveset.Move(index);
+                if (_move != null) { _fromMove = _move; _fromT = _moveT; _moveBlend = 0f; } else { _fromMove = null; _moveBlend = 1f; }
+                _move = m;
+                _moveT = 0f;
+                _attackT = 1f;
+                if (_speedLines != null) _speedLines.Begin();
+                if (m.Background.x >= 0f && _stats != null && _stats.IsOwner) SpeedLineBackdrop.Play(m.Background.x, m.Background.y - m.Background.x);
+                return;
+            }
+            _move = null; _fromMove = null; _moveWeight = 0f;   // any other action takes over from the basic attack
             _attackKind = kind;
             _attackIndex = index;
             _attackT = 0f;
@@ -95,6 +125,7 @@ namespace LightMMORPG.Player
         {
             if (_handL == null && _proc == null) return;
             _attackT = Mathf.Min(1f, _attackT + dt / _attackDuration);
+            AdvanceMove(dt);
             // 0 → 1 → 0 strike curve, fast out, slower return
             float k = _attackT < 0.35f ? _attackT / 0.35f : 1f - (_attackT - 0.35f) / 0.65f;
             k = Mathf.Clamp01(k);
@@ -201,6 +232,65 @@ namespace LightMMORPG.Player
             rig.SolveTwoBone(CharacterBone.LeftUpperArm, l * hs, pole(-1), wl);
             rig.SolveTwoBone(CharacterBone.RightUpperArm, r * hs, pole(1), wr);
             rig.SolveTwoBone(CharacterBone.RightUpperLeg, f * hs, new Vector3(0.1f, 1.2f, 1.5f) * hs, wf);
+            _hs = hs;
+            ApplyMove(rig, hs);
+        }
+
+        // ------------------------------------------------------------------ basic attacks (movesets)
+
+        private void AdvanceMove(float dt)
+        {
+            bool interrupted = _blockingNow || _chargingNow || (_stats != null && _stats.IsDown.Value);
+            if (_move != null && interrupted) { _move = null; _fromMove = null; _guardHold = 0f; }
+            if (_move != null)
+            {
+                _moveT += dt;
+                if (_fromMove != null) _fromT += dt;
+                _moveBlend = Mathf.Min(1f, _moveBlend + dt / 0.06f);
+                _moveWeight = Mathf.Min(1f, _moveWeight + dt / 0.05f);
+                if (_moveT >= _move.Length) { _move = null; _fromMove = null; _guardHold = 0.35f; }
+            }
+            else if (_moveWeight > 0f)
+            {
+                // hold the guard a moment after the combo, then relax to the normal stance (fast if something else takes over)
+                _guardHold -= dt;
+                if (interrupted) _moveWeight = Mathf.Max(0f, _moveWeight - dt / 0.08f);
+                else if (_guardHold <= 0f) _moveWeight = Mathf.Max(0f, _moveWeight - dt / 0.3f);
+            }
+        }
+
+        /// <summary>Blends the current move (or the guard) over the base pose; legs keep the run / flight cycle while moving.</summary>
+        private void ApplyMove(CharacterRig rig, float hs)
+        {
+            float w = AttackMove.Ease(KeyEase.Smooth, _moveWeight);
+            if (w <= 0f) { _rootOffset = Vector3.zero; _rootTurn = Quaternion.identity; return; }
+            var set = Moveset;
+            if (_move != null)
+            {
+                _move.Sample(_moveT, _pose);
+                if (_fromMove != null && _moveBlend < 1f)
+                {
+                    _fromMove.Sample(_fromT, _fromPose);
+                    AttackPose.Lerp(_fromPose, _pose, AttackMove.Ease(KeyEase.Smooth, _moveBlend), _pose);
+                }
+            }
+            else AttackPose.Lerp(set.Guard, set.Guard, 0f, _pose);
+
+            for (int i = 0; i < CharacterBones.Count; i++) _baseRot[i] = rig.GetModelRotation((CharacterBone)i);
+            Vector3 baseHips = rig[CharacterBone.Hips].localPosition;
+            AttackPoseSolver.Apply(rig, _pose, hs);
+            for (int i = 0; i < CharacterBones.Count; i++) _attackRot[i] = rig.GetModelRotation((CharacterBone)i);
+            Vector3 attackHips = rig[CharacterBone.Hips].localPosition;
+
+            float legW = w * (1f - Mathf.Max(_speed01, _flightBlend));
+            rig[CharacterBone.Hips].localPosition = Vector3.Lerp(baseHips, attackHips, legW);
+            for (int i = 0; i < CharacterBones.Count; i++)
+            {
+                bool leg = i >= (int)CharacterBone.LeftUpperLeg && i <= (int)CharacterBone.RightToes;
+                rig.SetModelRotation((CharacterBone)i, Quaternion.Slerp(_baseRot[i], _attackRot[i], leg ? legW : w));
+            }
+            _rootOffset = _pose.RootPos * (hs * w);
+            _rootTurn = Quaternion.Slerp(Quaternion.identity, _pose.RootRotation, w);
         }
 
         /// <summary>Forward lunge/punch pose (0..1 strength), decays quickly.</summary>
@@ -284,9 +374,12 @@ namespace LightMMORPG.Player
                 roll = Mathf.Lerp(roll, 0f, _down);
             }
 
-            _model.localPosition = offset;
-            _model.localRotation = Quaternion.Euler(pitch, 0f, roll);
+            _model.localPosition = offset + _rootOffset;
+            _model.localRotation = Quaternion.Euler(pitch, 0f, roll) * _rootTurn;
             _model.localScale = Vector3.Scale(_baseScale, scale);
+
+            // speed lines on the striking limb (frozen with the pose during hit-stop, since this point isn't reached then)
+            if (_speedLines != null && _proc != null && _proc.Rig != null) _speedLines.Tick(_proc.Rig, _move, _moveT, dt, _hs);
         }
     }
 }

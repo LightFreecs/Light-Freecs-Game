@@ -95,6 +95,7 @@ namespace LightMMORPG.Characters
         }
 
         public Vector3 BindArmDir(int side) => side < 0 ? _armDirL : _armDirR;
+        public Vector3 BindPalm(int side) => side < 0 ? _palmL : _palmR;
 
         /// <summary>Back to the bind (A-) pose.</summary>
         public void ResetPose()
@@ -133,6 +134,59 @@ namespace LightMMORPG.Characters
             Vector3 p = Vector3.zero;
             for (int i = (int)bone; i >= 0; i = CharacterBones.Parent(i)) p += _bindLocal[i];
             return p;
+        }
+
+        /// <summary>Model-space position of a joint in the CURRENT pose (uses the model rotations set so far; parents first).</summary>
+        public Vector3 ModelPosition(CharacterBone bone)
+        {
+            int i = (int)bone, parent = CharacterBones.Parent(i);
+            if (parent < 0) return _bones[i].localPosition;
+            return ModelPosition((CharacterBone)parent) + _model[parent] * _bones[i].localPosition;
+        }
+
+        /// <summary>Bind-pose offset of a bone from its parent (bone length and direction).</summary>
+        public Vector3 BindLocal(CharacterBone bone) => _bindLocal[(int)bone];
+
+        /// <summary>
+        /// Two-bone IK from the joint's POSED position, both bones aimed with one shared hinge axis taken from the pole, so the
+        /// middle joint bends like a hinge and the two bones never roll against each other (shortest-arc aiming per bone wrings
+        /// the skin at elbows and knees). <paramref name="bindPole"/>: where the middle joint sticks out in the bind pose
+        /// (elbows: back, knees: forward). The end bone keeps its rotation relative to the middle one. Port of the Attack Bench.
+        /// </summary>
+        public void SolveTwoBoneHinged(CharacterBone upper, Vector3 target, Vector3 pole, float weight, Vector3 bindPole)
+        {
+            if (weight <= 0f) return;
+            var mid = upper + 1;
+            var end = upper + 2;
+            Vector3 a = ModelPosition(upper);
+            Vector3 bindU = _bindLocal[(int)mid], bindM = _bindLocal[(int)end];
+            float l1 = bindU.magnitude, l2 = bindM.magnitude;
+            Vector3 d1 = bindU / l1, d2 = bindM / l2;
+            Quaternion curU = _model[(int)upper], curM = _model[(int)mid], endModel = _model[(int)end];
+            Vector3 toT = target - a;
+            float dist = Mathf.Clamp(toT.magnitude, Mathf.Abs(l1 - l2) + 1e-3f, l1 + l2 - 1e-3f);
+            Vector3 dir = toT.sqrMagnitude > 1e-10f ? toT.normalized : Vector3.down;
+            float cosA = (l1 * l1 + dist * dist - l2 * l2) / (2f * l1 * dist);
+            float angA = Mathf.Acos(Mathf.Clamp(cosA, -1f, 1f));
+            Vector3 poleDir = Vector3.ProjectOnPlane(pole - a, dir);
+            if (poleDir.sqrMagnitude < 1e-6f) poleDir = Vector3.ProjectOnPlane(Vector3.down, dir);
+            poleDir.Normalize();
+            Vector3 elbowDir = dir * Mathf.Cos(angA) + poleDir * Mathf.Sin(angA);
+            Vector3 elbowPos = a + elbowDir * l1, endPos = a + dir * dist;
+            Vector3 hinge = Vector3.Cross(poleDir, dir).normalized;
+            Vector3 hingeBind = Vector3.Cross(bindPole, d1).normalized;
+            Quaternion qU = AimFrame(d1, hingeBind, elbowDir, hinge);
+            Quaternion qM = AimFrame(d2, hingeBind, (endPos - elbowPos).normalized, hinge);
+            SetModelRotation(upper, Quaternion.Slerp(curU, qU, weight));
+            SetModelRotation(mid, Quaternion.Slerp(curM, qM, weight));
+            SetModelRotation(end, _model[(int)mid] * Quaternion.Inverse(curM) * endModel);
+        }
+
+        /// <summary>Rotation taking the frame (x along the bone, y = hinge axis) of the bind pose to the target one.</summary>
+        private static Quaternion AimFrame(Vector3 xBind, Vector3 yBind, Vector3 xTarget, Vector3 yTarget)
+        {
+            Quaternion Frame(Vector3 x, Vector3 y) => Quaternion.LookRotation(x, Vector3.ProjectOnPlane(y, x));
+            return Frame(xTarget, yTarget) * Quaternion.Inverse(Frame(xBind, yBind));
         }
 
         /// <summary>Curls the fingers of one hand (0 open, 1 fist). Uses the hand's current model rotation.</summary>

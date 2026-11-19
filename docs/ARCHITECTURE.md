@@ -607,3 +607,29 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     and size / angle / height / spacing; the Eyes tab has six eye tiles and size / height / spacing. The menu fighter looks
     at the camera; tapping / clicking it in Customize plays the next expression.
   - Verified: headless compile clean only (owner tests by hand).
+- Basic attack movesets (2026-11-18): the light combo now plays a full-body moveset from the Attack Bench
+  (`docs/bench/attack-bench.html`, https://claude.ai/artifact/Btq5eM1mhUCJLQmYprZ2mB, version 3), made after the owner's
+  reference clip (a straight-punch rush and a thrusting kick). Owner: "ship that as basic attack", and plan for several
+  basic-attack movesets picked from an inventory later (not built yet).
+  - `Characters/BasicMovesets.cs`: `AttackPose` (root offset / turn, hips, torso, head, fist targets + fist roll, foot targets
+    + foot yaw / pitch; attack space, 2.3 m design metres), `AttackKey` (time, `KeyEase` Smooth / Snap / In), `AttackMove`
+    (keys, striking limb, hit time, speed-line window, length, finisher flag, background window), `BasicMoveset` (guard +
+    moves, `Move(comboIndex)` wraps), `BasicMovesets` (registry: `Get(id)`, `All`, `DefaultId = "rush"`). Only set today:
+    **Rush** = left straight, right straight, left body blow, thrust kick (finisher), bench numbers unchanged.
+    `AttackPoseSolver.Apply` = the bench's applyPose (torso turn over three spine bones, head kept on the target ≤ 55°,
+    hinge IK for arms / legs, fist roll split over forearm + hand, planted feet flat / kicking foot square to the shin).
+  - `CharacterRig`: `ModelPosition` (posed joint position), `BindLocal`, `BindPalm`, `SolveTwoBoneHinged` (IK from the posed
+    shoulder / hip, both bones on one hinge axis so elbows and knees never wring; the old `SolveTwoBone` is kept for the
+    other actions).
+  - `PlayerProceduralAnimator`: `Moveset` / `SetMoveset(id)` (default Rush; this is where an equipped set will plug in,
+    e.g. from the player's loadout, and it must be set on every client, like the appearance). `PlayAttack(Light, i)` plays
+    move i of the set (60 ms cross-fade from the previous hit); guard held 0.35 s after the combo, then relax 0.3 s;
+    blocking / charging / down cut it short. Blended per bone over the base pose; legs keep the run / flight cycle in
+    proportion to speed. Root offset / turn go on Graphics/Model. Heavy, blast, beam, surge still use the old poses.
+  - Effects (`VFX/AttackFx.cs`, shader `Resources/Shaders/FxUnlit.shader`): `LimbSpeedLines` (ink lines + pale limb copy on
+    the striking forearm / shin, Graphics space, samples every 1/120 s of animation time, frozen with the pose in hit-stop),
+    `AttackFx.SpawnSpark` (yellow spark billboard, replaces the sphere flash for unblocked melee hits in `CombatFx`),
+    `SpeedLineBackdrop` (finisher, local player only: camera-facing sheet of streaming lines 22 m ahead, depth-tested so the
+    fighters draw in front). Hit-stop and camera shake are the existing `CombatFx` ones. No sound yet.
+  - Not done (owner, later): the inventory / equipping UI and syncing the chosen set; heavy attack rework.
+  - Verified: headless compile only (owner tests by hand).

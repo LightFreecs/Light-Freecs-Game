@@ -44,7 +44,9 @@ namespace LightMMORPG.VFX
             else if (localAttacker) ThirdPersonCamera.Shake(big ? 0.18f : 0.07f, 0.12f);
 
             var cfg = GameConfig.Load();
-            SpawnFlash(point, big ? 1.6f : (blocked ? 0.6f : 0.9f), blocked ? cfg.auraMaterial : cfg.impactMaterial, big ? 0.22f : 0.14f);
+            bool melee = kind == HitKind.Light || kind == HitKind.Finisher || kind == HitKind.Heavy;
+            if (melee && !blocked) AttackFx.SpawnSpark(point, big);   // yellow spark burst (Attack Bench)
+            else SpawnFlash(point, big ? 1.6f : (blocked ? 0.6f : 0.9f), blocked ? cfg.auraMaterial : cfg.impactMaterial, big ? 0.22f : 0.14f);
         }
 
         /// <summary>Expanding/fading sphere flash.</summary>
