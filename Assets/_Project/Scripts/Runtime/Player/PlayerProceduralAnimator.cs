@@ -51,7 +51,7 @@ namespace LightMMORPG.Player
         private string _movesetId = BasicMovesets.DefaultId;
         private AttackMove _move, _fromMove;
         private float _moveT, _fromT, _moveBlend = 1f, _moveWeight, _guardHold, _hs = 1f;
-        private readonly AttackPose _pose = new(), _fromPose = new();
+        private readonly AttackPose _pose = new(), _fromPose = new(), _blend = new();
         private readonly Quaternion[] _baseRot = new Quaternion[CharacterBones.Count], _attackRot = new Quaternion[CharacterBones.Count];
         private Vector3 _rootOffset;
         private Quaternion _rootTurn = Quaternion.identity;
@@ -107,7 +107,6 @@ namespace LightMMORPG.Player
                 _moveT = 0f;
                 _attackT = 1f;
                 if (_speedLines != null) _speedLines.Begin();
-                if (m.Background.x >= 0f && _stats != null && _stats.IsOwner) SpeedLineBackdrop.Play(m.Background.x, m.Background.y - m.Background.x);
                 return;
             }
             _move = null; _fromMove = null; _moveWeight = 0f;   // any other action takes over from the basic attack
@@ -277,20 +276,30 @@ namespace LightMMORPG.Player
             else AttackPose.Lerp(set.Guard, set.Guard, 0f, _pose);
 
             for (int i = 0; i < CharacterBones.Count; i++) _baseRot[i] = rig.GetModelRotation((CharacterBone)i);
-            Vector3 baseHips = rig[CharacterBone.Hips].localPosition;
-            AttackPoseSolver.Apply(rig, _pose, hs);
-            for (int i = 0; i < CharacterBones.Count; i++) _attackRot[i] = rig.GetModelRotation((CharacterBone)i);
-            Vector3 attackHips = rig[CharacterBone.Hips].localPosition;
-
+            Vector3 wristL = rig.ModelPosition(CharacterBone.LeftHand), wristR = rig.ModelPosition(CharacterBone.RightHand);
             float legW = w * (1f - Mathf.Max(_speed01, _flightBlend));
-            rig[CharacterBone.Hips].localPosition = Vector3.Lerp(baseHips, attackHips, legW);
-            for (int i = 0; i < CharacterBones.Count; i++)
-            {
-                bool leg = i >= (int)CharacterBone.LeftUpperLeg && i <= (int)CharacterBone.RightToes;
-                rig.SetModelRotation((CharacterBone)i, Quaternion.Slerp(_baseRot[i], _attackRot[i], leg ? legW : w));
-            }
-            _rootOffset = _pose.RootPos * (hs * w);
-            _rootTurn = Quaternion.Slerp(Quaternion.identity, _pose.RootRotation, w);
+
+            // Blend in POSE space from the base stance (no turns, the base pose's own wrists), so every in-between pose is
+            // solved and kept out of the torso; slerping arm rotations instead swept the fists through the body.
+            var b = _blend;
+            AttackPose.Lerp(_pose, _pose, 0f, b);
+            b.RootPos = _pose.RootPos * w; b.RootYaw = _pose.RootYaw * w; b.RootPitch = _pose.RootPitch * w; b.RootRoll = _pose.RootRoll * w;
+            b.HipsPos = _pose.HipsPos * legW; b.HipsYaw = _pose.HipsYaw * w; b.HipsPitch = _pose.HipsPitch * w; b.HipsRoll = _pose.HipsRoll * w;
+            b.TorsoYaw = _pose.TorsoYaw * w; b.TorsoPitch = _pose.TorsoPitch * w; b.TorsoRoll = _pose.TorsoRoll * w;
+            b.HeadPitch = _pose.HeadPitch * w;
+            Quaternion rq = b.RootRotation;
+            Vector3 rp = b.RootPos * hs;
+            Vector3 ToAttack(Vector3 m) => (rq * m + rp) / hs;
+            b.ArmL = Vector3.Lerp(ToAttack(wristL), _pose.ArmL, w); b.TwistL = _pose.TwistL * w;
+            b.ArmR = Vector3.Lerp(ToAttack(wristR), _pose.ArmR, w); b.TwistR = _pose.TwistR * w;
+            AttackPoseSolver.Apply(rig, b, hs);
+
+            // legs: the run / flight cycle stays in proportion to speed
+            for (int i = (int)CharacterBone.LeftUpperLeg; i <= (int)CharacterBone.RightToes; i++) _attackRot[i] = rig.GetModelRotation((CharacterBone)i);
+            for (int i = (int)CharacterBone.LeftUpperLeg; i <= (int)CharacterBone.RightToes; i++)
+                rig.SetModelRotation((CharacterBone)i, Quaternion.Slerp(_baseRot[i], _attackRot[i], legW));
+            _rootOffset = rp;
+            _rootTurn = rq;
         }
 
         /// <summary>Forward lunge/punch pose (0..1 strength), decays quickly.</summary>

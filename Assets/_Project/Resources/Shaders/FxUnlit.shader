@@ -1,6 +1,6 @@
 // LightMMORPG/FxUnlit — unlit, alpha-blended, vertex colour × texture × _Color, no depth write, ZTest from the material.
 // Used by the basic-attack effects (VFX/AttackFx.cs): limb speed lines (ZTest Always so the ink lines draw over the limb,
-// the pale limb copy with LEqual), impact sparks and the speed-line background. Lives in Resources so builds include it.
+// the pale limb copy with LEqual), and impact sparks. Lives in Resources so builds include it.
 Shader "LightMMORPG/FxUnlit"
 {
     Properties

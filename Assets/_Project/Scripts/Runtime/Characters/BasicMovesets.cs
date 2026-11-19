@@ -63,10 +63,8 @@ namespace LightMMORPG.Characters
         public Vector2 Streak;
         /// <summary>Back in guard (seconds).</summary>
         public float Length;
-        /// <summary>Finisher: bigger sparks, the speed-line background.</summary>
+        /// <summary>Finisher (bigger, longer hold).</summary>
         public bool Big;
-        /// <summary>Speed-line background from x to y (seconds); x &lt; 0 = none.</summary>
-        public Vector2 Background = new(-1f, -1f);
         public AttackKey[] Keys;
 
         public static float Ease(KeyEase e, float u) => e switch
@@ -112,8 +110,8 @@ namespace LightMMORPG.Characters
         public const string DefaultId = "rush";
 
         /// <summary>
-        /// "Rush", from the owner's reference clip (a straight-punch rush and a thrusting kick): left straight, right straight,
-        /// left body blow, thrust kick (finisher). Numbers = the Attack Bench, version 3.
+        /// "Rush", from the owner's reference clip (a straight-punch rush): left straight, right straight, left body blow,
+        /// right power straight (finisher). Numbers = the Attack Bench (the owner dropped the kick finisher).
         /// </summary>
         public static readonly BasicMoveset Rush = BuildRush();
 
@@ -214,49 +212,62 @@ namespace LightMMORPG.Characters
                     K(0.30f, KeyEase.Smooth, P()),
                 },
             };
-            var kick = new AttackMove
+            var power = new AttackMove
             {
-                Name = "Thrust kick", Limb = StrikeLimb.FootR, Hit = 0.16f, Streak = new Vector2(0.07f, 0.20f), Length = 0.56f, Big = true,
-                Background = new Vector2(0.10f, 0.42f),
+                Name = "Right power straight", Limb = StrikeLimb.HandR, Hit = 0.10f, Streak = new Vector2(0.04f, 0.14f), Length = 0.40f, Big = true,
                 Keys = new[]
                 {
                     K(0f, KeyEase.Smooth, P()),
-                    K(0.08f, KeyEase.In, P(p =>
+                    K(0.05f, KeyEase.Smooth, P(p => { p.RootYaw = 20f; p.HipsPos = new Vector3(0f, -0.09f, 0f); p.ArmR = new Vector3(0.17f, 1.44f, 0.08f); })),
+                    K(0.10f, KeyEase.Snap, P(p =>
                     {
-                        p.RootYaw = 4f; p.HipsYaw = 0f; p.HipsPitch = -8f; p.HipsPos = new Vector3(0f, -0.03f, 0f); p.TorsoYaw = 0f; p.TorsoPitch = -6f;
-                        p.LegR = new Vector3(0.12f, 0.74f, 0.14f); p.FootYawR = 0f; p.FootPitchR = 0f; p.FootYawL = 4f;
-                        p.ArmL = new Vector3(-0.12f, 1.52f, 0.26f); p.ArmR = new Vector3(0.20f, 1.34f, 0.14f);
+                        p.RootYaw = -22f; p.RootPos = new Vector3(0f, 0f, 0.16f); p.HipsYaw = -10f; p.HipsPitch = 9f; p.HipsPos = new Vector3(0f, -0.10f, 0f);
+                        p.TorsoYaw = -12f; p.TorsoPitch = 18f;
+                        p.ArmR = new Vector3(0.03f, 1.56f, 1.10f); p.TwistR = 60f; p.ArmL = new Vector3(-0.13f, 1.46f, 0.14f); p.TwistL = -20f;
+                        p.LegR = new Vector3(0.20f, 0.105f, -0.06f); p.FootYawR = 5f; p.FootPitchR = 25f; p.LegL = new Vector3(-0.18f, 0.105f, 0.40f);
                     })),
-                    K(0.16f, KeyEase.Snap, P(p =>
+                    K(0.24f, KeyEase.Smooth, P(p =>
                     {
-                        p.RootYaw = 0f; p.RootPos = new Vector3(0f, 0f, 0.10f); p.HipsYaw = 0f; p.HipsPitch = -18f; p.HipsPos = new Vector3(0f, -0.02f, 0f);
-                        p.TorsoYaw = 0f; p.TorsoPitch = -10f;
-                        p.LegR = new Vector3(0.10f, 1.08f, 0.94f); p.FootYawR = 0f; p.FootPitchR = 0f; p.LegL = new Vector3(-0.18f, 0.105f, 0.20f); p.FootYawL = -6f;
-                        p.ArmL = new Vector3(-0.14f, 1.48f, 0.28f); p.ArmR = new Vector3(0.24f, 1.30f, 0.14f);
+                        p.RootYaw = -21f; p.RootPos = new Vector3(0f, 0f, 0.16f); p.HipsYaw = -10f; p.HipsPitch = 9f; p.HipsPos = new Vector3(0f, -0.10f, 0f);
+                        p.TorsoYaw = -12f; p.TorsoPitch = 18f;
+                        p.ArmR = new Vector3(0.04f, 1.56f, 1.04f); p.TwistR = 55f; p.ArmL = new Vector3(-0.13f, 1.46f, 0.14f); p.TwistL = -20f;
+                        p.LegR = new Vector3(0.20f, 0.105f, -0.06f); p.FootYawR = 5f; p.FootPitchR = 25f; p.LegL = new Vector3(-0.18f, 0.105f, 0.40f);
                     })),
-                    K(0.30f, KeyEase.Smooth, P(p =>
-                    {
-                        p.RootYaw = 0f; p.RootPos = new Vector3(0f, 0f, 0.10f); p.HipsYaw = 0f; p.HipsPitch = -17f; p.HipsPos = new Vector3(0f, -0.02f, 0f);
-                        p.TorsoYaw = 0f; p.TorsoPitch = -9f;
-                        p.LegR = new Vector3(0.10f, 1.06f, 0.89f); p.FootYawR = 0f; p.FootPitchR = 0f; p.LegL = new Vector3(-0.18f, 0.105f, 0.20f); p.FootYawL = -6f;
-                        p.ArmL = new Vector3(-0.14f, 1.48f, 0.28f); p.ArmR = new Vector3(0.24f, 1.30f, 0.14f);
-                    })),
-                    K(0.42f, KeyEase.Smooth, P(p =>
-                    {
-                        p.RootYaw = 6f; p.RootPos = new Vector3(0f, 0f, 0.05f); p.HipsYaw = 2f; p.HipsPitch = -6f; p.HipsPos = new Vector3(0f, -0.04f, 0f);
-                        p.TorsoYaw = 2f; p.TorsoPitch = -2f;
-                        p.LegR = new Vector3(0.14f, 0.55f, 0.18f); p.FootYawR = 10f; p.FootPitchR = 0f;
-                    })),
-                    K(0.56f, KeyEase.Smooth, P()),
+                    K(0.40f, KeyEase.Smooth, P()),
                 },
             };
-            return new BasicMoveset { Id = DefaultId, Name = "Rush", Guard = guard, Moves = new[] { left, right, body, kick } };
+            return new BasicMoveset { Id = DefaultId, Name = "Rush", Guard = guard, Moves = new[] { left, right, body, power } };
         }
     }
 
     /// <summary>Poses the rig to an <see cref="AttackPose"/> (port of the Attack Bench's applyPose). Writes model rotations only.</summary>
     public static class AttackPoseSolver
     {
+        // the base body's torso round the spine (measured, 2.3 m design metres) plus room for the fist beyond the wrist
+        private const float TorsoSide = 0.19f, TorsoFront = 0.135f, TorsoBack = 0.12f, FistRoom = 0.07f;
+
+        /// <summary>
+        /// Moves a wrist target out of the torso: an elliptic cylinder round the posed spine (hips → neck) in the chest's frame.
+        /// Every pose and every blend between poses goes through this, so a fist can never sink into the chest or stomach.
+        /// </summary>
+        public static Vector3 KeepOutOfTorso(CharacterRig rig, Vector3 target, float hs)
+        {
+            Vector3 a = rig.ModelPosition(CharacterBone.Hips), b = rig.ModelPosition(CharacterBone.Neck), axis = b - a;
+            float len2 = axis.sqrMagnitude;
+            if (len2 < 1e-6f) return target;
+            float u = Vector3.Dot(target - a, axis) / len2;
+            if (u < 0f || u > 1f) return target;
+            Vector3 c = a + axis * u;
+            Quaternion chest = rig.GetModelRotation(CharacterBone.Chest);
+            Vector3 o = Quaternion.Inverse(chest) * (target - c);
+            float rx = (TorsoSide + FistRoom) * hs, rz = ((o.z >= 0f ? TorsoFront : TorsoBack) + FistRoom) * hs;
+            float k = (o.x / rx) * (o.x / rx) + (o.z / rz) * (o.z / rz);
+            if (k >= 1f) return target;
+            if (k < 1e-6f) o = new Vector3(0f, o.y, rz);
+            else { float s = 1f / Mathf.Sqrt(k); o.x *= s; o.z *= s; }
+            return c + chest * o;
+        }
+
         /// <summary>
         /// Overwrites the rig with the attack pose. <paramref name="hs"/> = rig height / 2.3 (design scale). The root offset / turn
         /// is NOT applied here (the caller moves Graphics/Model); limb targets are converted from attack space with it.
@@ -293,7 +304,8 @@ namespace LightMMORPG.Characters
                 rig.SetModelRotation(ua, chest); rig.SetModelRotation(ua + 1, chest); rig.SetModelRotation(ua + 2, chest);
                 Vector3 shoulder = rig.ModelPosition(ua);
                 Vector3 pole = shoulder + chest * (new Vector3(side * 0.5f, -0.7f, -0.25f) * hs);
-                rig.SolveTwoBoneHinged(ua, ToModel(side < 0 ? P.ArmL : P.ArmR), pole, 1f, Vector3.back);
+                Vector3 fist = KeepOutOfTorso(rig, ToModel(side < 0 ? P.ArmL : P.ArmR), hs);
+                rig.SolveTwoBoneHinged(ua, fist, pole, 1f, Vector3.back);
                 float twist = side < 0 ? P.TwistL : P.TwistR;
                 Vector3 fore = (rig.ModelPosition(ua + 2) - rig.ModelPosition(ua + 1)).normalized;
                 Quaternion roll = Quaternion.AngleAxis(twist * 0.5f, fore);

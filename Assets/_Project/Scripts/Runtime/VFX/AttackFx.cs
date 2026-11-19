@@ -8,7 +8,7 @@ namespace LightMMORPG.VFX
     /// <summary>
     /// Basic-attack effects from the Attack Bench (docs/bench/attack-bench.html), after the owner's reference clip:
     /// ink speed lines over a pale stretched copy of the striking limb (<see cref="LimbSpeedLines"/>), yellow impact sparks
-    /// (<see cref="SpawnSpark"/>) and the finisher's speed-line background (<see cref="SpeedLineBackdrop"/>). Visual only.
+    /// (<see cref="SpawnSpark"/>). Visual only.
     /// </summary>
     public static class AttackFx
     {
@@ -257,68 +257,6 @@ namespace LightMMORPG.VFX
         }
     }
 
-    /// <summary>
-    /// The finisher's speed-line background for the local player: diagonal white / blue lines streaming past, on a
-    /// camera-facing sheet far behind the fighters (depth-tested, so the fighters and nearby ground draw in front of it).
-    /// </summary>
-    public sealed class SpeedLineBackdrop : MonoBehaviour
-    {
-        private const float Distance = 22f;
-        private static SpeedLineBackdrop _inst;
-        private Material _mat;
-        private MeshRenderer _renderer;
-        private float _delay, _hold, _amount, _scroll;
-        private bool _on;
-
-        /// <summary>Show the lines after <paramref name="delay"/> seconds for <paramref name="length"/> seconds (fade in / out around it).</summary>
-        public static void Play(float delay, float length)
-        {
-            if (AttackFx.Headless || Camera.main == null) return;
-            if (_inst == null) _inst = Create();
-            _inst._delay = delay;
-            _inst._hold = length;
-            _inst._on = true;
-        }
-
-        private static SpeedLineBackdrop Create()
-        {
-            var go = new GameObject("SpeedLineBackdrop");
-            go.AddComponent<MeshFilter>().sharedMesh = FxMeshes.Quad;
-            var b = go.AddComponent<SpeedLineBackdrop>();
-            b._renderer = go.AddComponent<MeshRenderer>();
-            b._mat = FxMaterials.Make(FxTextures.Lines, CompareFunction.LessEqual, 2990);
-            b._mat.mainTextureScale = new Vector2(2f, 5f);
-            b._renderer.sharedMaterial = b._mat;
-            b._renderer.shadowCastingMode = ShadowCastingMode.Off;
-            b._renderer.receiveShadows = false;
-            b._renderer.enabled = false;
-            return b;
-        }
-
-        private void LateUpdate()
-        {
-            float dt = Time.deltaTime;
-            float target = 0f;
-            if (_on)
-            {
-                if (_delay > 0f) _delay -= dt;
-                else { target = 1f; _hold -= dt; if (_hold <= 0f) _on = false; }
-            }
-            _amount = Mathf.Clamp01(_amount + (target > _amount ? dt / 0.06f : -dt / 0.18f));
-            var cam = Camera.main;
-            bool show = _amount > 0.01f && cam != null;
-            _renderer.enabled = show;
-            if (!show) return;
-            var ct = cam.transform;
-            float h = 2f * Distance * Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad), w = h * cam.aspect, size = Mathf.Sqrt(w * w + h * h) * 1.05f;
-            transform.SetPositionAndRotation(ct.position + ct.forward * Distance, ct.rotation * Quaternion.Euler(0f, 0f, -22f));
-            transform.localScale = new Vector3(size, size, 1f);
-            _scroll += dt * 2.2f;
-            _mat.mainTextureOffset = new Vector2(_scroll, 0f);
-            _mat.color = new Color(1f, 1f, 1f, _amount);
-        }
-    }
-
     internal static class FxMaterials
     {
         public static Material Make(Texture tex, CompareFunction zTest, int queue)
@@ -357,7 +295,6 @@ namespace LightMMORPG.VFX
     internal static class FxTextures
     {
         private static readonly Texture2D[] Sparks = new Texture2D[3];
-        private static Texture2D _lines;
 
         /// <summary>Yellow shards round a white core, with a few white rays (3 variants).</summary>
         public static Texture2D Spark(int variant)
@@ -422,38 +359,6 @@ namespace LightMMORPG.VFX
 
             static Vector2 Polar(float a, float r) => new(Mathf.Cos(a) * r, Mathf.Sin(a) * r);
             static Vector2 Shrink(Vector2[] tr, int i) => Vector2.Lerp(tr[i], (tr[0] + tr[1] + tr[2]) / 3f, 0.18f);
-        }
-
-        /// <summary>Horizontal streaks (white and blue) on transparent, tiling sideways; the backdrop scrolls and tilts it.</summary>
-        public static Texture2D Lines
-        {
-            get
-            {
-                if (_lines != null) return _lines;
-                const int W = 256, H = 128;
-                var px = new Color[W * H];
-                for (int i = 0; i < 46; i++)
-                {
-                    bool white = AttackFx.Rnd(i, 16) < 0.55f;
-                    int y0 = Mathf.FloorToInt(AttackFx.Rnd(i, 11) * H), th = 1 + Mathf.FloorToInt(AttackFx.Rnd(i, 15) * 2.5f);
-                    int x0 = Mathf.FloorToInt(AttackFx.Rnd(i, 12) * W), len = 40 + Mathf.FloorToInt(AttackFx.Rnd(i, 13) * 120f);
-                    Color c = white ? new Color(1f, 1f, 1f, 0.85f) : new Color(0.31f, 0.45f, 0.66f, 0.4f);
-                    for (int dx = 0; dx < len; dx++)
-                    {
-                        float taper = Mathf.Sin(Mathf.PI * dx / len);
-                        for (int dy = 0; dy < th; dy++)
-                        {
-                            int x = (x0 + dx) % W, y = Mathf.Min(H - 1, y0 + dy);
-                            var cc = c; cc.a *= taper;
-                            if (cc.a > px[y * W + x].a) px[y * W + x] = cc;
-                        }
-                    }
-                }
-                _lines = new Texture2D(W, H, TextureFormat.RGBA32, false) { name = "SpeedLines", wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Bilinear };
-                _lines.SetPixels(px);
-                _lines.Apply(false, true);
-                return _lines;
-            }
         }
 
         private static bool InTri(Vector2 p, Vector2 a, Vector2 b, Vector2 c)

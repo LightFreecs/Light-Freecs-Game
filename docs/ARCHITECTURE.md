@@ -615,9 +615,12 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     + foot yaw / pitch; attack space, 2.3 m design metres), `AttackKey` (time, `KeyEase` Smooth / Snap / In), `AttackMove`
     (keys, striking limb, hit time, speed-line window, length, finisher flag, background window), `BasicMoveset` (guard +
     moves, `Move(comboIndex)` wraps), `BasicMovesets` (registry: `Get(id)`, `All`, `DefaultId = "rush"`). Only set today:
-    **Rush** = left straight, right straight, left body blow, thrust kick (finisher), bench numbers unchanged.
+    **Rush** = left straight, right straight, left body blow, right power straight (finisher; the owner dropped the bench's
+    thrust kick and its speed-line background), bench numbers otherwise unchanged.
     `AttackPoseSolver.Apply` = the bench's applyPose (torso turn over three spine bones, head kept on the target ≤ 55°,
     hinge IK for arms / legs, fist roll split over forearm + hand, planted feet flat / kicking foot square to the shin).
+    `KeepOutOfTorso`: every fist target is pushed out of an elliptic cylinder round the posed spine (measured torso + room
+    for the fist), so no pose or blend sinks a fist into the body (owner: "sometimes the fist goes into the body").
   - `CharacterRig`: `ModelPosition` (posed joint position), `BindLocal`, `BindPalm`, `SolveTwoBoneHinged` (IK from the posed
     shoulder / hip, both bones on one hinge axis so elbows and knees never wring; the old `SolveTwoBone` is kept for the
     other actions).
@@ -625,11 +628,12 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     e.g. from the player's loadout, and it must be set on every client, like the appearance). `PlayAttack(Light, i)` plays
     move i of the set (60 ms cross-fade from the previous hit); guard held 0.35 s after the combo, then relax 0.3 s;
     blocking / charging / down cut it short. Blended per bone over the base pose; legs keep the run / flight cycle in
-    proportion to speed. Root offset / turn go on Graphics/Model. Heavy, blast, beam, surge still use the old poses.
+    proportion to speed. Root offset / turn go on Graphics/Model. The guard fades in / out in POSE space (turns scaled, fists
+    from the base pose's own wrists), never by slerping arm rotations, which swept fists through the body. Heavy, blast, beam, surge still use the old poses.
   - Effects (`VFX/AttackFx.cs`, shader `Resources/Shaders/FxUnlit.shader`): `LimbSpeedLines` (ink lines + pale limb copy on
     the striking forearm / shin, Graphics space, samples every 1/120 s of animation time, frozen with the pose in hit-stop),
     `AttackFx.SpawnSpark` (yellow spark billboard, replaces the sphere flash for unblocked melee hits in `CombatFx`),
     `SpeedLineBackdrop` (finisher, local player only: camera-facing sheet of streaming lines 22 m ahead, depth-tested so the
-    fighters draw in front). Hit-stop and camera shake are the existing `CombatFx` ones. No sound yet.
+    fighters draw in front; removed again at the owner's request). Hit-stop and camera shake are the existing `CombatFx` ones. No sound yet.
   - Not done (owner, later): the inventory / equipping UI and syncing the chosen set; heavy attack rework.
   - Verified: headless compile only (owner tests by hand).
