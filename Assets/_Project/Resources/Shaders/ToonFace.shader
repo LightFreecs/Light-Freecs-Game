@@ -92,7 +92,7 @@ Shader "LightMMORPG/ToonFace"
             float4 _BrowXform;
             float4 _BrowBend0;
             float4 _BrowBend1;
-            // injuries (InjuryVisuals): x = face bruises 0..1, y = one eye swollen shut 0..1, z = which eye (+1 / -1)
+            // injuries (InjuryVisuals): x = face damage 0..1, y = one eye shut 0..1, z = which eye (+1 / -1)
             float4 _Injury;
         CBUFFER_END
 
@@ -175,6 +175,26 @@ Shader "LightMMORPG/ToonFace"
             }
 
             // Brow Bench paintIris: the iris (moved by look, scaled by k) over the face features, clipped to the eye mask
+            float HatchHash(float n) { return frac(sin(n * 12.9898 + 4.1414) * 43758.5453); }
+
+            // anime damage marks: a little cluster of short parallel strokes (n of them, odd), slanted by ang, in some 2D
+            // space q (relative to the cluster's centre); spacing / length / width in the same units. 0..1 coverage.
+            float Hatch(float2 q, float ang, float n, float spacing, float len, float width, float seed)
+            {
+                float c = cos(ang), s = sin(ang);
+                q = float2(c * q.x + s * q.y, -s * q.x + c * q.y);
+                float h = (n - 1.0) * 0.5;
+                float i = clamp(round(q.y / spacing), -h, h);
+                float r1 = HatchHash(i + seed * 17.0), r2 = HatchHash(i * 3.7 + seed * 5.0);
+                float halfLen = len * (0.32 + 0.22 * r1) * (1.0 - 0.35 * abs(i) / max(h, 1.0));
+                float x = q.x - (r2 - 0.5) * len * 0.35;                   // strokes start a little staggered
+                float y = q.y - i * spacing - (r1 - 0.5) * spacing * 0.25;
+                float t = saturate(1.0 - (x / max(halfLen, 1e-5)) * (x / max(halfLen, 1e-5)));   // tapered at both ends
+                float w = width * (0.45 + 0.55 * sqrt(t));
+                float aa = max(fwidth(y), 1e-5);
+                return smoothstep(w + aa, w - aa, abs(y)) * step(abs(x), halfLen);
+            }
+
             half3 LiveIris(half3 col, float2 e, float px, half m, float side)
             {
                 float2 look = side > 0.0 ? _Look.xy : _Look.zw;
@@ -293,25 +313,31 @@ Shader "LightMMORPG/ToonFace"
                 float W = max(_EyeGeo.z, 1e-4);
                 float2 e = float2((side * hp.x - _EyeGeo.x) / W + 0.5, (hp.y - _EyeGeo.y) / W - _EyeGeo.w);
                 float px = max(max(fwidth(e.x), fwidth(e.y)), 1e-5);   // eye widths per screen pixel
-                // injuries: a swollen purple bruise round one eye, a bruise on the other cheek (lids too, so they look puffy)
+                // injuries (anime battle damage): red scratch strokes on the cheeks and over the brow of the shut eye, a faint
+                // brownish-purple smudge under them; more of them the more hurt the fighter is (_Injury.x)
                 float hurtSide = _Injury.z >= 0.0 ? 1.0 : -1.0;
-                if (_Injury.x > 0.001 || _Injury.y > 0.001)
+                if (_Injury.x > 0.001)
                 {
-                    half k;
-                    if (side == hurtSide)
-                    {
-                        float2 d = (e - float2(0.5, 0.3)) / float2(0.95, 0.85);
-                        k = saturate(1.0 - dot(d, d)) * saturate(_Injury.y * 0.9 + _Injury.x * 0.4);
-                    }
-                    else
-                    {
-                        float2 d = (e - float2(0.45, -0.9)) / float2(0.75, 0.5);
-                        k = saturate(1.0 - dot(d, d)) * _Injury.x * 0.85;
-                    }
-                    k *= front * (0.75 + 0.25 * sin(hp.x * 61.0 + hp.y * 47.0) * sin(hp.y * 83.0 - hp.x * 29.0));
-                    half3 tint = lerp(half3(1, 1, 1), half3(0.62, 0.36, 0.5), saturate(k * 1.5));
-                    color *= tint;
-                    skin *= tint;
+                    float k = _Injury.x;
+                    bool hurt = side == hurtSide;
+                    // per side: the cheek under the eye, then (more hurt) the brow above it / the cheekbone
+                    float2 c1 = hurt ? float2(0.62, -0.85) : float2(0.42, -0.95);
+                    float2 c2 = hurt ? float2(0.45, 1.25) : float2(0.85, -0.25);
+                    float k1 = saturate((k - (hurt ? 0.25 : 0.05)) * 3.0), k2 = saturate((k - (hurt ? 0.45 : 0.65)) * 3.0);
+                    half sm = 0.0, st = 0.0;
+                    float2 d1 = (e - c1) / float2(0.55, 0.42), d2 = (e - c2) / float2(0.5, 0.32);
+                    sm = max(sm, k1 * 0.75 * saturate(1.0 - dot(d1, d1)));
+                    sm = max(sm, k2 * 0.7 * saturate(1.0 - dot(d2, d2)));
+                    st = max(st, k1 * Hatch(e - c1, -0.65 + (hurt ? 0.0 : 0.25), k > 0.6 ? 5.0 : 3.0, 0.12, 0.8, 0.03, hurt ? 3.0 : 7.0));
+                    st = max(st, k2 * Hatch(e - c2, -0.5, 3.0, 0.11, 0.65, 0.028, hurt ? 11.0 : 13.0));
+                    // badly hurt: a scratch over the bridge of the nose / forehead on the shut-eye side
+                    float k3 = saturate((k - 0.55) * 3.0);
+                    if (hurt) st = max(st, k3 * Hatch(e - float2(-0.35, 0.55), -0.9, 3.0, 0.1, 0.55, 0.026, 19.0));
+                    sm *= front; st *= front;
+                    half3 smudge = lerp(half3(1, 1, 1), half3(0.74, 0.55, 0.6), sm);
+                    color *= smudge;
+                    skin *= smudge;
+                    color = lerp(color, half3(0.55, 0.09, 0.08) * featLight, st * 0.95);
                 }
                 half4 em = half4(0, 0, 0, 0);
                 if (_EyeLive > 0.5)
@@ -319,14 +345,27 @@ Shader "LightMMORPG/ToonFace"
                     em = SAMPLE_TEXTURE2D_LOD(_EyeMask, sampler_EyeMask, input.uv, 0);
                     if (em.r > 0.0) feat.rgb = LiveIris(feat.rgb, e, px, em.r, side);
                 }
+                // the hurt eye shut (InjuryVisuals): the painted outline and lashes round it go (the eye mask, dilated past the
+                // outline), leaving skin with one straight horizontal line across the eye (drawn below, over everything)
+                float shut = side == hurtSide && _EyeLive > 0.5 ? saturate(_Injury.y) : 0.0;
+                half nearEye = 0.0;
+                if (shut > 0.001)
+                {
+                    half near = em.r;
+                    [unroll] for (int di = 0; di < 8; di++)
+                    {
+                        float a = di * 0.785398;
+                        near = max(near, SAMPLE_TEXTURE2D_LOD(_EyeMask, sampler_EyeMask, input.uv + float2(cos(a), sin(a)) * 0.024, 0).r);
+                    }
+                    nearEye = saturate(near * 4.0);
+                    feat.a *= 1.0 - shut * nearEye;
+                }
                 color = lerp(color, feat.rgb * featLight, feat.a * front);
 
                 // blink / expression lids: skin slides over the white from the top and the bottom, with a line at the edge
                 if (_EyeLive > 0.5 && em.r > 0.0)
                 {
-                    // the swollen eye's upper lid stays nearly shut (a slit is left), whatever the expression
-                    float lidTop = side == hurtSide ? max(saturate(_EyeAnim.y), saturate(_Injury.y) * 0.9) : saturate(_EyeAnim.y);
-                    float h = em.b * 1.5, w = em.g, lb = saturate(_EyeAnim.z), lt = lidTop * (1.0 - lb);
+                    float h = em.b * 1.5, w = em.g, lb = saturate(_EyeAnim.z), lt = saturate(_EyeAnim.y) * (1.0 - lb);
                     half m = em.r * front;
                     if (lb > 0.002)
                     {
@@ -341,6 +380,13 @@ Shader "LightMMORPG/ToonFace"
                         half a = saturate((0.021 - abs(w - edge) * h) / px + 0.5) * min(1.0, lt * 6.0);
                         color = lerp(color, half3(0.114, 0.086, 0.086) * featLight, a * m);
                     }
+                    if (shut > 0.001) color = lerp(color, skin, shut * m);   // shut eye: the white goes
+                }
+                if (shut > 0.001)
+                {
+                    // shut eye: a straight horizontal line at the iris's height, as wide as the eye
+                    half a = saturate((0.045 - abs(e.y - _Iris0.y)) / px + 0.5) * shut * nearEye * front;
+                    color = lerp(color, half3(0.114, 0.086, 0.086) * featLight, a);
                 }
 
                 // brows on top

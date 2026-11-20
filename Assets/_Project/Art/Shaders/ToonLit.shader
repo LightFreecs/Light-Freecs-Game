@@ -44,9 +44,11 @@ Shader "LightMMORPG/ToonLit"
             half4 _EmissionColor;
             half4 _OutlineColor;
             float _OutlineWidth;
-            // bruises (InjuryVisuals, per renderer through a MaterialPropertyBlock): xyz = spot in the body's bind pose
-            // (mesh UV2), w = strength 0..1; params x = count, y = radius, z = strength boost (low health)
+            // battle damage (InjuryVisuals, per renderer through a MaterialPropertyBlock): _Bruises xyz = spot in the body's
+            // bind pose (mesh UV2), w = strength 0..1; _BruiseN xyz = the skin's outward direction there (bind pose), w = a
+            // random seed; params x = count, y = smudge radius, z = strength boost (low health), w = height scale
             float4 _Bruises[8];
+            float4 _BruiseN[8];
             float4 _BruiseParams;
         CBUFFER_END
 
@@ -114,25 +116,53 @@ Shader "LightMMORPG/ToonLit"
                 return o;
             }
 
-            float BruiseHash(float3 p) { p = frac(p * 0.3183099 + 0.1); p *= 17.0; return frac(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+            float HatchHash(float n) { return frac(sin(n * 12.9898 + 4.1414) * 43758.5453); }
 
-            // how bruised this skin point is (0..1): soft blotches round each hit spot, mottled so they read as bruises
-            half Bruise(float3 bp)
+            // anime damage marks: a little cluster of short parallel strokes (n of them, odd), slanted by ang, in some 2D
+            // space q (relative to the cluster's centre); spacing / length / width in the same units. 0..1 coverage.
+            float Hatch(float2 q, float ang, float n, float spacing, float len, float width, float seed)
             {
-                float r = max(_BruiseParams.y, 1e-4);
-                float k = 0.0;
+                float c = cos(ang), s = sin(ang);
+                q = float2(c * q.x + s * q.y, -s * q.x + c * q.y);
+                float h = (n - 1.0) * 0.5;
+                float i = clamp(round(q.y / spacing), -h, h);
+                float r1 = HatchHash(i + seed * 17.0), r2 = HatchHash(i * 3.7 + seed * 5.0);
+                float halfLen = len * (0.32 + 0.22 * r1) * (1.0 - 0.35 * abs(i) / max(h, 1.0));
+                float x = q.x - (r2 - 0.5) * len * 0.35;                   // strokes start a little staggered
+                float y = q.y - i * spacing - (r1 - 0.5) * spacing * 0.25;
+                float t = saturate(1.0 - (x / max(halfLen, 1e-5)) * (x / max(halfLen, 1e-5)));   // tapered at both ends
+                float w = width * (0.45 + 0.55 * sqrt(t));
+                float aa = max(fwidth(y), 1e-5);
+                return smoothstep(w + aa, w - aa, abs(y)) * step(abs(x), halfLen);
+            }
+
+            // battle damage at this skin point: x = soft brownish-purple smudge, y = red scratch strokes (anime hatching)
+            half2 Damage(float3 bp)
+            {
+                float sc = max(_BruiseParams.w, 0.2), r = max(_BruiseParams.y, 1e-4), boost = _BruiseParams.z;
+                half smudge = 0.0, strokes = 0.0;
                 [unroll] for (int i = 0; i < 8; i++)
                 {
-                    float d = distance(bp, _Bruises[i].xyz) / r;
-                    float on = step((float)i + 0.5, _BruiseParams.x);   // only the first count spots
-                    k = max(k, on * _Bruises[i].w * saturate(1.15 - d * d));
+                    float on = step((float)i + 0.5, _BruiseParams.x);
+                    float3 d = bp - _Bruises[i].xyz;
+                    float3 nrm = normalize(_BruiseN[i].xyz + float3(0, 0, 1e-4));
+                    float front = smoothstep(-0.03 * sc, 0.0, dot(d, nrm));   // this side of the limb only
+                    float w = saturate(_Bruises[i].w * boost) * on * front;
+                    float dist = length(d) / r;
+                    smudge = max(smudge, w * 0.8 * saturate(1.0 - dist * dist));
+                    // strokes in the skin's tangent plane there, slanting down-across like drawn scratches
+                    float3 up = abs(nrm.y) < 0.85 ? float3(0, 1, 0) : float3(1, 0, 0);
+                    float3 t = normalize(cross(up, nrm)), bt = cross(nrm, t);
+                    float2 q = float2(dot(d, t), dot(d, bt)) / sc;
+                    float seed = _BruiseN[i].w;
+                    float ang = -0.75 + (HatchHash(seed * 9.1) - 0.5) * 0.7;
+                    float n = w > 0.55 ? 5.0 : 3.0;
+                    strokes = max(strokes, saturate(w * 1.6) * Hatch(q, ang, n, 0.018, 0.11, 0.0048, seed));
+                    // a second, smaller cluster beside it (the reference art scatters them)
+                    float2 off = float2(HatchHash(seed * 3.3) - 0.5, HatchHash(seed * 5.9) - 0.5) * 0.09 + float2(0.05, -0.03);
+                    strokes = max(strokes, saturate(w * 1.6 - 0.25) * Hatch(q - off, ang + 0.25, 3.0, 0.016, 0.08, 0.0042, seed + 2.0));
                 }
-                float3 q = bp / r * 2.2;
-                float3 c = floor(q), f = frac(q);
-                f = f * f * (3.0 - 2.0 * f);
-                float n = lerp(lerp(lerp(BruiseHash(c), BruiseHash(c + float3(1, 0, 0)), f.x), lerp(BruiseHash(c + float3(0, 1, 0)), BruiseHash(c + float3(1, 1, 0)), f.x), f.y),
-                               lerp(lerp(BruiseHash(c + float3(0, 0, 1)), BruiseHash(c + float3(1, 0, 1)), f.x), lerp(BruiseHash(c + float3(0, 1, 1)), BruiseHash(c + float3(1, 1, 1)), f.x), f.y), f.z);
-                return (half)saturate(k * _BruiseParams.z * (0.7 + 0.6 * n));
+                return half2(saturate(smudge), saturate(strokes));
             }
 
             // Lit (1) / shade (0) factor for a given N.L, hard edge softened by _RampSmooth.
@@ -147,10 +177,10 @@ Shader "LightMMORPG/ToonLit"
                 half4 albedo = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv) * _BaseColor;
                 if (_BruiseParams.x > 0.5)
                 {
-                    // fresh bruise: deep red-purple at the centre, bluish at the edge
-                    half b = Bruise(input.bindPos);
-                    half3 tint = lerp(half3(0.72, 0.5, 0.66), half3(0.55, 0.28, 0.42), b);
-                    albedo.rgb = lerp(albedo.rgb, albedo.rgb * tint, saturate(b * 1.6));
+                    // anime battle damage: a faint brownish-purple smudge with red scratch strokes over it
+                    half2 dmg = Damage(input.bindPos);
+                    albedo.rgb = lerp(albedo.rgb, albedo.rgb * half3(0.74, 0.55, 0.6), dmg.x);
+                    albedo.rgb = lerp(albedo.rgb, half3(0.55, 0.09, 0.08), dmg.y * 0.95);
                 }
                 half3 n = normalize(input.normalWS);
                 half3 v = GetWorldSpaceNormalizeViewDir(input.positionWS);

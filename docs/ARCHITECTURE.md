@@ -792,3 +792,11 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     Back to full health (respawn, dummy refill) clears it all.
   - Verified: headless compile only (owner tests by hand).
   - Dev screenshots: player `-injuryCapture <dir>` renders the menu fighter's face and body at 85 / 50 / 20 / 8 % health with preset bruises (`InjuryVisuals.ApplyPreview`) and quits.
+  - Restyled to the owner's anime reference art (2026-11-20: "I like this style better do 1:1"): damage = clusters of short
+    parallel dark-red scratch strokes (`Hatch`, slanting down-across, tapered, staggered; 3, or 5 when strong, plus a
+    smaller satellite cluster) over a faint brownish-purple smudge. Body strokes lie in the skin's tangent plane at the
+    bruise (`_BruiseN` = outward direction in the bind pose + a seed, from the hit point's offset to the nearest bone;
+    only on that side of the limb). Face: strokes + smudge on both cheeks, then the brow above the shut eye / the other
+    cheekbone, then a scratch over the nose bridge as the fighter gets more hurt (`_Injury.x`). The hurt eye shuts from
+    30 % health (fully at 20 %) as a straight horizontal line at the iris height (owner: "make the eye a horizontal line"):
+    the painted outline / lashes round it are hidden (eye mask dilated 0.024 uv), the white becomes skin.

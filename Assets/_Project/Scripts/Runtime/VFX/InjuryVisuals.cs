@@ -6,14 +6,15 @@ using UnityEngine;
 namespace LightMMORPG.VFX
 {
     /// <summary>
-    /// Bruises and a swollen eye (every client, from synced state only, so everyone sees the same thing):
+    /// Anime battle damage (owner's reference art: clusters of short red scratch strokes over a faint brownish-purple
+    /// smudge) and one eye shut (every client, from synced state only, so everyone sees the same thing):
     /// <list type="bullet">
     /// <item>Every clean hit (not blocked) leaves a bruise where it landed (the struck spot the server reports): up to
     /// <see cref="MaxBruises"/> per fighter, nearby hits darken the same bruise, the weakest is replaced when full. The spot
     /// is stored in the body's bind pose (mesh UV2, <c>LightMMORPG/ToonLit</c> <c>_Bruises</c>), so it sticks to the skin.</item>
     /// <item>Hits to the head bruise the face instead (<c>LightMMORPG/ToonFace</c> <c>_Injury</c>).</item>
     /// <item>Low health: below 60 % every bruise darkens and the face bruises (round one eye, the other cheek) come up;
-    /// heavily injured (under 30 %, fully by 15 %) that eye swells shut, leaving a slit.</item>
+    /// heavily injured (under 30 %, fully by 20 %) one eye shuts (a closed lid line).</item>
     /// <item>Back to full health (respawn, the training dummy's refill) heals everything.</item>
     /// </list>
     /// </summary>
@@ -21,15 +22,16 @@ namespace LightMMORPG.VFX
     {
         public const int MaxBruises = 8;
         /// <summary>Health share where low-health bruising starts, and where the eye starts / finishes swelling shut.</summary>
-        public const float BruiseBelow = 0.6f, EyeStart = 0.3f, EyeShut = 0.15f;
+        public const float BruiseBelow = 0.6f, EyeStart = 0.3f, EyeShut = 0.2f;
 
-        private static readonly int BruisesId = Shader.PropertyToID("_Bruises"), BruiseParamsId = Shader.PropertyToID("_BruiseParams");
+        private static readonly int BruisesId = Shader.PropertyToID("_Bruises"), BruiseNId = Shader.PropertyToID("_BruiseN"), BruiseParamsId = Shader.PropertyToID("_BruiseParams");
         private static readonly int InjuryId = Shader.PropertyToID("_Injury");
 
         private sealed class State
         {
             public CharacterRig Rig;
             public readonly Vector4[] Bruises = new Vector4[MaxBruises];
+            public readonly Vector4[] Normals = new Vector4[MaxBruises];   // xyz = the skin's outward direction (bind pose), w = seed
             public int Count;
             public float FaceHits, Eye, LastHealth = -1f;
             public float EyeSide;
@@ -83,7 +85,8 @@ namespace LightMMORPG.VFX
                 s.Dirty = true;
                 return;
             }
-            AddBruise(s, ToBind(rig, local), add);
+            Vector3 bind = ToBind(rig, local, out Vector3 normal);
+            AddBruise(s, bind, normal, add);
         }
 
         // the main bone segments a hit can land on (bone → the joint it reaches to)
@@ -102,7 +105,7 @@ namespace LightMMORPG.VFX
         /// have identity bind rotations), pulled in towards the bone a little since the hit point sits on the hit capsule,
         /// outside the skin.
         /// </summary>
-        private static Vector3 ToBind(CharacterRig rig, Vector3 p)
+        private static Vector3 ToBind(CharacterRig rig, Vector3 p, out Vector3 normal)
         {
             float best = float.MaxValue;
             CharacterBone bone = CharacterBone.Spine;
@@ -115,11 +118,14 @@ namespace LightMMORPG.VFX
                 float d = (p - c).sqrMagnitude;
                 if (d < best) { best = d; bone = a; closest = c; }
             }
-            p = closest + (p - closest) * 0.75f;
-            return rig.BindPosition(bone) + Quaternion.Inverse(rig.GetModelRotation(bone)) * (p - rig.ModelPosition(bone));
+            Vector3 outward = p - closest;
+            Quaternion toBind = Quaternion.Inverse(rig.GetModelRotation(bone));
+            normal = outward.sqrMagnitude > 1e-8f ? (toBind * outward).normalized : Vector3.forward;
+            p = closest + outward * 0.75f;
+            return rig.BindPosition(bone) + toBind * (p - rig.ModelPosition(bone));
         }
 
-        private static void AddBruise(State s, Vector3 bind, float add)
+        private static void AddBruise(State s, Vector3 bind, Vector3 normal, float add)
         {
             float merge = 0.08f * Mathf.Max(0.5f, s.Rig.Height) / 2.3f;
             for (int i = 0; i < s.Count; i++)
@@ -140,6 +146,7 @@ namespace LightMMORPG.VFX
             }
             else s.Count++;
             s.Bruises[slot] = new Vector4(bind.x, bind.y, bind.z, add);
+            s.Normals[slot] = new Vector4(normal.x, normal.y, normal.z, Random.Range(0f, 50f));
             s.Dirty = true;
         }
 
@@ -180,7 +187,8 @@ namespace LightMMORPG.VFX
                 {
                     body.GetPropertyBlock(_mpb, slot);
                     _mpb.SetVectorArray(BruisesId, s.Bruises);
-                    _mpb.SetVector(BruiseParamsId, new Vector4(s.Count, 0.085f * rig.Height / 2.3f, 1f + low, 0f));
+                    _mpb.SetVectorArray(BruiseNId, s.Normals);
+                    _mpb.SetVector(BruiseParamsId, new Vector4(s.Count, 0.06f * rig.Height / 2.3f, 1f + low, rig.Height / 2.3f));
                     body.SetPropertyBlock(_mpb, slot);
                 }
                 if (rig.FaceSlot >= 0)
@@ -215,6 +223,7 @@ namespace LightMMORPG.VFX
         {
             if (rig == null || rig.Body == null) return;
             var arr = new Vector4[MaxBruises];
+            var nrm = new Vector4[MaxBruises];
             int n = Mathf.Clamp(bruises, 0, Mathf.Min(MaxBruises, PreviewSpots.Length));
             float hs = rig.Height / 2.3f;
             for (int i = 0; i < n; i++)
@@ -222,6 +231,8 @@ namespace LightMMORPG.VFX
                 var (bone, off, w) = PreviewSpots[i];
                 Vector3 p = rig.BindPosition(bone) + off * hs;
                 arr[i] = new Vector4(p.x, p.y, p.z, w);
+                Vector3 outward = new Vector3(off.x, 0f, off.z).normalized;
+                nrm[i] = new Vector4(outward.x, outward.y, outward.z, i * 7.3f + 1f);
             }
             float low = Mathf.Clamp01((BruiseBelow - healthFraction) / BruiseBelow);
             float eye = Mathf.InverseLerp(EyeStart, EyeShut, healthFraction);
@@ -230,7 +241,8 @@ namespace LightMMORPG.VFX
             {
                 rig.Body.GetPropertyBlock(mpb, slot);
                 mpb.SetVectorArray(BruisesId, arr);
-                mpb.SetVector(BruiseParamsId, new Vector4(n, 0.085f * hs, 1f + low, 0f));
+                mpb.SetVectorArray(BruiseNId, nrm);
+                mpb.SetVector(BruiseParamsId, new Vector4(n, 0.06f * hs, 1f + low, hs));
                 rig.Body.SetPropertyBlock(mpb, slot);
             }
             if (rig.FaceSlot >= 0)
