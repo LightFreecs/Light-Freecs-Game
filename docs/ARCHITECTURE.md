@@ -694,6 +694,19 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     `SolveTwoBone` (owner-approved menu pose, unchanged).
   - Body deformation checked on the bench at the extremes (run knee folded ~130°, push-off hip, block elbows): only a small
     natural pinch behind the folded knee; no weight changes needed.
+  - Follow-up (owner: "hand while punching goes back into the shoulder, shoulders when walking look stiff and twist like
+    rubber"), measured on the bench with the real skinned mesh (hand vertices vs torso / collarbone / upper-arm vertices,
+    behind their normals) and the upper arm's roll about its own axis:
+    - Guard fist sank up to 5 cm into the front of its own shoulder in 76 punch frames → 4 frames, ≤ 1.7 cm (skin contact).
+      `AttackPoseSolver.FistCentre` (7 cm past the wrist in the hand frame, measured) + `FistClearance` (shoulder-girdle
+      ellipsoid round the posed shoulders + the torso cylinder, fist radius 6.5 cm, out through the front so a guard stays in
+      front of the chest); `SolveArm` re-solves up to three times. Used by `Apply` and `ArmTo`.
+    - Walking arms rolled −97° … −27° about themselves each step (rest 7°): `ElbowPole` now carries the rest stance's elbow
+      aim along with the swing (`CharacterRig.RestArm`), blending to the chest-frame aim for raises of 70°-120°+. Walk roll
+      now −2° … 10°, run 32° … 54°.
+    - `FollowArm` forward / back now follows the arm's swing from rest (clamp((z − 0.14) × 17, −8°, 14°)), so walking arms
+      roll the shoulders a little instead of leaving them fixed.
+    - Knee / elbow / leg checks above still 0 bad frames.
   - `tools/basebody_blender.py`: `import` → `ArtSource/Player/player.blend` (body + trunks + band, the game's 42 bones as
     "PlayerRig", weights as vertex groups, game coordinates with a display turn), `export` writes edited shapes / weights back
     into `BaseBody.bytes` (same vertex layout), `check` round-trips (positions exact, weights within 6e-8).

@@ -321,9 +321,11 @@ namespace LightMMORPG.Characters
         }
 
         /// <summary>
-        /// Where the elbow points (a pole for the hinge IK): down, out and a little back in the chest's frame; if that would
-        /// sink the elbow into the torso (a fist tucked in front of the chest, the run's fist under the chin with the body leant
-        /// far forward), the elbow swings out to the side, step by step, until it clears.
+        /// Where the elbow points (a pole for the hinge IK). The rest stance's elbow aim carried along with the arm's swing
+        /// (<see cref="CharacterRig.RestArm"/>), so a swinging arm doesn't roll about itself and wring the shoulder; for big
+        /// raises (70°-120° from rest and beyond: guard, fist at the chin) it blends to down, out and a little back in the chest's
+        /// frame. If that would sink the elbow into the torso (the run's fist under the chin with the body leant far forward),
+        /// the elbow swings out to the side, step by step, until it clears.
         /// </summary>
         public static Vector3 ElbowPole(CharacterRig rig, int side, Vector3 shoulder, Vector3 fist, Quaternion chest, float hs)
         {
@@ -335,8 +337,16 @@ namespace LightMMORPG.Characters
             Vector3 Perp(Vector3 v) { Vector3 w = Vector3.ProjectOnPlane(v, dir); return w.sqrMagnitude < 1e-6f ? Vector3.zero : w.normalized; }
             Vector3 outward = Perp(chest * new Vector3(side, -0.25f, 0f));
             if (outward == Vector3.zero) outward = Perp(chest * Vector3.down);
-            Vector3 basePole = Perp(chest * new Vector3(side * 0.5f, -0.7f, -0.25f));
-            if (basePole == Vector3.zero) basePole = outward;
+            Vector3 chestPole = Perp(chest * new Vector3(side * 0.5f, -0.7f, -0.25f));
+            if (chestPole == Vector3.zero) chestPole = outward;
+            rig.RestArm(side, out Vector3 restDir, out Vector3 restElbow);
+            restDir = chest * restDir;
+            Vector3 carried = Perp(Quaternion.FromToRotation(restDir, dir) * (chest * restElbow));
+            if (carried == Vector3.zero) carried = chestPole;
+            float swing = Vector3.Angle(restDir, dir);
+            float tb = Mathf.Clamp01((swing - 70f) / 50f);
+            Vector3 basePole = Vector3.Lerp(carried, chestPole, tb * tb * (3f - 2f * tb)).normalized;
+            if (basePole == Vector3.zero) basePole = chestPole;
             float angA = Mathf.Acos(Mathf.Clamp((l1 * l1 + dist * dist - l2 * l2) / (2f * l1 * dist), -1f, 1f));
             Vector3 d = basePole;
             for (int i = 0; i <= 10; i++)
@@ -346,6 +356,84 @@ namespace LightMMORPG.Characters
                 if (!InsideTorso(rig, elbow, 0.05f, hs)) break;
             }
             return shoulder + d * hs;
+        }
+
+        // the fist, measured on the base body: centre 7 cm past the wrist joint in the hand's frame, ~5.5 cm round (+1 cm margin)
+        private static readonly Vector3 FistLocal = new(0.025f, -0.069f, 0.017f);
+        private const float FistRadius = 0.065f;
+
+        /// <summary>Centre of a posed fist (model space).</summary>
+        public static Vector3 FistCentre(CharacterRig rig, int side, float hs)
+        {
+            var hand = (CharacterBone)CharacterBones.Side(CharacterBone.LeftHand, side);
+            return rig.ModelPosition(hand) + rig.GetModelRotation(hand) * (new Vector3(side * FistLocal.x, FistLocal.y, FistLocal.z) * hs);
+        }
+
+        /// <summary>
+        /// How far a fist centre must move to clear the body: the shoulder girdle (an ellipsoid round the posed shoulders and upper
+        /// chest, 0.27 wide, 0.14 high, 0.14 / 0.13 deep, which the torso cylinder is too narrow for; left out through its front or
+        /// back so a guard stays in front of the chest) and the torso cylinder. Zero when clear. The guard fist used to sink up to
+        /// 5 cm into the front of its own shoulder during punches.
+        /// </summary>
+        public static Vector3 FistClearance(CharacterRig rig, Vector3 c, float hs)
+        {
+            Quaternion chest = rig.GetModelRotation(CharacterBone.UpperChest);
+            Vector3 mid = (rig.ModelPosition(CharacterBone.LeftUpperArm) + rig.ModelPosition(CharacterBone.RightUpperArm)) * 0.5f
+                          + chest * (new Vector3(0f, -0.02f, 0.02f) * hs);
+            Vector3 o = Quaternion.Inverse(chest) * (c - mid);
+            float ax = (0.27f + FistRadius) * hs, ay = (0.14f + FistRadius) * hs, az = ((o.z >= 0f ? 0.14f : 0.13f) + FistRadius) * hs;
+            float s = (o.x / ax) * (o.x / ax) + (o.y / ay) * (o.y / ay) + (o.z / az) * (o.z / az);
+            Vector3 push = Vector3.zero;
+            if (s < 1f)
+            {
+                float zs = Mathf.Sqrt(Mathf.Max(0f, 1f - (o.x / ax) * (o.x / ax) - (o.y / ay) * (o.y / ay))) * az;
+                push = chest * new Vector3(0f, 0f, (o.z >= 0f ? zs : -zs) - o.z);
+            }
+            Vector3 p = c + push;
+            return push + (KeepOutOfTorsoRoom(rig, p, FistRadius, hs) - p);
+        }
+
+        private static Vector3 KeepOutOfTorsoRoom(CharacterRig rig, Vector3 target, float room, float hs)
+        {
+            Vector3 a = rig.ModelPosition(CharacterBone.Hips), b = rig.ModelPosition(CharacterBone.Neck), axis = b - a;
+            float len2 = axis.sqrMagnitude;
+            if (len2 < 1e-6f) return target;
+            float u = Vector3.Dot(target - a, axis) / len2;
+            if (u < 0f || u > 1f) return target;
+            Vector3 c = a + axis * u;
+            Quaternion chest = rig.GetModelRotation(CharacterBone.Chest);
+            Vector3 o = Quaternion.Inverse(chest) * (target - c);
+            float rx = (TorsoSide + room) * hs, rz = ((o.z >= 0f ? TorsoFront : TorsoBack) + room) * hs;
+            float k = (o.x / rx) * (o.x / rx) + (o.z / rz) * (o.z / rz);
+            if (k >= 1f) return target;
+            if (k < 1e-6f) o = new Vector3(0f, o.y, rz);
+            else { float s = 1f / Mathf.Sqrt(k); o.x *= s; o.z *= s; }
+            return c + chest * o;
+        }
+
+        /// <summary>
+        /// Arm IK with the body in the way: collarbone follows, hinge IK from the posed shoulder, then the fist is checked against
+        /// the shoulders and torso (<see cref="FistClearance"/>) and moved out and solved again (up to three passes).
+        /// </summary>
+        private static void SolveArm(CharacterRig rig, int side, Vector3 fist, Quaternion chest, float weight, float hs, Quaternion? clavicleFrom)
+        {
+            var sh = (CharacterBone)CharacterBones.Side(CharacterBone.LeftShoulder, side);
+            var ua = sh + 1;
+            Quaternion armU = rig.GetModelRotation(ua), armM = rig.GetModelRotation(ua + 1), armE = rig.GetModelRotation(ua + 2);
+            for (int pass = 0; pass < 3; pass++)
+            {
+                if (clavicleFrom.HasValue) rig.SetModelRotation(sh, clavicleFrom.Value); else rig.Inherit(sh);
+                Quaternion before = rig.GetModelRotation(sh);
+                rig.FollowArm(side, fist - rig.ModelPosition(ua));
+                rig.SetModelRotation(sh, Quaternion.Slerp(before, rig.GetModelRotation(sh), weight));
+                // the arm starts each pass from the same rotations, so a partial weight blends from the incoming pose
+                rig.SetModelRotation(ua, armU); rig.SetModelRotation(ua + 1, armM); rig.SetModelRotation(ua + 2, armE);
+                Vector3 shoulder = rig.ModelPosition(ua);
+                rig.SolveTwoBoneHinged(ua, fist, ElbowPole(rig, side, shoulder, fist, chest, hs), weight, Vector3.back);
+                Vector3 push = FistClearance(rig, FistCentre(rig, side, hs), hs);
+                if (push.magnitude < 0.002f * hs) break;
+                fist += push * 1.15f;
+            }
         }
 
         /// <summary>
@@ -370,14 +458,9 @@ namespace LightMMORPG.Characters
         {
             if (weight <= 0f) return;
             var sh = (CharacterBone)CharacterBones.Side(CharacterBone.LeftShoulder, side);
-            var ua = sh + 1;
             Quaternion chest = rig.GetModelRotation(CharacterBone.UpperChest);
-            Quaternion before = rig.GetModelRotation(sh);
             Vector3 fist = KeepOutOfTorso(rig, target, hs);
-            rig.FollowArm(side, fist - rig.ModelPosition(ua));
-            rig.SetModelRotation(sh, Quaternion.Slerp(before, rig.GetModelRotation(sh), weight));
-            Vector3 shoulder = rig.ModelPosition(ua);
-            rig.SolveTwoBoneHinged(ua, fist, ElbowPole(rig, side, shoulder, fist, chest, hs), weight, Vector3.back);
+            SolveArm(rig, side, fist, chest, weight, hs, rig.GetModelRotation(sh));
             rig.SetFingerCurl(side, 1f);
         }
 
@@ -424,11 +507,8 @@ namespace LightMMORPG.Characters
                 var ua = sh + 1;
                 rig.Inherit(sh);
                 Vector3 fist = KeepOutOfTorso(rig, ToModel(side < 0 ? P.ArmL : P.ArmR), hs);
-                rig.FollowArm(side, fist - rig.ModelPosition(ua));
-                Quaternion clavicle = rig.GetModelRotation(sh);
-                rig.SetModelRotation(ua, clavicle); rig.SetModelRotation(ua + 1, clavicle); rig.SetModelRotation(ua + 2, clavicle);
-                Vector3 shoulder = rig.ModelPosition(ua);
-                rig.SolveTwoBoneHinged(ua, fist, ElbowPole(rig, side, shoulder, fist, chest, hs), 1f, Vector3.back);
+                rig.SetModelRotation(ua, chest); rig.SetModelRotation(ua + 1, chest); rig.SetModelRotation(ua + 2, chest);
+                SolveArm(rig, side, fist, chest, 1f, hs, null);
                 float twist = side < 0 ? P.TwistL : P.TwistR;
                 Vector3 fore = (rig.ModelPosition(ua + 2) - rig.ModelPosition(ua + 1)).normalized;
                 Quaternion roll = Quaternion.AngleAxis(twist * 0.5f, fore);

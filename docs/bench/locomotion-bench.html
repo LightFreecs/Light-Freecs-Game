@@ -244,6 +244,17 @@ class Rig {
       this.setFingerCurl(side, fist);
     }
   }
+  // NEW (CharacterRig.RestArm): the rest stance's shoulder→wrist direction and where its elbow points (chest frame)
+  restArm(side) {
+    const ua = sideBone(B.LeftUpperArm, side);
+    const qa = mul(AA(-side * 29, FWD), AA(-8, RIGHT));
+    const up = rot(qa, this.bindLocal[ua + 1].clone().normalize()), bend = rot(qa, this.armDir(side)).cross(FWD).normalize();
+    const fore = rot(mul(AA(22, bend), qa), this.bindLocal[ua + 2].clone().normalize());
+    const l1 = this.bindLocal[ua + 1].length(), l2 = this.bindLocal[ua + 2].length();
+    const dir = up.clone().multiplyScalar(l1).add(fore.clone().multiplyScalar(l2)).normalize();
+    const elbow = up.clone().sub(dir.clone().multiplyScalar(up.dot(dir))).normalize();
+    return { dir, elbow };
+  }
   // two-bone IK from the joint's posed position, both bones on one hinge (CharacterRig.SolveTwoBoneHinged)
   solveTwoBone(upper, target, pole, weight, bindPole) {
     if (weight <= 0) return;
@@ -281,7 +292,8 @@ function applyClavicle(rig, side, armDirModel) {
   // lift: the part of the arm's rise above the A-pose (50° below level); forward / back: only when the arm really reaches
   const elevBind = Math.asin(clamp(-rig.armDir(side).y, -1, 1)), elevNow = Math.asin(clamp(-want.y, -1, 1));
   const up = clamp((elevBind - elevNow) * 180 / Math.PI * CLAV_FOLLOW, 0, CLAV_UP);
-  const fwd = CLAV_FWD * smoothstep(0.35, 0.95, want.z) - CLAV_BACK * smoothstep(0.35, 0.95, -want.z);
+  // forward / back: follows the arm's swing from the rest stance (z 0.14), so walking arms roll the shoulders a little
+  const fwd = clamp((want.z - 0.14) * 17, -CLAV_BACK, CLAV_FWD);
   // left collarbone points to -x: raising it is a turn about +z by -angle, forward about +y by +angle (right side: mirrored)
   const lift = AA(side * up, FWD), swing = AA(-side * fwd, UP);
   rig.setModel(sh, mul(parent, swing, lift));
@@ -501,14 +513,19 @@ function insideTorso(rig, p, room) {
   const o = rot(rig.model[B.Chest].clone().invert(), p.clone().sub(c));
   return (o.x / (TORSO_SIDE + room)) ** 2 + (o.z / ((o.z >= 0 ? TORSO_FRONT : TORSO_BACK) + room)) ** 2 < 1;
 }
-// NEW (AttackPoseSolver.ElbowPole): elbows aim down, out and a little back in the chest's frame; if that would sink the
-// elbow into the torso (a fist tucked in front of the chest), the elbow swings out to the side until it clears
+// NEW (AttackPoseSolver.ElbowPole): the elbow keeps the rest stance's aim carried along with the arm's swing (so a swinging
+// arm doesn't roll about itself and wring the shoulder); for big raises (guard, fist at the chin) it blends to down, out and a
+// little back in the chest's frame; if that would sink the elbow into the torso it swings out to the side until it clears
 function elbowPole(rig, side, shoulder, fist, chest, ua) {
   const l1 = rig.bindLocal[ua + 1].length(), l2 = rig.bindLocal[ua + 2].length();
   const to = fist.clone().sub(shoulder), dist = clamp(to.length(), Math.abs(l1 - l2) + 1e-3, l1 + l2 - 1e-3), dir = to.normalize();
   const perp = v => { const w = v.clone().sub(dir.clone().multiplyScalar(v.dot(dir))); return w.lengthSq() < 1e-6 ? null : w.normalize(); };
   const out = perp(rot(chest, V(side, -0.25, 0))) || perp(rot(chest, V(0, -1, 0)));
-  const base = perp(rot(chest, V(side * 0.5, -0.7, -0.25))) || out;
+  const chestPole = perp(rot(chest, V(side * 0.5, -0.7, -0.25))) || out;
+  const rest = rig.restArm(side), restDir = rot(chest, rest.dir);
+  const carried = perp(rot(new THREE.Quaternion().setFromUnitVectors(restDir, dir), rot(chest, rest.elbow))) || chestPole;
+  const swing = restDir.angleTo(dir) * 180 / Math.PI;
+  const base = carried.clone().lerp(chestPole, smoothstep(70, 120, swing)).normalize();
   const angA = Math.acos(clamp((l1 * l1 + dist * dist - l2 * l2) / (2 * l1 * dist), -1, 1));
   let d = base;
   for (let t = 0; t <= 1.0001; t += 0.1) {
@@ -517,6 +534,38 @@ function elbowPole(rig, side, shoulder, fist, chest, ua) {
     if (!insideTorso(rig, elbow, 0.05)) break;
   }
   return shoulder.clone().add(d);
+}
+// NEW (AttackPoseSolver.FistClearance): the fist (its centre 7 cm past the wrist, 5.5 cm round) must stay out of the torso
+// cylinder and of the shoulder girdle (an ellipsoid round the posed shoulders and upper chest, which the torso cylinder is too
+// narrow for). Returns how far to move the fist out (zero if it's clear).
+const FIST_LOCAL = [0.025, -0.069, 0.017], FIST_R = 0.065;   // measured fist: centre 7 cm past the wrist, ~5.5 cm round (+1 cm margin)
+function fistCentre(rig, side) {
+  const hand = sideBone(B.LeftHand, side);
+  return rig.modelPos(hand).add(rot(rig.model[hand], V(side * FIST_LOCAL[0], FIST_LOCAL[1], FIST_LOCAL[2])));
+}
+function fistClearance(rig, c) {
+  const chest = rig.model[B.UpperChest], inv = chest.clone().invert();
+  const mid = rig.modelPos(B.LeftUpperArm).add(rig.modelPos(B.RightUpperArm)).multiplyScalar(0.5).add(rot(chest, V(0, -0.02, 0.02)));
+  const o = rot(inv, c.clone().sub(mid));
+  const ax = 0.27 + FIST_R, ay = 0.14 + FIST_R, az = (o.z >= 0 ? 0.14 : 0.13) + FIST_R;
+  const s = (o.x / ax) ** 2 + (o.y / ay) ** 2 + (o.z / az) ** 2;
+  let push = V(0, 0, 0);
+  // out through the front (or the back, if it's behind): a guard stays in front of the chest instead of flying out wide
+  if (s < 1) { const zs = Math.sqrt(Math.max(0, 1 - (o.x / ax) ** 2 - (o.y / ay) ** 2)) * az; push = rot(chest, V(0, 0, (o.z >= 0 ? zs : -zs) - o.z)); }
+  const t = keepOutOfTorsoRoom(rig, c.clone().add(push), FIST_R);
+  return push.add(t.sub(c.clone().add(push)));
+}
+function keepOutOfTorsoRoom(rig, target, room) {
+  const a = rig.modelPos(B.Hips), b = rig.modelPos(B.Neck), axis = b.clone().sub(a);
+  const u = target.clone().sub(a).dot(axis) / axis.lengthSq();
+  if (u < 0 || u > 1) return target.clone();
+  const c = a.clone().add(axis.clone().multiplyScalar(u)), chest = rig.model[B.Chest];
+  const o = rot(chest.clone().invert(), target.clone().sub(c));
+  const rx = TORSO_SIDE + room, rz = (o.z >= 0 ? TORSO_FRONT : TORSO_BACK) + room;
+  const k = (o.x / rx) ** 2 + (o.z / rz) ** 2;
+  if (k >= 1) return target.clone();
+  if (k < 1e-6) o.set(0, o.y, rz); else { const s = 1 / Math.sqrt(k); o.x *= s; o.z *= s; }
+  return c.add(rot(chest, o));
 }
 // NEW (AttackPoseSolver.KneePole): knees bend towards the front of the leg, wherever the foot is (in front, under or kicked up
 // behind); the old pole sat above the hip when the foot was thrown back, and the knee bent the wrong way
@@ -541,13 +590,19 @@ function solvePose(rig, P) {
   rig.setModel(B.Neck, chest.clone().slerp(Hd, 0.5)); rig.setModel(B.Head, Hd);
   for (const side of [-1, 1]) {
     const A = side < 0 ? P.armL : P.armR, sh = sideBone(B.LeftShoulder, side), ua = sh + 1;
-    rig.inherit(sh);
-    const fist = keepOutOfTorso(rig, toModel(A.t));
-    if (state.shoulders) applyClavicle(rig, side, fist.clone().sub(rig.modelPos(ua)));   // NEW: collarbone first, then the arm from it
-    rig.setModel(ua, rig.model[sh]); rig.setModel(ua + 1, rig.model[sh]); rig.setModel(ua + 2, rig.model[sh]);
-    const shoulder = rig.modelPos(ua);
-    const pole = elbowPole(rig, side, shoulder, fist, chest, ua);
-    rig.solveTwoBone(ua, fist, pole, 1, V(0, 0, -1));
+    let fist = keepOutOfTorso(rig, toModel(A.t));
+    for (let iter = 0; iter < 3; iter++) {
+      rig.inherit(sh);
+      if (state.shoulders) applyClavicle(rig, side, fist.clone().sub(rig.modelPos(ua)));   // NEW: collarbone first, then the arm from it
+      rig.setModel(ua, rig.model[sh]); rig.setModel(ua + 1, rig.model[sh]); rig.setModel(ua + 2, rig.model[sh]);
+      const shoulder = rig.modelPos(ua);
+      const pole = elbowPole(rig, side, shoulder, fist, chest, ua);
+      rig.solveTwoBone(ua, fist, pole, 1, V(0, 0, -1));
+      if (!state.shoulders) break;
+      const push = fistClearance(rig, fistCentre(rig, side));   // NEW: fist out of the shoulders / chest, then solve again
+      if (push.length() < 0.002) break;
+      fist = fist.clone().add(push.multiplyScalar(1.15));
+    }
     const fore = rig.modelPos(ua + 2).sub(rig.modelPos(ua + 1)).normalize();
     rig.setModel(ua + 1, mul(AA(A.twist * 0.5, fore), rig.model[ua + 1]));
     rig.setModel(ua + 2, mul(AA(A.twist * 0.5, fore), rig.model[ua + 1]));
@@ -889,7 +944,7 @@ requestAnimationFrame(frame);
 
 // for checking the bench: hold a phase, run at a speed, step and render
 window.__bench = {
-  STYLES, MOVES, state, get rig() { return rig; }, sampleGait, pressAttack, buildGaits,
+  STYLES, MOVES, state, get rig() { return rig; }, get body() { return bodies.new; }, sampleGait, pressAttack, buildGaits,
   // hold a hand-made pose (debug): edit(pose) changes a copy of the rest stance; stays until poseOff()
   poseOn(edit) { const p = structuredClone(ZERO); edit(p); window.__fixed = p; }, poseOff() { window.__fixed = null; },
   set(gait, shift) { state.gait = gait; shiftHeld = !!shift; syncGait(); },

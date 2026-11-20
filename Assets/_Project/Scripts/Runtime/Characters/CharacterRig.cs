@@ -201,9 +201,27 @@ namespace LightMMORPG.Characters
             Vector3 want = (Quaternion.Inverse(chest) * armDirModel).normalized;
             float elevBind = Mathf.Asin(Mathf.Clamp(-BindArmDir(side).y, -1f, 1f)), elevNow = Mathf.Asin(Mathf.Clamp(-want.y, -1f, 1f));
             float up = Mathf.Clamp((elevBind - elevNow) * Mathf.Rad2Deg * ClavicleFollow, 0f, ClavicleMaxUp);
-            float fwd = ClavicleMaxForward * Smooth(0.35f, 0.95f, want.z) - ClavicleMaxBack * Smooth(0.35f, 0.95f, -want.z);
+            // forward / back follows the arm's swing from the rest stance (z 0.14): walking arms roll the shoulders a little
+            // (they looked stiff with the collarbone fixed), a punch protracts fully, the rest stance leaves it alone
+            float fwd = Mathf.Clamp((want.z - 0.14f) * 17f, -ClavicleMaxBack, ClavicleMaxForward);
             // the left collarbone points to -x: lifting it is a turn about +z by -angle, forward a turn about +y by +angle
             SetModelRotation(sh, chest * Quaternion.AngleAxis(-side * fwd, Vector3.up) * Quaternion.AngleAxis(side * up, Vector3.forward));
+        }
+
+        /// <summary>
+        /// The rest stance's arm (<see cref="ApplyRestPose"/> defaults): shoulder→wrist direction and where the elbow points,
+        /// both in the chest's frame. The elbow aim is carried along from here as the arm swings, so the upper arm doesn't
+        /// roll about itself (a walking arm used to roll 70° each step and wring the shoulder).
+        /// </summary>
+        public void RestArm(int side, out Vector3 dir, out Vector3 elbow)
+        {
+            var ua = CharacterBones.Side(CharacterBone.LeftUpperArm, side);
+            Quaternion qa = Quaternion.AngleAxis(-side * 29f, Vector3.forward) * Quaternion.AngleAxis(-8f, Vector3.right);
+            Vector3 up = qa * _bindLocal[ua + 1].normalized;
+            Vector3 bend = Vector3.Cross(qa * BindArmDir(side), Vector3.forward).normalized;
+            Vector3 fore = Quaternion.AngleAxis(22f, bend) * qa * _bindLocal[ua + 2].normalized;
+            dir = (up * _bindLocal[ua + 1].magnitude + fore * _bindLocal[ua + 2].magnitude).normalized;
+            elbow = Vector3.ProjectOnPlane(up, dir).normalized;
         }
 
         private static float Smooth(float a, float b, float x)
