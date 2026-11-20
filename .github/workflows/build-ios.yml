@@ -86,6 +86,23 @@ jobs:
           printf '#!/bin/sh\nexec ccache "%s" "$@"\n' "$(xcrun -f clang)" > "$RUNNER_TEMP/cc/clang"
           printf '#!/bin/sh\nexec ccache "%s" "$@"\n' "$(xcrun -f clang++)" > "$RUNNER_TEMP/cc/clang++"
           chmod +x "$RUNNER_TEMP/cc/clang" "$RUNNER_TEMP/cc/clang++"
+          # IL2CPP's C++ (the bulk of the build) is compiled by Unity's own build tool in a script phase, from the
+          # toolchain folder the script passes it. Give it a mirror of the Xcode toolchain whose clang / clang++ go
+          # through ccache (everything else links to the real tools).
+          REAL="$(dirname "$(dirname "$(dirname "$(xcrun -f clang)")")")"
+          TC="$RUNNER_TEMP/tc"
+          mkdir -p "$TC/usr/bin"
+          for e in "$REAL"/*; do [ "$(basename "$e")" = usr ] || ln -s "$e" "$TC/"; done
+          for e in "$REAL"/usr/*; do [ "$(basename "$e")" = bin ] || ln -s "$e" "$TC/usr/"; done
+          for e in "$REAL"/usr/bin/*; do ln -s "$e" "$TC/usr/bin/"; done
+          rm -f "$TC/usr/bin/clang" "$TC/usr/bin/clang++"
+          cp "$RUNNER_TEMP/cc/clang" "$TC/usr/bin/clang"
+          cp "$RUNNER_TEMP/cc/clang++" "$TC/usr/bin/clang++"
+          echo "IL2CPP toolchain mirror: $TC (real: $REAL)"
+          # point the IL2CPP script phase at it (only when IL2CPP_CCACHE_TOOLCHAIN is set)
+          sed -i '' 's/--tool-chain-path=\\"$UNITY_TOOLCHAIN_DIR\\"/--tool-chain-path=\\"${IL2CPP_CCACHE_TOOLCHAIN:-$UNITY_TOOLCHAIN_DIR}\\"/' \
+            build/iOS/LightMMORPG/Unity-iPhone.xcodeproj/project.pbxproj
+          grep -c 'IL2CPP_CCACHE_TOOLCHAIN' build/iOS/LightMMORPG/Unity-iPhone.xcodeproj/project.pbxproj
           ccache --zero-stats
           ccache --show-stats | head -5
 
@@ -100,6 +117,7 @@ jobs:
           CCACHE_INODECACHE: "true"
         run: |
           export CCACHE_DIR="$HOME/.ccache"
+          export IL2CPP_CCACHE_TOOLCHAIN="$RUNNER_TEMP/tc"
           cd build/iOS/LightMMORPG
           xcodebuild -project Unity-iPhone.xcodeproj \
             -scheme Unity-iPhone \
