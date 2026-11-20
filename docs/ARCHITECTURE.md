@@ -745,3 +745,14 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
   `Exhaustion` (server ticks with the motor's Charge input, reset on respawn / `ServerRestore`), damage in
   `ServerApplyHit` × attacker strength × own exhaustion; `PlayerCombat.CanAfford` / server checks need energy and aura.
   - Verified: headless compile only (owner tests by hand; the new EditMode tests were not run).
+- Battle HUD (2026-11-19; owner approved `docs/bench/hud-bench.html`: "the ui looks perfect ... ship it"; an opponent's
+  power level is NOT shown, you shouldn't be able to read their ceiling; a way to "feel" how strong they are is for later).
+  - `UI/HudShapes.cs`: `SlantShape` (parallelogram span of a rect, 20 deg lean, gradient, ticks, grow for outlines, mirror),
+    `RingShape` (ring / disc / arc / radial notches), `ChevronShape`. `UI/HudBar.cs`: shadow, white edge, dark back, damage
+    trail (held 0.5 s white, then drains red), gradient fill + gloss band, ticks; `HudBar.Label` (bold italic + drop shadow).
+  - `GameHud`: power gauge top-left (strength ring in the aura colour, 10 % start notch, glow + rising chevrons while
+    charging, FULL POWER / AURA SPENT / EXHAUSTED, outer Surge countdown ring), name + Lv, HP (ticks every 10 %, pulses
+    below 30 %), guard strip (GUARD BREAK), energy (spend trail), aura reserve fuse with an ember and the burn rate, Surge
+    timer. Target: mirrored bar top-right (name, Lv, HP, guard). Name plates use the slanted bar. Scoreboard moved under
+    the target (top-right, y -150).
+  - Verified: headless compile only (owner tests by hand).

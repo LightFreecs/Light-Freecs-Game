@@ -30,21 +30,32 @@ namespace LightMMORPG.UI
     }
 
     /// <summary>
-    /// Runtime-built HUD: own HP/energy/guard bars (top-left), ability icons with cooldown sweep + energy dimming
-    /// (bottom-centre, PC only — the touch buttons show their own), locked-on target bar (top-centre), name plates with
-    /// HP above other players, KO / respawn countdown + KO feed (centre), and a corner scoreboard (top-right).
+    /// Runtime-built HUD (Battle HUD bench, <c>docs/bench/hud-bench.html</c>): power gauge (strength ring) + slanted HP /
+    /// guard / energy / aura reserve bars with damage trails (top-left), ability icons with cooldown sweep + energy dimming
+    /// (bottom-centre, PC only — the touch buttons show their own), mirrored locked-on target bar (top-right; no power level,
+    /// so an opponent's strength ceiling stays hidden), name plates with HP above other players, KO / respawn countdown +
+    /// KO feed (centre), and a scoreboard (top-right, under the target).
     /// </summary>
     public sealed class GameHud : MonoBehaviour
     {
-        private static readonly Color HpColor = new(0.35f, 0.95f, 0.45f);
-        private static readonly Color HpLow = new(1f, 0.3f, 0.25f);
-        private static readonly Color EnergyColor = new(0.3f, 0.75f, 1f);
-        private static readonly Color GuardColor = new(1f, 0.85f, 0.3f);
+        // Battle HUD bench colours (docs/bench/hud-bench.html)
+        private static readonly Color HpA = Hex(0xc6ff5c), HpB = Hex(0x36d98a), LowA = Hex(0xffb03d), LowB = Hex(0xff4d43);
+        private static readonly Color EnA = Hex(0x6fe6ff), EnB = Hex(0x2c8dff), GuardColor = Hex(0xffd25a), Ko = Hex(0xff4d43);
+        private static readonly Color HpLow = new(1f, 0.3f, 0.25f), ExhaustText = Hex(0xff8a7a);
+
+        private static Color Hex(int rgb) => new(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f, 1f);
 
         private Canvas _canvas;
         private RectTransform _safe, _plates;
-        private UiKit.Bar _hp, _energy, _guard, _surge, _aura, _targetHp;
-        private Text _targetName, _center, _feed, _score, _power;
+        private HudBar _hp, _energy, _guard, _aura, _surge, _targetHp, _targetGuard;
+        private Text _targetName, _center, _feed, _score;
+        // player cluster: power gauge (strength ring), name, numbers
+        private RingShape _ring, _ringGlow, _surgeRing, _ember;
+        private readonly ChevronShape[] _chevrons = new ChevronShape[3];
+        private Text _powVal, _powLbl, _name, _hpNum, _enNum, _auraNum, _guardTag, _targetHpNum;
+        private RectTransform _surgeRoot, _emberRt;
+        private Color _auraColor = new(1f, 0.85f, 0.1f);
+        private string _nameKey;
         private RectTransform _abilityRow, _targetRoot;
         private readonly List<AbilityIcon> _icons = new();
         private readonly Dictionary<PlayerStats, Plate> _plateMap = new();
@@ -64,7 +75,7 @@ namespace LightMMORPG.UI
         {
             public RectTransform Root;
             public Text Name;
-            public UiKit.Bar Hp;
+            public HudBar Hp;
         }
 
         private void Awake()
@@ -78,16 +89,8 @@ namespace LightMMORPG.UI
             UiKit.Stretch(_safe);
             _safe.gameObject.AddComponent<SafeAreaFitter>();
 
-            // own bars
-            var tl = new Vector2(0f, 1f);
-            _hp = UiKit.CreateBar(_safe, "HP", tl, tl, new Vector2(30f, -30f), new Vector2(460f, 34f), HpColor, 20);
-            _energy = UiKit.CreateBar(_safe, "Energy", tl, tl, new Vector2(30f, -70f), new Vector2(380f, 22f), EnergyColor, 15);
-            _guard = UiKit.CreateBar(_safe, "Guard", tl, tl, new Vector2(30f, -98f), new Vector2(260f, 14f), GuardColor);
-            _surge = UiKit.CreateBar(_safe, "Surge", tl, tl, new Vector2(300f, -98f), new Vector2(110f, 14f), new Color(1f, 0.5f, 0.15f));
-            // aura reserve (never refills this battle) in the player's aura colour, and the power level beside the health bar
-            var auraC = Characters.PlayerAppearance.AuraColors[Characters.PlayerAppearance.Load().auraColor].color;
-            _aura = UiKit.CreateBar(_safe, "Aura", tl, tl, new Vector2(30f, -118f), new Vector2(380f, 18f), auraC, 12);
-            _power = UiKit.Text(UiKit.Rect("Power", _safe, tl, tl, new Vector2(500f, -30f), new Vector2(300f, 34f)), "", 24, TextAnchor.MiddleLeft, Color.white);
+            // own bars (Battle HUD bench layout, 1920 x 1080 reference)
+            BuildPlayer();
 
             // abilities
             var bc = new Vector2(0.5f, 0f);
@@ -98,20 +101,24 @@ namespace LightMMORPG.UI
             AddIcon(AttackKind.Surge, "3\nSurge", 3);
             AddIcon(AttackKind.Light, "C\nCharge", 4);
 
-            // target
-            var tc = new Vector2(0.5f, 1f);
-            _targetRoot = UiKit.Rect("Target", _safe, tc, tc, new Vector2(0f, -24f), new Vector2(520f, 60f));
-            _targetName = UiKit.Text(UiKit.Rect("Name", _targetRoot, tc, tc, Vector2.zero, new Vector2(520f, 26f)), "", 22, TextAnchor.MiddleCenter, Color.white);
-            _targetHp = UiKit.CreateBar(_targetRoot, "HP", new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), Vector2.zero, new Vector2(520f, 24f), HpLow, 15);
+            // locked-on target, top right, mirrored (no power level: an opponent's strength ceiling stays hidden)
+            var tr0 = new Vector2(1f, 1f);
+            _targetRoot = UiKit.Rect("Target", _safe, tr0, tr0, new Vector2(-44f, -40f), new Vector2(640f, 90f));
+            var ttl = new Vector2(0f, 1f);
+            _targetName = HudBar.Label(_targetRoot, "Name", ttl, ttl, new Vector2(0f, 0f), new Vector2(614f, 24f), 22, TextAnchor.UpperRight, FontStyle.Bold);
+            _targetHp = HudBar.Create(_targetRoot, "HP", ttl, ttl, new Vector2(118f, 26f), new Vector2(500f, 32f), 10, mirror: true);
+            _targetHpNum = HudBar.Label(_targetRoot, "HPNum", ttl, ttl, new Vector2(136f, 26f), new Vector2(200f, 32f), 24, TextAnchor.MiddleLeft);
+            _targetGuard = HudBar.Create(_targetRoot, "Guard", ttl, ttl, new Vector2(418f, 66f), new Vector2(200f, 8f), mirror: true, trail: false, shadow: false);
+            _targetGuard.SetFillColors(GuardColor, GuardColor);
 
             // centre messages
             var c = new Vector2(0.5f, 0.5f);
             _center = UiKit.Text(UiKit.Rect("Center", _safe, c, c, new Vector2(0f, 120f), new Vector2(900f, 140f)), "", 56, TextAnchor.MiddleCenter, Color.white);
-            _feed = UiKit.Text(UiKit.Rect("Feed", _safe, tc, tc, new Vector2(0f, -110f), new Vector2(900f, 40f)), "", 26, TextAnchor.MiddleCenter, new Color(1f, 0.9f, 0.5f));
+            _feed = UiKit.Text(UiKit.Rect("Feed", _safe, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -110f), new Vector2(900f, 40f)), "", 26, TextAnchor.MiddleCenter, new Color(1f, 0.9f, 0.5f));
 
             // scoreboard
             var tr = new Vector2(1f, 1f);
-            var sbRoot = UiKit.Rect("Scoreboard", _safe, tr, tr, new Vector2(-24f, -24f), new Vector2(380f, 180f));
+            var sbRoot = UiKit.Rect("Scoreboard", _safe, tr, tr, new Vector2(-24f, -150f), new Vector2(380f, 180f)); // under the target bar
             UiKit.Image(sbRoot, new Color(0f, 0f, 0f, 0.35f));
             _score = UiKit.Text(sbRoot, "", 19, TextAnchor.UpperLeft, Color.white, FontStyle.Normal);
             _score.rectTransform.offsetMin = new Vector2(12f, 8f);
@@ -149,29 +156,8 @@ namespace LightMMORPG.UI
             _plates.gameObject.SetActive(show);
             if (!show) return;
 
-            // own bars
-            _hp.Set(me.Health.Value / me.MaxHealth);
-            _hp.FillImage.color = me.Health.Value / me.MaxHealth < 0.3f ? HpLow : HpColor;
-            _hp.Label.text = Mathf.CeilToInt(me.Health.Value) + " / " + me.MaxHealth;
-            _energy.Set(me.Energy.Value / me.MaxEnergy);
-            _energy.Label.text = Mathf.FloorToInt(me.Energy.Value) + " EN";
-            _guard.Set(me.Guard.Value / me.MaxGuard);
-            _guard.FillImage.color = me.GuardBroken.Value ? HpLow : GuardColor;
-            _surge.Root.gameObject.SetActive(me.SurgeActive);
-            if (me.SurgeActive) _surge.Set(me.SurgeRemaining.Value / Mathf.Max(0.01f, me.SurgeDuration));
-            _aura.Set(me.Aura.Value / Mathf.Max(1f, me.MaxAura));
-            _aura.Label.text = me.AuraDepleted ? "AURA SPENT" : "AURA " + Mathf.CeilToInt(me.Aura.Value);
-            int strength = Mathf.RoundToInt(me.Strength * 100f);
-            if (me.Exhaustion.Value > 0f)
-            {
-                _power.text = "EXHAUSTED  " + strength + "%";
-                _power.color = HpLow;
-            }
-            else
-            {
-                _power.text = "POWER  " + strength + "%" + (me.Motor != null && me.Motor.IsCharging && me.Power.Value < 1f ? "  CHARGING" : "");
-                _power.color = me.Power.Value >= 0.999f ? new Color(1f, 0.85f, 0.3f) : Color.white;
-            }
+            float dt = Time.unscaledDeltaTime;
+            UpdatePlayer(me, dt);
 
             // abilities (PC)
             _abilityRow.gameObject.SetActive(!PlayerInputReader.TouchMode);
@@ -194,9 +180,14 @@ namespace LightMMORPG.UI
             _targetRoot.gameObject.SetActive(target != null);
             if (target != null)
             {
-                _targetName.text = target.NameWithLevel + (target.IsDown.Value ? "  (down)" : "");
-                _targetHp.Set(target.Health.Value / target.MaxHealth);
-                _targetHp.Label.text = Mathf.CeilToInt(target.Health.Value).ToString();
+                _targetName.text = target.DisplayName + (target.Level.Value > 0 ? "  <color=#ffffffb3>Lv " + target.Level.Value + "</color>" : "") + (target.IsDown.Value ? "  (K.O.)" : "");
+                float tf = target.Health.Value / Mathf.Max(1f, target.MaxHealth);
+                _targetHp.Set(tf, dt);
+                HpColors(_targetHp, tf);
+                _targetHpNum.text = Mathf.CeilToInt(target.Health.Value).ToString();
+                bool tBroken = target.GuardBroken.Value;
+                _targetGuard.Set(tBroken ? 1f : target.Guard.Value / Mathf.Max(1f, target.MaxGuard), dt);
+                _targetGuard.SetFillColors(tBroken ? Ko : GuardColor, tBroken ? Ko : GuardColor);
             }
 
             // centre
@@ -207,6 +198,149 @@ namespace LightMMORPG.UI
 
             UpdateScoreboard();
             UpdatePlates(cam != null ? cam.GetComponent<UnityEngine.Camera>() : UnityEngine.Camera.main, me);
+        }
+
+        // ---------------- player cluster ----------------
+
+        private void BuildPlayer()
+        {
+            var tl = new Vector2(0f, 1f);
+            _auraColor = Characters.PlayerAppearance.AuraColors[Characters.PlayerAppearance.Load().auraColor].color;
+
+            // power gauge: dark disc, track, strength ring in the aura colour, notches every 10 % (the 10 % start mark bright),
+            // a pulsing glow and rising chevrons while charging, an outer Power Surge countdown
+            var g = UiKit.Rect("PowerGauge", _safe, tl, tl, new Vector2(44f, -34f), new Vector2(168f, 168f));
+            RingShape.Create(g, "Edge", 0.821f, 0.845f, HudBar.EdgeColor);
+            RingShape.Create(g, "Disc", 0f, 0.833f, HudBar.BackColor);
+            RingShape.Create(g, "Track", 0.643f, 0.786f, new Color(1f, 1f, 1f, 0.12f));
+            _ringGlow = RingShape.Create(g, "Glow", 0.6f, 0.83f, Color.clear);
+            _ring = RingShape.Create(g, "Ring", 0.643f, 0.786f, _auraColor);
+            var notches = RingShape.Create(g, "Notches", 0.631f, 0.798f, new Color(7f / 255f, 11f / 255f, 24f / 255f, 0.8f));
+            notches.Notches = 10;
+            var start = RingShape.Create(g, "StartMark", 0.631f, 0.798f, new Color(1f, 1f, 1f, 0.85f));
+            start.Notches = 1;
+            start.NotchWidth = 3f;
+            start.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -36f); // 10 % of a turn, clockwise
+            _surgeRing = RingShape.Create(g, "Surge", 0.899f, 0.958f, Hex(0xffb347));
+            var c = new Vector2(0.5f, 1f);
+            _powVal = HudBar.Label(g, "Value", c, c, new Vector2(0f, 42f), new Vector2(168f, 64f), 58, TextAnchor.MiddleCenter);
+            _powLbl = HudBar.Label(g, "Label", c, c, new Vector2(0f, 106f), new Vector2(168f, 20f), 14, TextAnchor.MiddleCenter, FontStyle.Bold);
+            for (int i = 0; i < _chevrons.Length; i++)
+            {
+                var rt = UiKit.Rect("Chevron" + i, g, c, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(22f, 12f));
+                _chevrons[i] = rt.gameObject.AddComponent<ChevronShape>();
+                _chevrons[i].raycastTarget = false;
+            }
+
+            _name = HudBar.Label(_safe, "Name", tl, tl, new Vector2(240f, 30f), new Vector2(600f, 26f), 19, TextAnchor.MiddleLeft, FontStyle.Bold);
+            _hp = HudBar.Create(_safe, "HP", tl, tl, new Vector2(246f, 66f), new Vector2(620f, 40f), 10);
+            _hpNum = HudBar.Label(_safe, "HPNum", tl, tl, new Vector2(600f, 66f), new Vector2(250f, 40f), 30, TextAnchor.MiddleRight);
+            _guard = HudBar.Create(_safe, "Guard", tl, tl, new Vector2(236f, 112f), new Vector2(300f, 10f), trail: false, shadow: false);
+            _guardTag = HudBar.Label(_safe, "GuardBreak", tl, tl, new Vector2(552f, 108f), new Vector2(200f, 18f), 15, TextAnchor.MiddleLeft, FontStyle.Bold);
+            _guardTag.text = "GUARD BREAK";
+            _guardTag.color = Ko;
+            _energy = HudBar.Create(_safe, "Energy", tl, tl, new Vector2(226f, 132f), new Vector2(520f, 20f), 10);
+            _energy.SetFillColors(EnB, EnA);
+            _energy.TrailColor = new Color(1f, 1f, 1f, 0.75f);
+            _energy.TrailHold = 0.35f;
+            _energy.TrailRate = 1.2f;
+            _enNum = HudBar.Label(_safe, "ENNum", tl, tl, new Vector2(760f, 130f), new Vector2(200f, 24f), 22, TextAnchor.MiddleLeft);
+            // aura reserve: a fuse in the aura colour that only ever burns down, with an ember at its end while burning
+            _aura = HudBar.Create(_safe, "Aura", tl, tl, new Vector2(216f, 162f), new Vector2(520f, 16f), trail: false);
+            _aura.SetFillColors(Color.Lerp(_auraColor, Color.black, 0.45f), _auraColor);
+            _emberRt = UiKit.Rect("Ember", _aura.Root, new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(26f, 28f));
+            _ember = _emberRt.gameObject.AddComponent<RingShape>();
+            _ember.raycastTarget = false;
+            _ember.Inner = 0f;
+            _auraNum = HudBar.Label(_safe, "AuraNum", tl, tl, new Vector2(756f, 158f), new Vector2(360f, 24f), 20, TextAnchor.MiddleLeft);
+            // power surge countdown
+            _surgeRoot = UiKit.Rect("Surge", _safe, tl, tl, new Vector2(236f, -188f), new Vector2(320f, 20f));
+            var sl = HudBar.Label(_surgeRoot, "Label", tl, tl, Vector2.zero, new Vector2(90f, 20f), 15, TextAnchor.MiddleLeft, FontStyle.Bold);
+            sl.text = "SURGE";
+            _surge = HudBar.Create(_surgeRoot, "Bar", tl, tl, new Vector2(94f, 6f), new Vector2(200f, 8f), trail: false, shadow: false);
+            _surge.SetFillColors(Hex(0xff9a3d), Hex(0xffe07a));
+            _surge.Gloss.enabled = false;
+        }
+
+        private static void HpColors(HudBar b, float frac)
+        {
+            if (frac >= 0.3f) { b.SetFillColors(HpB, HpA); return; }
+            float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 7.7f);
+            b.SetFillColors(Color.Lerp(LowB, Color.white, 0.2f * pulse), Color.Lerp(LowA, Color.white, 0.2f * pulse));
+        }
+
+        private void UpdatePlayer(PlayerStats me, float dt)
+        {
+            float now = Time.unscaledTime;
+            bool exhausted = me.AuraDepleted;
+            float strength = me.Strength;
+            bool full = me.Power.Value >= 0.999f;
+
+            // gauge
+            _ring.Fill = strength;
+            _ring.color = exhausted ? Hex(0xff5a4a) : _auraColor;
+            _powVal.text = Mathf.RoundToInt(strength * 100f) + "<size=26>%</size>";
+            _powVal.color = exhausted ? ExhaustText : Color.white;
+            _powLbl.text = exhausted ? (me.Exhaustion.Value > 0f ? "EXHAUSTED" : "AURA SPENT") : full ? "FULL POWER" : "POWER";
+            _powLbl.color = exhausted ? ExhaustText : full ? _auraColor : Color.white;
+            bool charging = !exhausted && !full && me.Motor != null && me.Motor.IsCharging;
+            var glow = _auraColor;
+            glow.a = charging ? 0.22f + 0.12f * Mathf.Sin(now * 11f) : 0f;
+            _ringGlow.color = glow;
+            for (int i = 0; i < _chevrons.Length; i++)
+            {
+                float k = Mathf.Repeat(now / 0.6f + i / 3f, 1f);
+                _chevrons[i].rectTransform.anchoredPosition = new Vector2(0f, k * 28f);
+                var cc = _auraColor;
+                cc.a = charging ? Mathf.Clamp01(k < 0.3f ? k / 0.3f : (1f - k) / 0.7f) : 0f;
+                _chevrons[i].color = cc;
+            }
+            _surgeRing.enabled = me.SurgeActive;
+            if (me.SurgeActive) _surgeRing.Fill = me.SurgeRemaining.Value / Mathf.Max(0.01f, me.SurgeDuration);
+
+            // name, health, guard
+            string key = me.DisplayName + "|" + me.Level.Value;
+            if (key != _nameKey)
+            {
+                _nameKey = key;
+                _name.text = me.DisplayName.ToUpperInvariant() + (me.Level.Value > 0 ? "  <color=#ffffffbf>Lv " + me.Level.Value + "</color>" : "");
+            }
+            float hf = me.Health.Value / Mathf.Max(1f, me.MaxHealth);
+            _hp.Set(hf, dt);
+            HpColors(_hp, hf);
+            _hpNum.text = Mathf.CeilToInt(me.Health.Value) + "<size=20><color=#ffffffbf> / " + me.MaxHealth + "</color></size>";
+            bool broken = me.GuardBroken.Value;
+            _guard.Set(broken ? 1f : me.Guard.Value / Mathf.Max(1f, me.MaxGuard), dt);
+            _guard.SetFillColors(broken ? Ko : GuardColor, broken ? Color.Lerp(Ko, Color.black, 0.5f) : GuardColor);
+            bool idleGuard = !broken && me.Guard.Value >= me.MaxGuard - 0.01f && (me.Motor == null || !me.Motor.IsBlocking);
+            _guard.Fill.color = new Color(1f, 1f, 1f, idleGuard ? 0.7f : 1f);
+            _guardTag.gameObject.SetActive(broken);
+
+            // energy
+            _energy.Set(me.Energy.Value / Mathf.Max(1f, me.MaxEnergy), dt);
+            _enNum.text = Mathf.FloorToInt(me.Energy.Value) + " <size=13>EN</size>";
+
+            // aura reserve
+            float af = me.Aura.Value / Mathf.Max(1f, me.MaxAura);
+            _aura.Set(af, dt);
+            float burn = Core.AuraReserve.Upkeep(me.Power.Value);
+            _emberRt.anchorMin = _emberRt.anchorMax = new Vector2(af, 0.5f);
+            var ec = _auraColor;
+            ec.a = burn > 0f && !exhausted ? 0.35f + 0.25f * Mathf.Sin(now * 14f) : 0f;
+            _ember.color = ec;
+            if (exhausted)
+            {
+                _auraNum.text = "0 <size=14>AURA SPENT</size>";
+                _auraNum.color = ExhaustText;
+            }
+            else
+            {
+                _auraNum.text = Mathf.CeilToInt(me.Aura.Value) + " <size=14>AURA" + (burn > 0.05f ? "   <color=#ffffffbf>-" + burn.ToString("0.0") + "/s</color>" : "") + "</size>";
+                _auraNum.color = Color.white;
+            }
+
+            _surgeRoot.gameObject.SetActive(me.SurgeActive);
+            if (me.SurgeActive) _surge.Set(me.SurgeRemaining.Value / Mathf.Max(0.01f, me.SurgeDuration), dt);
         }
 
         private void UpdateScoreboard()
@@ -246,7 +380,7 @@ namespace LightMMORPG.UI
                     {
                         Root = rt,
                         Name = UiKit.Text(UiKit.Rect("Name", rt, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(200f, 22f)), "", 18, TextAnchor.MiddleCenter, Color.white),
-                        Hp = UiKit.CreateBar(rt, "HP", new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), Vector2.zero, new Vector2(150f, 14f), HpLow),
+                        Hp = HudBar.Create(rt, "HP", new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, -2f), new Vector2(160f, 10f), shadow: false),
                     };
                     _plateMap[p] = plate;
                 }
@@ -260,7 +394,9 @@ namespace LightMMORPG.UI
                 float scale = Mathf.Clamp(12f / sp.z, 0.55f, 1.1f);
                 plate.Root.localScale = Vector3.one * scale;
                 plate.Name.text = p.NameWithLevel + (p.IsDown.Value ? " (K.O.)" : "");
-                plate.Hp.Set(p.Health.Value / p.MaxHealth);
+                float pf = p.Health.Value / Mathf.Max(1f, p.MaxHealth);
+                plate.Hp.Set(pf, Time.unscaledDeltaTime);
+                HpColors(plate.Hp, pf);
             }
         }
     }
