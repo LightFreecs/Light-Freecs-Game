@@ -677,3 +677,24 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     (block, charge, heavy, menu) get the new weights but no collarbone motion.
   - Verified: headless compile only (owner tests by hand). Not seen in a rendered match: the gait at network-smoothed speeds,
     strafing / backwards steps, the shoulders with the Toon Head and outline shader.
+- Limb fixes + player body in Blender (2026-11-19; owner: "limbs sometimes twist ... and go inside other parts of the body").
+  Measured on the Locomotion Bench (every walk / run phase, punches standing / walking / running: knee direction vs the leg's
+  front, elbow / forearm / wrist inside the torso, leg vs leg, forearm vs thigh, elbow jumps between frames): 82 bad frames,
+  all in the run. Now 0.
+  - Knees: `AttackPoseSolver.KneePole` = the front of the leg (cross(hip→foot, foot-yawed right)) wherever the foot is. The old
+    pole (in front of and above the foot) sat above the hip when the run threw the foot up behind, so for ~25 % of every
+    step the knee bent backwards.
+  - Elbows: `ElbowPole` keeps the old aim (down, out, a little back in the chest frame) but swings the elbow out to the side
+    until it clears the torso (`InsideTorso`, the KeepOutOfTorso cylinder + 5 cm). The run's fist under the chin had sunk its
+    elbow into the chest and flipped it ~58° once a step.
+  - Block / charge / heavy / blast / beam / surge used the plain `SolveTwoBone` from the bind shoulder (missed targets once
+    the body leant, forearm roll from shortest-arc aiming): now `AttackPoseSolver.ArmTo` / `LegTo` (keep out of torso,
+    collarbone follows, hinge IK from the posed shoulder, the poles above). Block = a cross block in front of the face, left
+    forearm in front (before: chest height, forearms 2 cm apart, each fist in the other arm). `MenuFighter` still uses
+    `SolveTwoBone` (owner-approved menu pose, unchanged).
+  - Body deformation checked on the bench at the extremes (run knee folded ~130°, push-off hip, block elbows): only a small
+    natural pinch behind the folded knee; no weight changes needed.
+  - `tools/basebody_blender.py`: `import` → `ArtSource/Player/player.blend` (body + trunks + band, the game's 42 bones as
+    "PlayerRig", weights as vertex groups, game coordinates with a display turn), `export` writes edited shapes / weights back
+    into `BaseBody.bytes` (same vertex layout), `check` round-trips (positions exact, weights within 6e-8).
+  - Verified: headless compile only (owner tests by hand).

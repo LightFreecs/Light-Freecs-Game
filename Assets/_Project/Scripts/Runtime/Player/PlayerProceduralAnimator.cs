@@ -228,21 +228,24 @@ namespace LightMMORPG.Player
                 rig.SetFingerCurl(side, 1f);
             }
             PoseLocomotion(rig, hs);
-            // guard / power-up stances (IK), then attacks on top
-            Vector3 pole(int side) => new Vector3(side * 0.6f, 0.4f, -0.7f) * hs + Vector3.up * 1.2f * hs;
+            // guard / power-up stances, then the older attack targets on top. Hinge IK from the posed shoulder, the collarbone
+            // following, elbows kept out of the torso (AttackPoseSolver.ArmTo); the plain two-bone IK from the bind shoulder
+            // used before twisted forearms and missed the target once the body leant or turned.
             if (_blockingNow)
             {
-                rig.SolveTwoBone(CharacterBone.LeftUpperArm, new Vector3(0.06f, 1.62f, 0.32f) * hs, pole(-1), 1f);
-                rig.SolveTwoBone(CharacterBone.RightUpperArm, new Vector3(-0.06f, 1.7f, 0.3f) * hs, pole(1), 1f);
+                // cross block in front of the face, the left forearm in front of the right one (before: at chest height,
+                // both forearms 2 cm apart, each fist sinking into the other arm)
+                AttackPoseSolver.ArmTo(rig, -1, new Vector3(0.10f, 1.84f, 0.40f) * hs, 1f, hs);
+                AttackPoseSolver.ArmTo(rig, 1, new Vector3(-0.10f, 1.95f, 0.29f) * hs, 1f, hs);
             }
             else if (_chargingNow)
             {
-                rig.SolveTwoBone(CharacterBone.LeftUpperArm, new Vector3(-0.42f, 1.0f, 0.12f) * hs, pole(-1), 1f);
-                rig.SolveTwoBone(CharacterBone.RightUpperArm, new Vector3(0.42f, 1.0f, 0.12f) * hs, pole(1), 1f);
+                AttackPoseSolver.ArmTo(rig, -1, new Vector3(-0.42f, 1.0f, 0.12f) * hs, 1f, hs);
+                AttackPoseSolver.ArmTo(rig, 1, new Vector3(0.42f, 1.0f, 0.12f) * hs, 1f, hs);
             }
-            rig.SolveTwoBone(CharacterBone.LeftUpperArm, l * hs, pole(-1), wl);
-            rig.SolveTwoBone(CharacterBone.RightUpperArm, r * hs, pole(1), wr);
-            rig.SolveTwoBone(CharacterBone.RightUpperLeg, f * hs, new Vector3(0.1f, 1.2f, 1.5f) * hs, wf);
+            AttackPoseSolver.ArmTo(rig, -1, l * hs, wl, hs);
+            AttackPoseSolver.ArmTo(rig, 1, r * hs, wr, hs);
+            AttackPoseSolver.LegTo(rig, 1, f * hs, wf, hs);
             _hs = hs;
             ApplyMove(rig, hs);
         }

@@ -307,6 +307,88 @@ namespace LightMMORPG.Characters
             return c + chest * o;
         }
 
+        /// <summary>Is p inside the torso (the elliptic cylinder of <see cref="KeepOutOfTorso"/>) grown by room (design metres)?</summary>
+        public static bool InsideTorso(CharacterRig rig, Vector3 p, float room, float hs)
+        {
+            Vector3 a = rig.ModelPosition(CharacterBone.Hips), b = rig.ModelPosition(CharacterBone.Neck), axis = b - a;
+            float len2 = axis.sqrMagnitude;
+            if (len2 < 1e-6f) return false;
+            float u = Vector3.Dot(p - a, axis) / len2;
+            if (u < -0.05f || u > 1.05f) return false;
+            Vector3 o = Quaternion.Inverse(rig.GetModelRotation(CharacterBone.Chest)) * (p - (a + axis * u));
+            float rx = (TorsoSide + room) * hs, rz = ((o.z >= 0f ? TorsoFront : TorsoBack) + room) * hs;
+            return (o.x / rx) * (o.x / rx) + (o.z / rz) * (o.z / rz) < 1f;
+        }
+
+        /// <summary>
+        /// Where the elbow points (a pole for the hinge IK): down, out and a little back in the chest's frame; if that would
+        /// sink the elbow into the torso (a fist tucked in front of the chest, the run's fist under the chin with the body leant
+        /// far forward), the elbow swings out to the side, step by step, until it clears.
+        /// </summary>
+        public static Vector3 ElbowPole(CharacterRig rig, int side, Vector3 shoulder, Vector3 fist, Quaternion chest, float hs)
+        {
+            var ua = (CharacterBone)CharacterBones.Side(CharacterBone.LeftUpperArm, side);
+            float l1 = rig.BindLocal(ua + 1).magnitude, l2 = rig.BindLocal(ua + 2).magnitude;
+            Vector3 to = fist - shoulder;
+            float dist = Mathf.Clamp(to.magnitude, Mathf.Abs(l1 - l2) + 1e-3f, l1 + l2 - 1e-3f);
+            Vector3 dir = to.sqrMagnitude > 1e-10f ? to.normalized : Vector3.down;
+            Vector3 Perp(Vector3 v) { Vector3 w = Vector3.ProjectOnPlane(v, dir); return w.sqrMagnitude < 1e-6f ? Vector3.zero : w.normalized; }
+            Vector3 outward = Perp(chest * new Vector3(side, -0.25f, 0f));
+            if (outward == Vector3.zero) outward = Perp(chest * Vector3.down);
+            Vector3 basePole = Perp(chest * new Vector3(side * 0.5f, -0.7f, -0.25f));
+            if (basePole == Vector3.zero) basePole = outward;
+            float angA = Mathf.Acos(Mathf.Clamp((l1 * l1 + dist * dist - l2 * l2) / (2f * l1 * dist), -1f, 1f));
+            Vector3 d = basePole;
+            for (int i = 0; i <= 10; i++)
+            {
+                d = Vector3.Lerp(basePole, outward, i / 10f).normalized;
+                Vector3 elbow = shoulder + dir * (Mathf.Cos(angA) * l1) + d * (Mathf.Sin(angA) * l1);
+                if (!InsideTorso(rig, elbow, 0.05f, hs)) break;
+            }
+            return shoulder + d * hs;
+        }
+
+        /// <summary>
+        /// Where the knee points: the front of the leg, wherever the foot is (in front, under the hip or kicked up behind), turned
+        /// with the foot's yaw. The old pole (in front of and above the foot) sat above the hip when the run threw a foot up behind,
+        /// and the knee bent backwards.
+        /// </summary>
+        public static Vector3 KneePole(Vector3 hip, Vector3 foot, float footYaw, float hs)
+        {
+            Vector3 dir = (foot - hip).normalized, right = Quaternion.AngleAxis(footYaw, Vector3.up) * Vector3.right;
+            Vector3 n = Vector3.Cross(dir, right);
+            if (n.sqrMagnitude < 1e-6f) n = Quaternion.AngleAxis(footYaw, Vector3.up) * Vector3.forward;
+            return (hip + foot) * 0.5f + n.normalized * (0.5f * hs);
+        }
+
+        /// <summary>
+        /// One arm to a fist target (model space) over whatever pose the rig is in: kept out of the torso, the collarbone follows,
+        /// hinge IK from the posed shoulder with <see cref="ElbowPole"/>. For the older action poses (block, charge, heavy, blast,
+        /// beam, surge), which used the plain two-bone IK from the bind shoulder and could twist the forearm.
+        /// </summary>
+        public static void ArmTo(CharacterRig rig, int side, Vector3 target, float weight, float hs)
+        {
+            if (weight <= 0f) return;
+            var sh = (CharacterBone)CharacterBones.Side(CharacterBone.LeftShoulder, side);
+            var ua = sh + 1;
+            Quaternion chest = rig.GetModelRotation(CharacterBone.UpperChest);
+            Quaternion before = rig.GetModelRotation(sh);
+            Vector3 fist = KeepOutOfTorso(rig, target, hs);
+            rig.FollowArm(side, fist - rig.ModelPosition(ua));
+            rig.SetModelRotation(sh, Quaternion.Slerp(before, rig.GetModelRotation(sh), weight));
+            Vector3 shoulder = rig.ModelPosition(ua);
+            rig.SolveTwoBoneHinged(ua, fist, ElbowPole(rig, side, shoulder, fist, chest, hs), weight, Vector3.back);
+            rig.SetFingerCurl(side, 1f);
+        }
+
+        /// <summary>One leg to a foot target (model space) with <see cref="KneePole"/>, over the current pose.</summary>
+        public static void LegTo(CharacterRig rig, int side, Vector3 target, float weight, float hs)
+        {
+            if (weight <= 0f) return;
+            var ul = (CharacterBone)CharacterBones.Side(CharacterBone.LeftUpperLeg, side);
+            rig.SolveTwoBoneHinged(ul, target, KneePole(rig.ModelPosition(ul), target, 0f, hs), weight, Vector3.forward);
+        }
+
         /// <summary>
         /// Overwrites the rig with the attack pose. <paramref name="hs"/> = rig height / 2.3 (design scale). The root offset / turn
         /// is NOT applied here (the caller moves Graphics/Model); limb targets are converted from attack space with it.
@@ -346,8 +428,7 @@ namespace LightMMORPG.Characters
                 Quaternion clavicle = rig.GetModelRotation(sh);
                 rig.SetModelRotation(ua, clavicle); rig.SetModelRotation(ua + 1, clavicle); rig.SetModelRotation(ua + 2, clavicle);
                 Vector3 shoulder = rig.ModelPosition(ua);
-                Vector3 pole = shoulder + chest * (new Vector3(side * 0.5f, -0.7f, -0.25f) * hs);
-                rig.SolveTwoBoneHinged(ua, fist, pole, 1f, Vector3.back);
+                rig.SolveTwoBoneHinged(ua, fist, ElbowPole(rig, side, shoulder, fist, chest, hs), 1f, Vector3.back);
                 float twist = side < 0 ? P.TwistL : P.TwistR;
                 Vector3 fore = (rig.ModelPosition(ua + 2) - rig.ModelPosition(ua + 1)).normalized;
                 Quaternion roll = Quaternion.AngleAxis(twist * 0.5f, fore);
@@ -365,8 +446,7 @@ namespace LightMMORPG.Characters
                 float fy = (side < 0 ? P.FootYawL : P.FootYawR) - P.RootYaw, fp = side < 0 ? P.FootPitchL : P.FootPitchR;
                 rig.SetModelRotation(ul, H); rig.SetModelRotation(ul + 1, H); rig.SetModelRotation(ul + 2, H);
                 Vector3 foot = ToModel(t);
-                Vector3 pole = foot + Quaternion.AngleAxis(fy, Vector3.up) * (new Vector3(0f, 0f, 0.9f) * hs) + new Vector3(0f, 0.55f, 0f) * hs;
-                rig.SolveTwoBoneHinged(ul, foot, pole, 1f, Vector3.forward);
+                rig.SolveTwoBoneHinged(ul, foot, KneePole(rig.ModelPosition(ul), foot, fy, hs), 1f, Vector3.forward);
                 Quaternion planted = Quaternion.AngleAxis(fy, Vector3.up) * Quaternion.AngleAxis(fp, Vector3.right);
                 Quaternion lifted = rig.GetModelRotation(ul + 1) * Quaternion.AngleAxis(fp, Vector3.right);
                 float lift = AttackMove.Ease(KeyEase.Smooth, Mathf.Clamp01((t.y - 0.2f) / 0.25f));

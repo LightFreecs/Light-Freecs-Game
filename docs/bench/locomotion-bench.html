@@ -492,6 +492,40 @@ function keepOutOfTorso(rig, target) {
   if (k < 1e-6) o.set(0, o.y, rz); else { const s = 1 / Math.sqrt(k); o.x *= s; o.z *= s; }
   return c.add(rot(chest, o));
 }
+// is p inside the torso (the same elliptic cylinder round the spine) grown by room?
+function insideTorso(rig, p, room) {
+  const a = rig.modelPos(B.Hips), b = rig.modelPos(B.Neck), axis = b.clone().sub(a);
+  const u = p.clone().sub(a).dot(axis) / axis.lengthSq();
+  if (u < -0.05 || u > 1.05) return false;
+  const c = a.clone().add(axis.clone().multiplyScalar(u));
+  const o = rot(rig.model[B.Chest].clone().invert(), p.clone().sub(c));
+  return (o.x / (TORSO_SIDE + room)) ** 2 + (o.z / ((o.z >= 0 ? TORSO_FRONT : TORSO_BACK) + room)) ** 2 < 1;
+}
+// NEW (AttackPoseSolver.ElbowPole): elbows aim down, out and a little back in the chest's frame; if that would sink the
+// elbow into the torso (a fist tucked in front of the chest), the elbow swings out to the side until it clears
+function elbowPole(rig, side, shoulder, fist, chest, ua) {
+  const l1 = rig.bindLocal[ua + 1].length(), l2 = rig.bindLocal[ua + 2].length();
+  const to = fist.clone().sub(shoulder), dist = clamp(to.length(), Math.abs(l1 - l2) + 1e-3, l1 + l2 - 1e-3), dir = to.normalize();
+  const perp = v => { const w = v.clone().sub(dir.clone().multiplyScalar(v.dot(dir))); return w.lengthSq() < 1e-6 ? null : w.normalize(); };
+  const out = perp(rot(chest, V(side, -0.25, 0))) || perp(rot(chest, V(0, -1, 0)));
+  const base = perp(rot(chest, V(side * 0.5, -0.7, -0.25))) || out;
+  const angA = Math.acos(clamp((l1 * l1 + dist * dist - l2 * l2) / (2 * l1 * dist), -1, 1));
+  let d = base;
+  for (let t = 0; t <= 1.0001; t += 0.1) {
+    d = base.clone().lerp(out, t).normalize();
+    const elbow = shoulder.clone().add(dir.clone().multiplyScalar(Math.cos(angA) * l1)).add(d.clone().multiplyScalar(Math.sin(angA) * l1));
+    if (!insideTorso(rig, elbow, 0.05)) break;
+  }
+  return shoulder.clone().add(d);
+}
+// NEW (AttackPoseSolver.KneePole): knees bend towards the front of the leg, wherever the foot is (in front, under or kicked up
+// behind); the old pole sat above the hip when the foot was thrown back, and the knee bent the wrong way
+function kneePole(hip, foot, fy) {
+  const dir = foot.clone().sub(hip).normalize(), right = rot(AA(fy, UP), V(1, 0, 0));
+  let n = dir.clone().cross(right);
+  if (n.lengthSq() < 1e-6) n = rot(AA(fy, UP), V(0, 0, 1));
+  return hip.clone().add(foot).multiplyScalar(0.5).add(n.normalize().multiplyScalar(0.5));
+}
 function solvePose(rig, P) {
   const RQ = rootQ(P), RQi = RQ.clone().invert(), RP = V(...P.root.p);
   const toModel = a => rot(RQi, V(...a).sub(RP));
@@ -512,7 +546,7 @@ function solvePose(rig, P) {
     if (state.shoulders) applyClavicle(rig, side, fist.clone().sub(rig.modelPos(ua)));   // NEW: collarbone first, then the arm from it
     rig.setModel(ua, rig.model[sh]); rig.setModel(ua + 1, rig.model[sh]); rig.setModel(ua + 2, rig.model[sh]);
     const shoulder = rig.modelPos(ua);
-    const pole = shoulder.clone().add(rot(chest, V(side * 0.5, -0.7, -0.25)));
+    const pole = elbowPole(rig, side, shoulder, fist, chest, ua);
     rig.solveTwoBone(ua, fist, pole, 1, V(0, 0, -1));
     const fore = rig.modelPos(ua + 2).sub(rig.modelPos(ua + 1)).normalize();
     rig.setModel(ua + 1, mul(AA(A.twist * 0.5, fore), rig.model[ua + 1]));
@@ -523,7 +557,7 @@ function solvePose(rig, P) {
     const L = side < 0 ? P.legL : P.legR, ul = sideBone(B.LeftUpperLeg, side);
     rig.setModel(ul, H); rig.setModel(ul + 1, H); rig.setModel(ul + 2, H);
     const footT = toModel(L.t), fy = L.yaw - P.root.yaw;
-    const pole = footT.clone().add(rot(AA(fy, UP), V(0, 0, 0.9))).add(V(0, 0.55, 0));
+    const pole = kneePole(rig.modelPos(ul), footT, fy);
     rig.solveTwoBone(ul, footT, pole, 1, V(0, 0, 1));
     const planted = mul(AA(fy, UP), AA(L.pitch, RIGHT)), lifted = mul(rig.model[ul + 1], AA(L.pitch, RIGHT));
     const lift = smooth((L.t[1] - 0.2) / 0.25);
@@ -705,6 +739,7 @@ function step(dt) {
     for (const side of [-1, 1]) { const w = rig.modelPos(sideBone(B.LeftHand, side)); basePose[side < 0 ? "armL" : "armR"].t = [w.x, w.y, w.z]; }
   }
   applyAttack(adt);
+  if (window.__fixed) solvePose(rig, window.__fixed);
   syncBones();
   fighter.updateMatrixWorld(true);
   const label = locoW < 0.05 ? (move ? move.name : "Standing") : (runBlend > 0.5 ? "Running" : "Walking");
@@ -855,6 +890,8 @@ requestAnimationFrame(frame);
 // for checking the bench: hold a phase, run at a speed, step and render
 window.__bench = {
   STYLES, MOVES, state, get rig() { return rig; }, sampleGait, pressAttack, buildGaits,
+  // hold a hand-made pose (debug): edit(pose) changes a copy of the rest stance; stays until poseOff()
+  poseOn(edit) { const p = structuredClone(ZERO); edit(p); window.__fixed = p; }, poseOff() { window.__fixed = null; },
   set(gait, shift) { state.gait = gait; shiftHeld = !!shift; syncGait(); },
   hold(p) { freezePhase = p; },
   settle(seconds = 1.5) { for (let t = 0; t < seconds; t += 1 / 60) step(1 / 60); if (camAnim) { camera.position.copy(camAnim.to); controls.target.copy(camAnim.tTo); camAnim = null; } controls.update(); renderer.render(scene, camera); return { v: speedSm, locoW, runBlend, phase }; },
