@@ -45,6 +45,13 @@ Later sessions add to `ProjectBuilder` rather than writing a second builder.
 
 ## Gameplay rules (prototype)
 - Stats: MaxHP 1000, MaxEnergy 100, energy regen 4/s, charge (hold) +30/s while standing still.
+- Power level + aura reserve (`Core/AuraReserve`, owner rule 2026-11-19): every battle (each spawn / respawn) starts at
+  10 % strength (damage dealt × power level) with a full aura reserve (1000, +1.5 % per Ki point). Holding Charge raises the
+  power level +25 %/s (× Ki regen) to 100 %. The reserve never refills during the battle: blast 20, beam 90, surge 120
+  (`AbilityDefinition.auraCost`, later specials via `PlayerStats.ServerTrySpendAura`), and power above 10 % burns
+  10/s × ((power − 10 %) / 90 %)^1.5 (full power ≈ 100 s alone). Empty reserve: no more charging the power level, and
+  exhaustion ramps 0 → 1 over 30 s: strength × (1 − 0.4 e), damage taken × (1 + 0.4 e). HUD: POWER / EXHAUSTED % beside
+  the health bar, AURA bar under guard (aura colour). The charging aura grows with the power level.
 - Movement: walk 2.2 m/s (default), run 8 m/s (hold Shift; was run 8 / sprint 13 until 2026-11-18), jump; flight toggle (fly up/down, no gravity, 11 m/s); dash (burst 25 m/s for 0.18 s, 0.6 s cooldown);
   flash step (instant ~7 m teleport in move dir, 2.5 s cooldown). All tick-based inside prediction.
 - Melee: 4-hit light combo (damage 30/30/40/60, combo window 0.6 s after each hit, last hit knockback), heavy attack
@@ -732,3 +739,9 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     (`PlayerIdentity.Face`), so everyone sees each player's colour. Customize → Body: AURA swatches under the body sliders;
     the menu fighter shows the flame aura while the Body tab is open and recolours it without rebuilding the hero.
   - Verified: headless compile only (owner tests by hand).
+- Power level + aura reserve (2026-11-19; owner: battles start at 10 % strength with a full aura reserve that never
+  recovers, charge up to 100 %, high strength and energy attacks exhaust it, then strength and defence dip): rules under
+  "Gameplay rules". `Core/AuraReserve` (pure, `Tests/EditMode/AuraReserveTests`), `PlayerStats` SyncVars `Power`, `Aura`,
+  `Exhaustion` (server ticks with the motor's Charge input, reset on respawn / `ServerRestore`), damage in
+  `ServerApplyHit` × attacker strength × own exhaustion; `PlayerCombat.CanAfford` / server checks need energy and aura.
+  - Verified: headless compile only (owner tests by hand; the new EditMode tests were not run).

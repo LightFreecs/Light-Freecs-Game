@@ -16,7 +16,8 @@ namespace LightMMORPG.Combat
     /// <summary>
     /// Server-authoritative fighter stats. The server owns the Core pools (<see cref="HealthPool"/>, <see cref="EnergyPool"/>,
     /// <see cref="GuardMeter"/>, <see cref="BuffTimer"/>) and mirrors them into SyncVars every tick; clients only read.
-    /// Energy regen / hold-to-charge (the motor's replicated Charge input), guard recovery, Power Surge, KO → down →
+    /// Energy regen / hold-to-charge (the motor's replicated Charge input; it also raises the power level, <see cref="AuraReserve"/>),
+    /// the aura reserve, guard recovery, Power Surge, KO → down →
     /// respawn and the KO/death score all run here. Name and palette live on <see cref="PlayerIdentity"/>.
     /// </summary>
     public sealed class PlayerStats : NetworkBehaviour
@@ -32,6 +33,12 @@ namespace LightMMORPG.Combat
         public readonly SyncVar<float> Guard = new(CombatConstants.MaxGuard, new SyncTypeSettings(0.1f));
         public readonly SyncVar<bool> GuardBroken = new(false, new SyncTypeSettings(0f));
         public readonly SyncVar<float> SurgeRemaining = new(0f, new SyncTypeSettings(0.25f));
+        /// <summary>Power level (share of full strength, 0.1 at the start of a battle; hold Charge to raise it). See <see cref="AuraReserve"/>.</summary>
+        public readonly SyncVar<float> Power = new(CombatConstants.StartPower, new SyncTypeSettings(0.1f));
+        /// <summary>Aura reserve left (never refills until the next battle / respawn).</summary>
+        public readonly SyncVar<float> Aura = new(CombatConstants.AuraReserve, new SyncTypeSettings(0.1f));
+        /// <summary>0 while there is aura left, then rising to 1: strength and defence sink.</summary>
+        public readonly SyncVar<float> Exhaustion = new(0f, new SyncTypeSettings(0.25f));
         public readonly SyncVar<bool> IsDown = new(false, new SyncTypeSettings(0f));
         public readonly SyncVar<float> DownRemaining = new(0f, new SyncTypeSettings(0.2f));
         public readonly SyncVar<int> Kos = new(0, new SyncTypeSettings(0f));
@@ -52,6 +59,10 @@ namespace LightMMORPG.Combat
         public float MaxHealth => Numbers.MaxHealth(_config.maxHealth);
         public float MaxEnergy => Numbers.MaxEnergy(_config.maxEnergy);
         public float MaxGuard => Numbers.MaxGuard(_config.maxGuard);
+        public float MaxAura => Numbers.MaxAura();
+        /// <summary>Damage dealt multiplier from the power level and exhaustion (synced values, same everywhere).</summary>
+        public float Strength => AuraReserve.Strength(Power.Value, Exhaustion.Value);
+        public bool AuraDepleted => Aura.Value <= 0f;
         /// <summary>"Name  Lv 12" for the HUD (just the name when the level is unknown).</summary>
         public string NameWithLevel => Level.Value > 0 ? DisplayName + "  Lv " + Level.Value : DisplayName;
         public float SurgeDuration => _config.powerSurge != null ? _config.powerSurge.duration : CombatConstants.SurgeDuration;
@@ -61,6 +72,7 @@ namespace LightMMORPG.Combat
         private EnergyPool _energy;
         private GuardMeter _guard;
         private readonly BuffTimer _surge = new();
+        private readonly AuraReserve _aura = new();
         private float _surgeDamageMultiplier = CombatConstants.SurgeDamageMultiplier;
         private bool _surgePausesRegen = true;
         private PlayerStats _lastAttacker;
@@ -130,6 +142,7 @@ namespace LightMMORPG.Combat
             _energy.Configure(MaxEnergy, _config.energyRegenPerSecond * Numbers.EnergyRegenMultiplier,
                 _config.energyChargePerSecond * Numbers.EnergyRegenMultiplier);
             _guard.SetMax(MaxGuard);
+            _aura.SetMax(MaxAura);
             if (Motor != null) Motor.ServerSetStatSpeed(Numbers.SpeedMultiplier);
             PushAll();
             Debug.Log("[Stats] " + DisplayName + " level " + Level.Value + " build " + build + " hp=" + MaxHealth.ToString("F0", CultureInfo.InvariantCulture));
@@ -173,6 +186,7 @@ namespace LightMMORPG.Combat
             if (_surge.Tick(dt)) EndSurge();
             _energy.RegenPaused = _surge.IsActive && _surgePausesRegen;
             _energy.Tick(dt, Motor != null && Motor.IsCharging);
+            _aura.Tick(dt, Motor != null && Motor.IsCharging, CombatConstants.PowerChargePerSecond * Numbers.EnergyRegenMultiplier);
             _guard.Tick(dt, Motor != null && Motor.IsBlocking);
             PushAll();
         }
@@ -184,6 +198,9 @@ namespace LightMMORPG.Combat
             Guard.Value = _guard.Current;
             GuardBroken.Value = _guard.IsBroken;
             SurgeRemaining.Value = _surge.Remaining;
+            Power.Value = _aura.Power;
+            Aura.Value = _aura.Current;
+            Exhaustion.Value = _aura.Exhaustion;
             IsDown.Value = _health.IsKnockedOut;
             DownRemaining.Value = _health.DownRemaining;
         }
@@ -196,6 +213,7 @@ namespace LightMMORPG.Combat
             _health.Reset();
             _energy.Refill();
             _guard.Reset();
+            _aura.Reset();
             PushAll();
         }
 
@@ -207,6 +225,17 @@ namespace LightMMORPG.Combat
         {
             if (!_energy.TrySpend(amount)) return false;
             Energy.Value = _energy.Current;
+            return true;
+        }
+
+        [Server] public bool ServerHasAura(float amount) => _aura.CanSpend(amount);
+
+        /// <summary>Server: spend aura reserve (energy attacks, later specials). False (nothing spent) when there isn't enough.</summary>
+        [Server]
+        public bool ServerTrySpendAura(float amount)
+        {
+            if (!_aura.TrySpend(amount)) return false;
+            Aura.Value = _aura.Current;
             return true;
         }
 
@@ -243,6 +272,9 @@ namespace LightMMORPG.Combat
             // stat builds: attacker's Power, this player's Defense (both exactly 1 without points)
             if (attacker != null) dmgBase *= attacker.Numbers.DamageMultiplier;
             dmgBase *= Numbers.DamageTakenMultiplier;
+            // power level (10 % at the start of a battle, charge to raise it) and exhaustion once the aura is spent
+            if (attacker != null) dmgBase *= attacker._aura.StrengthMultiplier;
+            dmgBase *= _aura.DamageTakenMultiplier;
             bool blocking = Motor != null && Motor.IsBlocking && !_guard.IsBroken;
             DamageResult r = DamageCalculator.Calculate(dmgBase, surging, blocking);
 
@@ -289,6 +321,7 @@ namespace LightMMORPG.Combat
             _health.Reset();
             _energy.Refill();
             _guard.Reset();
+            _aura.Reset(); // a new battle: back to 10 % power, full aura
             EndSurge();
             Vector3 pos = transform.position + Vector3.up;
             var spawner = FindAnyObjectByType<PlayerSpawner>();

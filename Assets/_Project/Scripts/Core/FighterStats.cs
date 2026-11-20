@@ -86,8 +86,10 @@ namespace LightMMORPG.Core
         public float SpeedMultiplier;
         /// <summary>Ki: maximum energy.</summary>
         public float EnergyMultiplier;
-        /// <summary>Ki: passive energy regen and hold-to-charge rate.</summary>
+        /// <summary>Ki: passive energy regen and hold-to-charge rate (energy and power level).</summary>
         public float EnergyRegenMultiplier;
+        /// <summary>Ki: size of the aura reserve (never refills during a battle).</summary>
+        public float AuraMultiplier;
         /// <summary>Defense: damage received (below 1 = tougher).</summary>
         public float DamageTakenMultiplier;
         /// <summary>Defense: size of the guard meter.</summary>
@@ -97,11 +99,12 @@ namespace LightMMORPG.Core
         public readonly float MaxHealth(float baseValue = CombatConstants.MaxHealth) => (float)Math.Round(baseValue * HealthMultiplier);
         public readonly float MaxEnergy(float baseValue = CombatConstants.MaxEnergy) => (float)Math.Round(baseValue * EnergyMultiplier);
         public readonly float MaxGuard(float baseValue = CombatConstants.MaxGuard) => (float)Math.Round(baseValue * GuardMultiplier);
+        public readonly float MaxAura(float baseValue = CombatConstants.AuraReserve) => (float)Math.Round(baseValue * AuraMultiplier);
 
         public static FighterNumbers Base => new()
         {
             DamageMultiplier = 1f, HealthMultiplier = 1f, SpeedMultiplier = 1f, EnergyMultiplier = 1f,
-            EnergyRegenMultiplier = 1f, DamageTakenMultiplier = 1f, GuardMultiplier = 1f,
+            EnergyRegenMultiplier = 1f, AuraMultiplier = 1f, DamageTakenMultiplier = 1f, GuardMultiplier = 1f,
         };
     }
 
@@ -128,6 +131,8 @@ namespace LightMMORPG.Core
         public const float SpeedPerSpeed = 0.0025f;
         public const float EnergyPerKi = 0.01f;
         public const float EnergyRegenPerKi = 0.01f;
+        /// <summary>Aura reserve per Ki point (+30 % at the cap).</summary>
+        public const float AuraPerKi = 0.015f;
         public const float DamageTakenPerDefense = 0.004f;
         public const float GuardPerDefense = 0.01f;
 
@@ -141,7 +146,7 @@ namespace LightMMORPG.Core
             StatId.Power => "Every attack hits harder",
             StatId.Vitality => "More health",
             StatId.Speed => "Run, fly and dash faster",
-            StatId.Ki => "More energy, faster regen",
+            StatId.Ki => "More energy and aura reserve, faster charge",
             _ => "Take less damage, bigger guard",
         };
 
@@ -202,6 +207,7 @@ namespace LightMMORPG.Core
                 SpeedMultiplier = 1f + SpeedPerSpeed * P(StatId.Speed),
                 EnergyMultiplier = 1f + EnergyPerKi * P(StatId.Ki),
                 EnergyRegenMultiplier = 1f + EnergyRegenPerKi * P(StatId.Ki),
+                AuraMultiplier = 1f + AuraPerKi * P(StatId.Ki),
                 DamageTakenMultiplier = 1f - DamageTakenPerDefense * P(StatId.Defense),
                 GuardMultiplier = 1f + GuardPerDefense * P(StatId.Defense),
             };

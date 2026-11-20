@@ -114,7 +114,9 @@ namespace LightMMORPG.Combat
         }
 
         public float EnergyCost(AttackKind k) => Def(k) != null ? Def(k).energyCost : 0f;
-        public bool CanAfford(AttackKind k) => _stats != null && _stats.Energy.Value >= EnergyCost(k);
+        public float AuraCost(AttackKind k) => Def(k) != null ? Def(k).auraCost : 0f;
+        /// <summary>Enough energy and enough aura reserve (energy attacks spend both; the aura never comes back this battle).</summary>
+        public bool CanAfford(AttackKind k) => _stats != null && _stats.Energy.Value >= EnergyCost(k) && _stats.Aura.Value >= AuraCost(k);
 
         // ---------------- owner input ----------------
 
@@ -281,8 +283,9 @@ namespace LightMMORPG.Combat
         private void CmdBlast(Vector3 aim)
         {
             var d = Def(AttackKind.Blast);
-            if (d == null || !_stats.ServerCanAct() || !_stats.ServerHasEnergy(d.energyCost) || !_blastCd.TryUse(Now)) return;
+            if (d == null || !_stats.ServerCanAct() || !_stats.ServerHasEnergy(d.energyCost) || !_stats.ServerHasAura(d.auraCost) || !_blastCd.TryUse(Now)) return;
             _stats.ServerTrySpendEnergy(d.energyCost);
+            _stats.ServerTrySpendAura(d.auraCost);
             aim = SafeDir(aim, _motor.Forward);
             Vector3 origin = ServerChest + aim * 0.8f;
             _projectiles.Add(new Projectile { Pos = origin, Dir = aim, Speed = d.speed, Life = d.duration, Radius = d.radius, Damage = d.damageMax });
@@ -303,12 +306,13 @@ namespace LightMMORPG.Combat
             var d = Def(AttackKind.Beam);
             bool wasCharging = _serverBeamCharging;
             _serverBeamCharging = false;
-            if (d == null || !wasCharging || !_stats.ServerCanAct() || !_stats.ServerHasEnergy(d.energyCost) || !_beamCd.TryUse(Now))
+            if (d == null || !wasCharging || !_stats.ServerCanAct() || !_stats.ServerHasEnergy(d.energyCost) || !_stats.ServerHasAura(d.auraCost) || !_beamCd.TryUse(Now))
             {
                 RpcBeamCharge(false);
                 return;
             }
             _stats.ServerTrySpendEnergy(d.energyCost);
+            _stats.ServerTrySpendAura(d.auraCost);
             aim = SafeDir(aim, _motor.Forward);
             float charge = CombatMath.ValidateCharge(claimedCharge, (float)(Now - _serverBeamStart), d.maxChargeTime);
             float damage = d.DamageForCharge(charge);
@@ -345,8 +349,9 @@ namespace LightMMORPG.Combat
         private void CmdSurge()
         {
             var d = Def(AttackKind.Surge);
-            if (d == null || !_stats.ServerCanAct() || _stats.SurgeActive || !_stats.ServerHasEnergy(d.energyCost) || !_surgeCd.IsReadyAt(Now)) return;
+            if (d == null || !_stats.ServerCanAct() || _stats.SurgeActive || !_stats.ServerHasEnergy(d.energyCost) || !_stats.ServerHasAura(d.auraCost) || !_surgeCd.IsReadyAt(Now)) return;
             _stats.ServerTrySpendEnergy(d.energyCost);
+            _stats.ServerTrySpendAura(d.auraCost);
             if (_stats.ServerActivateSurge(d)) _surgeCd.TryUse(Now);
             RpcSwing((byte)AttackKind.Surge, 0);
         }

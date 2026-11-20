@@ -16,6 +16,7 @@ MonoBehaviour:
   displayName: Energy Blast
   kind: 0
   energyCost: 10
+  auraCost: 20
   cooldown: 0.35
   damageMin: 45
   damageMax: 45

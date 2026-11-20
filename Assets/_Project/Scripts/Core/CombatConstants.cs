@@ -51,6 +51,24 @@ namespace LightMMORPG.Core
         public const float BeamMaxDamage = 400f;
         public const float BeamMaxChargeTime = 1.5f;
 
+        // Power level + aura reserve (AuraReserve): battles start weak with a full reserve that never refills
+        /// <summary>Power level at the start of every battle (share of full strength).</summary>
+        public const float StartPower = 0.1f;
+        /// <summary>Power level gained per second of holding Charge (10 % → 100 % in 3.6 s; Ki speeds it up).</summary>
+        public const float PowerChargePerSecond = 0.25f;
+        /// <summary>Aura reserve with no Ki points.</summary>
+        public const float AuraReserve = 1000f;
+        /// <summary>Aura burnt per second while at 100 % power (none at the start level).</summary>
+        public const float AuraUpkeepAtFullPower = 10f;
+        /// <summary>Upkeep curve: (power above the start level)^this, so half power costs ~1/3 of full.</summary>
+        public const float AuraUpkeepExponent = 1.5f;
+        /// <summary>Seconds after the reserve runs dry until exhaustion is total.</summary>
+        public const float ExhaustRampTime = 30f;
+        /// <summary>Strength lost at total exhaustion (0.4 = down to 60 %).</summary>
+        public const float ExhaustStrengthLoss = 0.4f;
+        /// <summary>Extra damage taken at total exhaustion (0.4 = 140 %).</summary>
+        public const float ExhaustDefenseLoss = 0.4f;
+
         // KO
         public const float KnockedOutDuration = 5f;
     }

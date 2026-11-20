@@ -16,6 +16,7 @@ MonoBehaviour:
   displayName: Charged Beam
   kind: 1
   energyCost: 35
+  auraCost: 90
   cooldown: 4
   damageMin: 150
   damageMax: 400

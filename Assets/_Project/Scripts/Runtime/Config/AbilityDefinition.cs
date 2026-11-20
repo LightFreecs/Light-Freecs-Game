@@ -20,6 +20,8 @@ namespace LightMMORPG.Config
 
         [Header("Cost")]
         public float energyCost;
+        [Tooltip("Aura reserve spent per use. The reserve never refills during a battle (see Core.AuraReserve).")]
+        public float auraCost;
         public float cooldown;
 
         [Header("Damage")]

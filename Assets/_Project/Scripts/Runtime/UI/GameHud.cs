@@ -43,8 +43,8 @@ namespace LightMMORPG.UI
 
         private Canvas _canvas;
         private RectTransform _safe, _plates;
-        private UiKit.Bar _hp, _energy, _guard, _surge, _targetHp;
-        private Text _targetName, _center, _feed, _score;
+        private UiKit.Bar _hp, _energy, _guard, _surge, _aura, _targetHp;
+        private Text _targetName, _center, _feed, _score, _power;
         private RectTransform _abilityRow, _targetRoot;
         private readonly List<AbilityIcon> _icons = new();
         private readonly Dictionary<PlayerStats, Plate> _plateMap = new();
@@ -84,6 +84,10 @@ namespace LightMMORPG.UI
             _energy = UiKit.CreateBar(_safe, "Energy", tl, tl, new Vector2(30f, -70f), new Vector2(380f, 22f), EnergyColor, 15);
             _guard = UiKit.CreateBar(_safe, "Guard", tl, tl, new Vector2(30f, -98f), new Vector2(260f, 14f), GuardColor);
             _surge = UiKit.CreateBar(_safe, "Surge", tl, tl, new Vector2(300f, -98f), new Vector2(110f, 14f), new Color(1f, 0.5f, 0.15f));
+            // aura reserve (never refills this battle) in the player's aura colour, and the power level beside the health bar
+            var auraC = Characters.PlayerAppearance.AuraColors[Characters.PlayerAppearance.Load().auraColor].color;
+            _aura = UiKit.CreateBar(_safe, "Aura", tl, tl, new Vector2(30f, -118f), new Vector2(380f, 18f), auraC, 12);
+            _power = UiKit.Text(UiKit.Rect("Power", _safe, tl, tl, new Vector2(500f, -30f), new Vector2(300f, 34f)), "", 24, TextAnchor.MiddleLeft, Color.white);
 
             // abilities
             var bc = new Vector2(0.5f, 0f);
@@ -155,6 +159,19 @@ namespace LightMMORPG.UI
             _guard.FillImage.color = me.GuardBroken.Value ? HpLow : GuardColor;
             _surge.Root.gameObject.SetActive(me.SurgeActive);
             if (me.SurgeActive) _surge.Set(me.SurgeRemaining.Value / Mathf.Max(0.01f, me.SurgeDuration));
+            _aura.Set(me.Aura.Value / Mathf.Max(1f, me.MaxAura));
+            _aura.Label.text = me.AuraDepleted ? "AURA SPENT" : "AURA " + Mathf.CeilToInt(me.Aura.Value);
+            int strength = Mathf.RoundToInt(me.Strength * 100f);
+            if (me.Exhaustion.Value > 0f)
+            {
+                _power.text = "EXHAUSTED  " + strength + "%";
+                _power.color = HpLow;
+            }
+            else
+            {
+                _power.text = "POWER  " + strength + "%" + (me.Motor != null && me.Motor.IsCharging && me.Power.Value < 1f ? "  CHARGING" : "");
+                _power.color = me.Power.Value >= 0.999f ? new Color(1f, 0.85f, 0.3f) : Color.white;
+            }
 
             // abilities (PC)
             _abilityRow.gameObject.SetActive(!PlayerInputReader.TouchMode);

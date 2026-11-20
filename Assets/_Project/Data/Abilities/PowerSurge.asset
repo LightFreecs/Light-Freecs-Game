@@ -16,6 +16,7 @@ MonoBehaviour:
   displayName: Power Surge
   kind: 2
   energyCost: 50
+  auraCost: 120
   cooldown: 20
   damageMin: 0
   damageMax: 0

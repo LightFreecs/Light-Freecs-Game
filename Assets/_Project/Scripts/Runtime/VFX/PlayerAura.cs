@@ -43,7 +43,9 @@ namespace LightMMORPG.VFX
                 _aura.Height = _rig.Height;
             }
             _aura.Visible = surge || charging;
-            _aura.Size = surge ? 1f : 0.85f;
+            // charging: the aura grows with the power level (10 % → 100 %); Power Surge: full size
+            float power = _stats != null ? Mathf.InverseLerp(Core.CombatConstants.StartPower, 1f, _stats.Power.Value) : 1f;
+            _aura.Size = surge ? 1f : Mathf.Lerp(0.72f, 0.92f, power);
         }
     }
 }

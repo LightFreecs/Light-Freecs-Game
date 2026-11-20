@@ -71,6 +71,7 @@ namespace LightMMORPG.EditorTools
             blast.displayName = "Energy Blast";
             blast.kind = AbilityKind.Projectile;
             blast.energyCost = 10f;
+            blast.auraCost = 20f;
             blast.cooldown = 0.35f;
             blast.damageMin = 45f;
             blast.damageMax = 45f;
@@ -89,6 +90,7 @@ namespace LightMMORPG.EditorTools
             beam.displayName = "Charged Beam";
             beam.kind = AbilityKind.Beam;
             beam.energyCost = 35f;
+            beam.auraCost = 90f;
             beam.cooldown = 4f;
             beam.damageMin = CombatConstants.BeamMinDamage;
             beam.damageMax = CombatConstants.BeamMaxDamage;
@@ -107,6 +109,7 @@ namespace LightMMORPG.EditorTools
             surge.displayName = "Power Surge";
             surge.kind = AbilityKind.Buff;
             surge.energyCost = 50f;
+            surge.auraCost = 120f;
             surge.cooldown = 20f;
             surge.damageMin = 0f;
             surge.damageMax = 0f;
