@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using FishNet.Object;
 using LightMMORPG.Cameras;
+using LightMMORPG.Characters;
 using LightMMORPG.Config;
 using LightMMORPG.Core;
 using LightMMORPG.Input;
@@ -17,6 +18,9 @@ namespace LightMMORPG.Combat
     /// direction (lock-on target if any, else camera forward). The server validates (alive, not stunned, cooldowns,
     /// energy, combo window), resolves hits (sphere overlap / simulated projectile / spherecast beam) through
     /// <see cref="PlayerStats.ServerApplyHit"/>, and tells other clients to play the same visuals (<c>ExcludeOwner</c>).
+    /// The server half of every attack is a public <c>Server*</c> method, so a server-driven fighter (the sparring
+    /// <see cref="TrainingDummy"/>) attacks through exactly the same rules. Melee hits report where the striking fist / foot
+    /// really is at the move's impact frame (<see cref="StrikePoint"/>), so the victim reacts where it was hit.
     /// </summary>
     public sealed class PlayerCombat : NetworkBehaviour
     {
@@ -48,6 +52,8 @@ namespace LightMMORPG.Combat
         private readonly List<Projectile> _projectiles = new();
         private readonly Collider[] _overlap = new Collider[16];
         private readonly HashSet<PlayerStats> _hitSet = new();
+        private readonly AttackPose _strikePose = new();
+        private CharacterController _cc;
 
         // ---- visuals ----
         private BeamChargeVisual _chargeVisual;
@@ -63,6 +69,7 @@ namespace LightMMORPG.Combat
             _motor = GetComponent<PlayerMotor>();
             _input = GetComponent<PlayerInputReader>();
             _anim = GetComponent<PlayerProceduralAnimator>();
+            _cc = GetComponent<CharacterController>();
             _combo = new ComboChain(_config.lightComboDamage, _config.comboWindow);
             _heavyCd = new Cooldown(_config.heavyCooldown);
             _blastCd = new Cooldown(Def(AttackKind.Blast)?.cooldown ?? 0.35f);
@@ -238,10 +245,18 @@ namespace LightMMORPG.Combat
             return d.normalized;
         }
 
-        [ServerRpc]
-        private void CmdLight(Vector3 aim)
+        [ServerRpc] private void CmdLight(Vector3 aim) => ServerLight(aim);
+        [ServerRpc] private void CmdHeavy(Vector3 aim) => ServerHeavy(aim);
+        [ServerRpc] private void CmdBlast(Vector3 aim) => ServerBlast(aim);
+        [ServerRpc] private void CmdBeamCharge(bool on) => ServerBeamCharge(on);
+        [ServerRpc] private void CmdBeamFire(Vector3 aim, float claimedCharge) => ServerBeamFire(aim, claimedCharge);
+        [ServerRpc] private void CmdSurge() => ServerSurge();
+
+        /// <summary>Server: the next light combo hit towards aim. False when it was refused (down, stunned, too soon).</summary>
+        [Server]
+        public bool ServerLight(Vector3 aim)
         {
-            if (!_stats.ServerCanAct() || Now < _nextLightServer) return;
+            if (!_stats.ServerCanAct() || Now < _nextLightServer) return false;
             _nextLightServer = Now + CombatMath.LightAttackInterval * 0.8; // small slack for jitter
             aim = SafeDir(aim, _motor.Forward);
             ComboHit hit = _combo.RegisterHit(Now);
@@ -250,22 +265,54 @@ namespace LightMMORPG.Combat
                 ? CombatMath.Knockback(aim, CombatMath.FinisherKnockbackSpeed, CombatMath.FinisherLift)
                 : CombatMath.Knockback(aim, CombatMath.LightKnockbackSpeed, 0f);
             float stun = hit.Knockback ? _config.heavyHitstun : _config.lightHitstun;
-            MeleeHits(aim, hit.Damage, stun, kb, kind);
+            MeleeHits(aim, hit.Damage, stun, kb, kind, StrikePoint(aim, hit.Index));
             RpcSwing((byte)AttackKind.Light, (byte)hit.Index);
+            return true;
         }
 
-        [ServerRpc]
-        private void CmdHeavy(Vector3 aim)
+        [Server]
+        public bool ServerHeavy(Vector3 aim)
         {
-            if (!_stats.ServerCanAct() || !_heavyCd.TryUse(Now)) return;
+            if (!_stats.ServerCanAct() || !_heavyCd.TryUse(Now)) return false;
             aim = SafeDir(aim, _motor.Forward);
             _combo.Reset();
+            // the heavy swing lands at belly height in front (PlayerProceduralAnimator's heavy target)
             MeleeHits(aim, _config.heavyDamage, _config.heavyHitstun,
-                CombatMath.Knockback(aim, CombatMath.HeavyKnockbackSpeed, CombatMath.HeavyLift), HitKind.Heavy);
+                CombatMath.Knockback(aim, CombatMath.HeavyKnockbackSpeed, CombatMath.HeavyLift), HitKind.Heavy, ToWorld(aim, new Vector3(0.1f, 1.1f, 1.5f)));
             RpcSwing((byte)AttackKind.Heavy, 0);
+            return true;
         }
 
-        private void MeleeHits(Vector3 aim, float damage, float stun, Vector3 knockback, HitKind kind)
+        /// <summary>Design height scale of this fighter (2.3 m = 1), from the capsule (set from the hero's height everywhere).</summary>
+        private float DesignScale => _cc != null ? _cc.height / 2.3f : 1f;
+
+        private Vector3 ToWorld(Vector3 aim, Vector3 designLocal)
+        {
+            Vector3 flat = new Vector3(aim.x, 0f, aim.z);
+            Quaternion yaw = flat.sqrMagnitude > 1e-6f ? Quaternion.LookRotation(flat) : transform.rotation;
+            return transform.position + yaw * (designLocal * DesignScale);
+        }
+
+        /// <summary>
+        /// Where the striking fist / foot of combo hit <paramref name="comboIndex"/> is at the move's impact frame (world), from
+        /// this fighter's moveset: a jab lands on the head, a body blow on the belly, a kick on the legs.
+        /// </summary>
+        public Vector3 StrikePoint(Vector3 aim, int comboIndex)
+        {
+            var set = _anim != null ? _anim.Moveset : BasicMovesets.Get(BasicMovesets.DefaultId);
+            var m = set.Move(comboIndex);
+            m.Sample(m.Hit, _strikePose);
+            Vector3 limb = m.Limb switch
+            {
+                StrikeLimb.HandL => _strikePose.ArmL,
+                StrikeLimb.HandR => _strikePose.ArmR,
+                StrikeLimb.FootL => _strikePose.LegL,
+                _ => _strikePose.LegR,
+            };
+            return ToWorld(aim, _strikePose.RootRotation * limb + _strikePose.RootPos);
+        }
+
+        private void MeleeHits(Vector3 aim, float damage, float stun, Vector3 knockback, HitKind kind, Vector3 strike)
         {
             Vector3 center = CombatMath.MeleeHitCenter(ServerChest, aim, _config.meleeHitForwardOffset, _motor.IsFlying);
             int n = Physics.OverlapSphereNonAlloc(center, _config.meleeHitRadius, _overlap, ~0, QueryTriggerInteraction.Ignore);
@@ -274,34 +321,39 @@ namespace LightMMORPG.Combat
             {
                 var target = _overlap[i].GetComponentInParent<PlayerStats>();
                 if (target == null || target == _stats || !_hitSet.Add(target)) continue;
-                Vector3 point = _overlap[i].ClosestPoint(center);
+                // the spot on the victim nearest the striking fist / foot (so the reaction matches where it landed)
+                Vector3 point = _overlap[i].ClosestPoint(strike);
                 target.ServerApplyHit(_stats, damage, stun, knockback, point, kind);
             }
         }
 
-        [ServerRpc]
-        private void CmdBlast(Vector3 aim)
+        [Server]
+        public bool ServerBlast(Vector3 aim)
         {
             var d = Def(AttackKind.Blast);
-            if (d == null || !_stats.ServerCanAct() || !_stats.ServerHasEnergy(d.energyCost) || !_stats.ServerHasAura(d.auraCost) || !_blastCd.TryUse(Now)) return;
+            if (d == null || !_stats.ServerCanAct() || !_stats.ServerHasEnergy(d.energyCost) || !_stats.ServerHasAura(d.auraCost) || !_blastCd.TryUse(Now)) return false;
             _stats.ServerTrySpendEnergy(d.energyCost);
             _stats.ServerTrySpendAura(d.auraCost);
             aim = SafeDir(aim, _motor.Forward);
             Vector3 origin = ServerChest + aim * 0.8f;
             _projectiles.Add(new Projectile { Pos = origin, Dir = aim, Speed = d.speed, Life = d.duration, Radius = d.radius, Damage = d.damageMax });
             RpcBlast(origin, aim);
+            return true;
         }
 
-        [ServerRpc]
-        private void CmdBeamCharge(bool on)
+        [Server]
+        public void ServerBeamCharge(bool on)
         {
             _serverBeamCharging = on;
             _serverBeamStart = Now;
             RpcBeamCharge(on);
         }
 
-        [ServerRpc]
-        private void CmdBeamFire(Vector3 aim, float claimedCharge)
+        /// <summary>Server: whether a beam is being charged (server-driven fighters).</summary>
+        public bool ServerBeamCharging => _serverBeamCharging;
+
+        [Server]
+        public void ServerBeamFire(Vector3 aim, float claimedCharge)
         {
             var d = Def(AttackKind.Beam);
             bool wasCharging = _serverBeamCharging;
@@ -345,15 +397,16 @@ namespace LightMMORPG.Combat
             return len;
         }
 
-        [ServerRpc]
-        private void CmdSurge()
+        [Server]
+        public bool ServerSurge()
         {
             var d = Def(AttackKind.Surge);
-            if (d == null || !_stats.ServerCanAct() || _stats.SurgeActive || !_stats.ServerHasEnergy(d.energyCost) || !_stats.ServerHasAura(d.auraCost) || !_surgeCd.IsReadyAt(Now)) return;
+            if (d == null || !_stats.ServerCanAct() || _stats.SurgeActive || !_stats.ServerHasEnergy(d.energyCost) || !_stats.ServerHasAura(d.auraCost) || !_surgeCd.IsReadyAt(Now)) return false;
             _stats.ServerTrySpendEnergy(d.energyCost);
             _stats.ServerTrySpendAura(d.auraCost);
             if (_stats.ServerActivateSurge(d)) _surgeCd.TryUse(Now);
             RpcSwing((byte)AttackKind.Surge, 0);
+            return true;
         }
 
         // ---------------- server projectile simulation ----------------

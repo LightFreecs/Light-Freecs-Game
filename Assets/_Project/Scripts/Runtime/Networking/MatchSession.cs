@@ -201,7 +201,7 @@ namespace LightMMORPG.Networking
         {
             var d = TrainingDummy.Instance;
             if (d == null) return;
-            d.Mode = d.Mode == TrainingDummy.Behaviour.Stand ? TrainingDummy.Behaviour.Block : TrainingDummy.Behaviour.Stand;
+            d.CycleMode();
         }
 
         private void SetPause(bool open)
@@ -242,7 +242,7 @@ namespace LightMMORPG.Networking
             bool serverOnly = b.StartedMode == NetMode.Server;
             if (connecting) _connectingText.text = training ? "Starting training…" : b.StartedMode == NetMode.Host ? "Starting match…" : "Connecting to " + b.Address + "…";
             if (training && TrainingDummy.Instance != null)
-                _dummyLabel.text = TrainingDummy.Instance.Mode == TrainingDummy.Behaviour.Block ? "Dummy: Blocking" : "Dummy: Standing";
+                _dummyLabel.text = TrainingDummy.Instance.ModeLabel;
             if (serverOnly) _serverText.text = "Server running · port " + b.Port + " · " + nm.ServerManager.Clients.Count + " connected";
 
             bool escape = Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame;

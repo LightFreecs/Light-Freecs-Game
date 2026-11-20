@@ -756,3 +756,22 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     timer. Target: mirrored bar top-right (name, Lv, HP, guard). Name plates use the slanted bar. Scoreboard moved under
     the target (top-right, y -150).
   - Verified: headless compile only (owner tests by hand).
+- Sparring dummy + hit reactions where the hit lands (2026-11-19; owner: "hook up training ai so it fights back ... i want
+  the reactions to match where the fist/attack are being hit").
+  - `PlayerCombat`: the server half of every attack is a public `Server*` method (`ServerLight/Heavy/Blast/BeamCharge/
+    BeamFire/Surge`; the `[ServerRpc]` Cmds just call them), so a server-driven fighter attacks through the same rules.
+    Melee hits report the spot on the victim nearest the striking limb at the move's impact frame (`StrikePoint`: the
+    attacker's moveset sampled at `AttackMove.Hit`, limb + root offset, scaled by the capsule height); heavy = its belly-
+    height target. Default "Rush": straights land at chest height (1.55 of 2.3), the body blow at the gut (1.2).
+  - `TrainingDummy` modes Spar (default) / Stand / Block (pause menu cycles them). Spar: closes in (runs when far, weaves),
+    2-4 hit combos 0.32 s apart (30 % end in a heavy) with 0.7-1.5 s gaps, guards (30 %) or backs off (15 %) after taking a
+    hit, energy blasts from 5-20 m, powers up with Charge when 7+ m away (to ~70 %, sometimes full; keeps 25 % aura; the
+    player rushing within 4 m breaks it off), 0.18-0.35 s reaction time. Heals only when the player is 10+ m away; leash
+    16 m.
+  - `PlayerProceduralAnimator.PlayHitReaction(point, push, strength, big)` (from `CombatFx.OnHit`, every hit kind): on
+    top of the finished pose, snaps in over 0.05 s and eases out (0.38 s, 0.62 s big). By the struck height on the victim
+    rig: head (> 80 %) head/neck snap away; chest (60-80 %) spine bends + twists away about cross(joint → point, push),
+    head lags; gut (40-60 %) folds over the fist (chest / upper chest forward), hips knocked back, knees give; legs buckle
+    the struck knee, hips drop, lean over. Blocked 0.3, light 1, blast 1.2, finisher / heavy 1.6, beam 1.8; big hits flash
+    a Surprised face. `RotateSubtree` keeps the rig's cached model rotations right.
+  - Verified: headless compile only (owner tests by hand).

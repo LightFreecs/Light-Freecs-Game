@@ -64,6 +64,10 @@ namespace LightMMORPG.Player
         private ToonFaceAnimator _face;
         private float _faceLookup;
 
+        // hit reactions: where the hit landed and which way it pushed (rig space), how hard, how long ago
+        private float _hrT = 9f, _hrDur = 0.4f, _hrStrength;
+        private Vector3 _hrPoint, _hrPush;
+
         /// <summary>The basic-attack moveset this fighter plays (default <see cref="BasicMovesets.DefaultId"/>; later picked from an inventory).</summary>
         public BasicMoveset Moveset => BasicMovesets.Get(_movesetId);
         public void SetMoveset(string id) => _movesetId = string.IsNullOrEmpty(id) ? BasicMovesets.DefaultId : id;
@@ -248,6 +252,7 @@ namespace LightMMORPG.Player
             AttackPoseSolver.LegTo(rig, 1, f * hs, wf, hs);
             _hs = hs;
             ApplyMove(rig, hs);
+            ApplyHitReaction(rig, hs);
         }
 
         // ------------------------------------------------------------------ basic attacks (movesets)
@@ -424,6 +429,105 @@ namespace LightMMORPG.Player
         /// <summary>Forward lunge/punch pose (0..1 strength), decays quickly.</summary>
         public void PlayLunge(float strength = 1f) => _lunge = Mathf.Max(_lunge, strength);
 
+        /// <summary>
+        /// Got hit at <paramref name="worldPoint"/> (where the fist / foot / blast landed), pushed along
+        /// <paramref name="worldPush"/> (attacker → victim). The body reacts around that spot: a head shot snaps the head back
+        /// and away, a chest hit rocks and twists the upper body away, a gut punch folds the fighter over the fist with the
+        /// hips knocked back, a leg kick buckles that knee. Hits off-centre twist the body away from the struck side.
+        /// <paramref name="strength"/> ~1 for a jab, ~1.6 for a finisher / heavy; blocked hits are small.
+        /// </summary>
+        public void PlayHitReaction(Vector3 worldPoint, Vector3 worldPush, float strength, bool big)
+        {
+            var rig = _proc != null ? _proc.Rig : null;
+            if (rig == null) return;
+            var rt = rig.transform;
+            _hrPoint = rt.InverseTransformPoint(worldPoint);
+            worldPush.y = 0f;
+            Vector3 push = worldPush.sqrMagnitude > 1e-6f ? rt.InverseTransformDirection(worldPush.normalized) : Vector3.back;
+            push.y = 0f;
+            _hrPush = push.sqrMagnitude > 1e-6f ? push.normalized : Vector3.back;
+            _hrStrength = strength;
+            _hrDur = big ? 0.62f : 0.38f;
+            _hrT = 0f;
+            if (big && strength > 0.5f)
+            {
+                if (_face == null) _face = _model.GetComponentInChildren<ToonFaceAnimator>();
+                if (_face != null && !_face.Holding) _face.Play(ToonExpression.Surprised);
+            }
+        }
+
+        /// <summary>Rotates a bone and everything below it by q (model space), keeping the rig's cached model rotations right.</summary>
+        private static void RotateSubtree(CharacterRig rig, CharacterBone root, Quaternion q)
+        {
+            int r = (int)root;
+            for (int i = r; i < CharacterBones.Count; i++)
+            {
+                bool inside = i == r;
+                for (int pi = CharacterBones.Parent(i); !inside && pi >= r; pi = CharacterBones.Parent(pi)) inside = pi == r;
+                if (inside) rig.SetModelRotation((CharacterBone)i, q * rig.GetModelRotation((CharacterBone)i));
+            }
+        }
+
+        /// <summary>Tips a bone (and what hangs off it) away from the impact: about cross(joint → hit point, push).</summary>
+        private void BendAway(CharacterRig rig, CharacterBone bone, float degrees)
+        {
+            if (Mathf.Abs(degrees) < 0.01f) return;
+            Vector3 r = _hrPoint - rig.ModelPosition(bone);
+            Vector3 axis = Vector3.Cross(r, _hrPush);
+            if (axis.sqrMagnitude < 1e-6f) axis = Vector3.Cross(Vector3.up, _hrPush);
+            RotateSubtree(rig, bone, Quaternion.AngleAxis(degrees, axis.normalized));
+        }
+
+        /// <summary>The hit reaction on top of the finished pose (see <see cref="PlayHitReaction"/>): snaps in, eases out.</summary>
+        private void ApplyHitReaction(CharacterRig rig, float hs)
+        {
+            if (_hrT >= _hrDur) return;
+            float rise = Smooth01(0f, 0.05f, _hrT);
+            float fall = 1f - Smooth01(0.05f, _hrDur, _hrT);
+            float w = Mathf.Min(rise, fall) * _hrStrength;
+            if (w <= 0.001f) return;
+            float h = _hrPoint.y / Mathf.Max(0.5f, rig.Height);   // 0 feet .. 1 top of the head
+            float side = Mathf.Clamp(_hrPoint.x / (0.18f * rig.Height), -1f, 1f);
+            Vector3 away = Vector3.Cross(Vector3.up, _hrPush).normalized;   // tips the top of the body along the push
+            if (h > 0.8f)
+            {
+                // head shot: the head snaps back and away, the neck and chest follow a little
+                BendAway(rig, CharacterBone.UpperChest, 5f * w);
+                BendAway(rig, CharacterBone.Neck, 12f * w);
+                BendAway(rig, CharacterBone.Head, 24f * w);
+            }
+            else if (h > 0.6f)
+            {
+                // chest: the upper body rocks and twists away, the head lags (whiplash)
+                BendAway(rig, CharacterBone.Spine, 6f * w);
+                BendAway(rig, CharacterBone.Chest, 9f * w);
+                BendAway(rig, CharacterBone.UpperChest, 10f * w);
+                RotateSubtree(rig, CharacterBone.Head, Quaternion.AngleAxis(-8f * w, away));
+            }
+            else if (h > 0.4f)
+            {
+                // gut: folds over the fist (upper body forward, towards the attacker), hips knocked back, head comes forward
+                var hips = rig[CharacterBone.Hips];
+                hips.localPosition += _hrPush * (0.06f * hs * w);
+                RotateSubtree(rig, CharacterBone.Spine, Quaternion.AngleAxis(side * -_hrPush.z * 10f * w, Vector3.up));
+                RotateSubtree(rig, CharacterBone.Chest, Quaternion.AngleAxis(-14f * w, away));
+                RotateSubtree(rig, CharacterBone.UpperChest, Quaternion.AngleAxis(-10f * w, away));
+                RotateSubtree(rig, CharacterBone.Head, Quaternion.AngleAxis(-6f * w, away));
+                for (int s = -1; s <= 1; s += 2)
+                    RotateSubtree(rig, (CharacterBone)CharacterBones.Side(CharacterBone.LeftLowerLeg, s), Quaternion.AngleAxis(10f * w, Vector3.right));
+            }
+            else
+            {
+                // legs: the struck knee buckles, the hips drop and the body leans over that side
+                int s = side < 0f ? -1 : 1;
+                var hips = rig[CharacterBone.Hips];
+                hips.localPosition += Vector3.down * (0.05f * hs * w);
+                BendAway(rig, (CharacterBone)CharacterBones.Side(CharacterBone.LeftUpperLeg, s), 10f * w);
+                RotateSubtree(rig, (CharacterBone)CharacterBones.Side(CharacterBone.LeftLowerLeg, s), Quaternion.AngleAxis(24f * w, Vector3.right));
+                RotateSubtree(rig, CharacterBone.Spine, Quaternion.AngleAxis(-s * 7f * w, Vector3.forward));
+            }
+        }
+
         /// <summary>Knocked back along a world direction (strength ~1).</summary>
         public void PlayRecoil(Vector3 worldDirection, float strength = 1f)
         {
@@ -462,6 +566,7 @@ namespace LightMMORPG.Player
             _stretch = Mathf.Lerp(_stretch, dashing ? 1f : 0f, 1f - Mathf.Exp(-(dashing ? 30f : 8f) * dt));
             _lunge = Mathf.MoveTowards(_lunge, 0f, dt * 5f);
             _recoil = Vector3.MoveTowards(_recoil, Vector3.zero, dt * 3f);
+            _hrT += dt;
 
             _phase += dt * Mathf.Lerp(2.2f, 9f, Mathf.Clamp01(planar / 13f));
             UpdateLocomotion(dt, local, planar, flying, dashing, stunned);

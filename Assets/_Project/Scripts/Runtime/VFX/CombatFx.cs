@@ -35,6 +35,9 @@ namespace LightMMORPG.VFX
                 victimAnim.HitStop(stop);
                 Vector3 dir = attacker != null ? victim.transform.position - attacker.transform.position : -victim.transform.forward;
                 victimAnim.PlayRecoil(dir, blocked ? 0.4f : (big ? 1.4f : 0.8f));
+                // the body reacts where the fist / foot / blast landed (the server reports the struck spot)
+                float react = blocked ? 0.3f : kind == HitKind.Beam ? 1.8f : big ? 1.6f : kind == HitKind.Blast ? 1.2f : 1f;
+                victimAnim.PlayHitReaction(point, dir, react, big && !blocked);
             }
             if (attackerAnim != null && kind != HitKind.Blast && kind != HitKind.Beam) attackerAnim.HitStop(stop);
 
