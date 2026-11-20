@@ -4,6 +4,10 @@ name: Build iOS
 # Step 2 compiles it on a macOS runner and packages an UNSIGNED .ipa.
 # Install it with a sideloading tool (e.g. Sideloadly / AltStore), which
 # re-signs it with your own Apple ID. No paid Apple Developer account needed.
+#
+# Speed (2026-11-20, was ~17 min): IL2CPP "faster (smaller) builds" for iOS (less generated C++), ccache on the
+# macOS compile (the engine / package C++ barely changes between builds, so warm builds mostly hit the cache),
+# `xcodebuild build` instead of `archive`, no dSYM / index store, and no pointless Docker-image cleanup.
 
 on:
   workflow_dispatch:
@@ -20,6 +24,8 @@ jobs:
           dotnet: true
           haskell: true
           large-packages: false
+          docker-images: false   # we pull Unity's image right after; deleting the preinstalled ones only costs time
+          swap-storage: false
 
       - uses: actions/checkout@v4
         with:
@@ -66,22 +72,54 @@ jobs:
           tar -xzf ios-xcode-project.tar.gz -C build/iOS
           ls build/iOS
 
-      - name: xcodebuild (no code signing)
+      # ccache: the C++ of the engine, FishNet and unchanged game code compiles to the same objects every build
+      - uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-ios-${{ github.run_id }}
+          restore-keys: ccache-ios-
+
+      - name: Install ccache
         run: |
+          HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 brew install ccache
+          mkdir -p "$RUNNER_TEMP/cc"
+          printf '#!/bin/sh\nexec ccache "%s" "$@"\n' "$(xcrun -f clang)" > "$RUNNER_TEMP/cc/clang"
+          printf '#!/bin/sh\nexec ccache "%s" "$@"\n' "$(xcrun -f clang++)" > "$RUNNER_TEMP/cc/clang++"
+          chmod +x "$RUNNER_TEMP/cc/clang" "$RUNNER_TEMP/cc/clang++"
+          ccache --zero-stats
+          ccache --show-stats | head -5
+
+      - name: xcodebuild (no code signing)
+        env:
+          CCACHE_DIR: ~/.ccache
+          CCACHE_MAXSIZE: 3G
+          CCACHE_BASEDIR: ${{ github.workspace }}
+          CCACHE_SLOPPINESS: clang_index_store,file_stat_matches,include_file_ctime,include_file_mtime,ivfsoverlay,pch_defines,modules,system_headers,time_macros
+          CCACHE_FILECLONE: "true"
+          CCACHE_DEPEND: "true"
+          CCACHE_INODECACHE: "true"
+        run: |
+          export CCACHE_DIR="$HOME/.ccache"
           cd build/iOS/LightMMORPG
           xcodebuild -project Unity-iPhone.xcodeproj \
             -scheme Unity-iPhone \
             -configuration Release \
             -sdk iphoneos \
-            -archivePath "$PWD/LightMMORPG.xcarchive" \
+            -derivedDataPath "$PWD/dd" \
+            -quiet \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
-            archive
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+            DEBUG_INFORMATION_FORMAT=dwarf COMPILER_INDEX_STORE_ENABLE=NO \
+            CC="$RUNNER_TEMP/cc/clang" CXX="$RUNNER_TEMP/cc/clang++" \
+            LD="$(xcrun -f clang)" LDPLUSPLUS="$(xcrun -f clang++)" \
+            build
+          ccache --show-stats
 
       - name: Package unsigned .ipa
         run: |
           cd build/iOS/LightMMORPG
-          APP=$(find LightMMORPG.xcarchive/Products/Applications -maxdepth 1 -name "*.app" | head -n 1)
-          if [ -z "$APP" ]; then echo "No .app found in archive"; exit 1; fi
+          APP=$(find dd/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -n 1)
+          if [ -z "$APP" ]; then echo "No .app found in the build products"; ls -R dd/Build/Products | head -50; exit 1; fi
           mkdir -p Payload
           cp -R "$APP" Payload/
           # Unity ships UnityRuntime.framework pre-signed; its leftover _CodeSignature files make
