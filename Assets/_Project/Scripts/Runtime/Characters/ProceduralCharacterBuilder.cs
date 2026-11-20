@@ -133,6 +133,9 @@ namespace LightMMORPG.Characters
 
             var rig = root.AddComponent<CharacterRig>();
             rig.Init(bones, gen.Height, gen.ArmDirL, gen.ArmDirR, gen.PalmL, gen.PalmR, gen.Aura);
+            var skin = new System.Collections.Generic.List<int>();
+            for (int i = 0; i < gen.Slots.Count; i++) if (gen.Slots[i].Kind == SlotKind.Skin) skin.Add(i);
+            rig.SetSurfaces(smr, skin.ToArray(), faceSlot);
             rig.ApplyRestPose();
             if (gen.FaceRig != null && faceSlot >= 0)
                 root.AddComponent<ToonFaceAnimator>().Init(smr, faceSlot, gen.FaceRig, bones[(int)B.Head], gen.HeadUnitOrigin, gen.HeadUnitScale);
@@ -229,6 +232,7 @@ namespace LightMMORPG.Characters
             mesh.SetNormals(g.Normals);
             mesh.SetUVs(0, g.Uvs);
             mesh.SetUVs(1, g.FaceCoords);
+            mesh.SetUVs(2, g.Positions);   // the bind pose again, so skin effects (bruises) stick to the body as it moves
             mesh.SetTangents(g.Tangents);
             mesh.boneWeights = g.Weights;
             mesh.subMeshCount = g.Triangles.Length;

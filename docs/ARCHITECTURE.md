@@ -776,3 +776,18 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     a Surprised face. `RotateSubtree` keeps the rig's cached model rotations right.
   - Verified: headless compile only (owner tests by hand).
   - Head shots (2026-11-20; owner: "have some of those hits aim for the head too"): Rush's left straight and right power straight aim at the face (fist target 1.95 of 2.3, torso pitch 15 / 18 -> 8 / 10 so the reach stays the same; the arm angles ~20 deg up because the anime head sits high). Combo zones: head, chest, gut, head. Attack Bench jab updated to match (it has no power straight; the game replaced its kick finisher).
+- Bruises + swollen eye (2026-11-20; owner: "add bruising when hit and at low hp ... close one of the eyes when heavily
+  injured"). `VFX/InjuryVisuals` (clients, from `OnHitFeedback` + synced health):
+  - Clean hits (not blocked) leave a bruise where they landed: the reported point → nearest bone segment → bind pose
+    (identity bind rotations; pulled 25 % towards the bone, the point sits on the hit capsule). Up to 8 per fighter, hits
+    within 8 cm darken the same one (+70 % of the hit), the weakest is replaced. Light 0.35, blast 0.4, big 0.6.
+  - Fighter meshes carry the bind pose in UV2 (`ProceduralCharacterBuilder.Upload`); `LightMMORPG/ToonLit` reads
+    `_Bruises[8]` (xyz bind spot, w strength) + `_BruiseParams` (count, radius 8.5 cm × height / 2.3, strength boost) from a
+    MaterialPropertyBlock on the skin slots only (`CharacterRig.Body / SkinSlots / FaceSlot`): mottled red-purple tint.
+  - Head hits (above 80 % of the height) bruise the face instead. `LightMMORPG/ToonFace` `_Injury` (face bruises, swollen
+    eye, which eye): purple swelling round one eye (the same eye on every client, from the object id), a bruise on the
+    other cheek; lids are tinted too.
+  - Low health: below 60 % every bruise darkens (× 1 + low) and the face bruises come up; under 30 % health that eye
+    swells shut (fully at 15 %, a slit left; the upper lid ignores expressions and blinks); shut while knocked out.
+    Back to full health (respawn, dummy refill) clears it all.
+  - Verified: headless compile only (owner tests by hand).

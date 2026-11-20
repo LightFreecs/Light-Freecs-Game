@@ -78,6 +78,17 @@ namespace LightMMORPG.Characters
         public Color AuraColor => _auraColor;
         public Transform this[CharacterBone b] => _bones[(int)b];
         public Transform[] Bones => _bones;
+        /// <summary>The fighter's one skinned renderer, its skin material slots (ToonLit) and its face slot (ToonFace, -1 = none).</summary>
+        public SkinnedMeshRenderer Body { get; private set; }
+        public int[] SkinSlots { get; private set; } = System.Array.Empty<int>();
+        public int FaceSlot { get; private set; } = -1;
+
+        internal void SetSurfaces(SkinnedMeshRenderer body, int[] skinSlots, int faceSlot)
+        {
+            Body = body;
+            SkinSlots = skinSlots ?? System.Array.Empty<int>();
+            FaceSlot = faceSlot;
+        }
 
         private readonly Quaternion[] _model = new Quaternion[CharacterBones.Count];
 

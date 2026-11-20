@@ -92,6 +92,8 @@ Shader "LightMMORPG/ToonFace"
             float4 _BrowXform;
             float4 _BrowBend0;
             float4 _BrowBend1;
+            // injuries (InjuryVisuals): x = face bruises 0..1, y = one eye swollen shut 0..1, z = which eye (+1 / -1)
+            float4 _Injury;
         CBUFFER_END
 
         TEXTURE2D(_BaseMap);
@@ -291,6 +293,26 @@ Shader "LightMMORPG/ToonFace"
                 float W = max(_EyeGeo.z, 1e-4);
                 float2 e = float2((side * hp.x - _EyeGeo.x) / W + 0.5, (hp.y - _EyeGeo.y) / W - _EyeGeo.w);
                 float px = max(max(fwidth(e.x), fwidth(e.y)), 1e-5);   // eye widths per screen pixel
+                // injuries: a swollen purple bruise round one eye, a bruise on the other cheek (lids too, so they look puffy)
+                float hurtSide = _Injury.z >= 0.0 ? 1.0 : -1.0;
+                if (_Injury.x > 0.001 || _Injury.y > 0.001)
+                {
+                    half k;
+                    if (side == hurtSide)
+                    {
+                        float2 d = (e - float2(0.5, 0.3)) / float2(0.95, 0.85);
+                        k = saturate(1.0 - dot(d, d)) * saturate(_Injury.y * 0.9 + _Injury.x * 0.4);
+                    }
+                    else
+                    {
+                        float2 d = (e - float2(0.45, -0.9)) / float2(0.75, 0.5);
+                        k = saturate(1.0 - dot(d, d)) * _Injury.x * 0.85;
+                    }
+                    k *= front * (0.75 + 0.25 * sin(hp.x * 61.0 + hp.y * 47.0) * sin(hp.y * 83.0 - hp.x * 29.0));
+                    half3 tint = lerp(half3(1, 1, 1), half3(0.62, 0.36, 0.5), saturate(k * 1.5));
+                    color *= tint;
+                    skin *= tint;
+                }
                 half4 em = half4(0, 0, 0, 0);
                 if (_EyeLive > 0.5)
                 {
@@ -302,7 +324,9 @@ Shader "LightMMORPG/ToonFace"
                 // blink / expression lids: skin slides over the white from the top and the bottom, with a line at the edge
                 if (_EyeLive > 0.5 && em.r > 0.0)
                 {
-                    float h = em.b * 1.5, w = em.g, lb = saturate(_EyeAnim.z), lt = saturate(_EyeAnim.y) * (1.0 - lb);
+                    // the swollen eye's upper lid stays nearly shut (a slit is left), whatever the expression
+                    float lidTop = side == hurtSide ? max(saturate(_EyeAnim.y), saturate(_Injury.y) * 0.9) : saturate(_EyeAnim.y);
+                    float h = em.b * 1.5, w = em.g, lb = saturate(_EyeAnim.z), lt = lidTop * (1.0 - lb);
                     half m = em.r * front;
                     if (lb > 0.002)
                     {

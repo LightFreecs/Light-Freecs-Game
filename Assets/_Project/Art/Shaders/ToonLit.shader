@@ -44,6 +44,10 @@ Shader "LightMMORPG/ToonLit"
             half4 _EmissionColor;
             half4 _OutlineColor;
             float _OutlineWidth;
+            // bruises (InjuryVisuals, per renderer through a MaterialPropertyBlock): xyz = spot in the body's bind pose
+            // (mesh UV2), w = strength 0..1; params x = count, y = radius, z = strength boost (low health)
+            float4 _Bruises[8];
+            float4 _BruiseParams;
         CBUFFER_END
 
         TEXTURE2D(_BaseMap);
@@ -78,6 +82,7 @@ Shader "LightMMORPG/ToonLit"
                 float4 positionOS : POSITION;
                 float3 normalOS   : NORMAL;
                 float2 uv         : TEXCOORD0;
+                float3 bindPos    : TEXCOORD2;   // fighters: the vertex in the bind pose (bruises stick to the skin)
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -88,6 +93,7 @@ Shader "LightMMORPG/ToonLit"
                 float3 positionWS : TEXCOORD1;
                 half3  normalWS   : TEXCOORD2;
                 half   fogFactor  : TEXCOORD3;
+                float3 bindPos    : TEXCOORD4;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
                 UNITY_VERTEX_OUTPUT_STEREO
             };
@@ -104,7 +110,29 @@ Shader "LightMMORPG/ToonLit"
                 o.normalWS = TransformObjectToWorldNormal(input.normalOS);
                 o.uv = TRANSFORM_TEX(input.uv, _BaseMap);
                 o.fogFactor = ComputeFogFactor(pos.positionCS.z);
+                o.bindPos = input.bindPos;
                 return o;
+            }
+
+            float BruiseHash(float3 p) { p = frac(p * 0.3183099 + 0.1); p *= 17.0; return frac(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+
+            // how bruised this skin point is (0..1): soft blotches round each hit spot, mottled so they read as bruises
+            half Bruise(float3 bp)
+            {
+                float r = max(_BruiseParams.y, 1e-4);
+                float k = 0.0;
+                [unroll] for (int i = 0; i < 8; i++)
+                {
+                    float d = distance(bp, _Bruises[i].xyz) / r;
+                    float on = step((float)i + 0.5, _BruiseParams.x);   // only the first count spots
+                    k = max(k, on * _Bruises[i].w * saturate(1.15 - d * d));
+                }
+                float3 q = bp / r * 2.2;
+                float3 c = floor(q), f = frac(q);
+                f = f * f * (3.0 - 2.0 * f);
+                float n = lerp(lerp(lerp(BruiseHash(c), BruiseHash(c + float3(1, 0, 0)), f.x), lerp(BruiseHash(c + float3(0, 1, 0)), BruiseHash(c + float3(1, 1, 0)), f.x), f.y),
+                               lerp(lerp(BruiseHash(c + float3(0, 0, 1)), BruiseHash(c + float3(1, 0, 1)), f.x), lerp(BruiseHash(c + float3(0, 1, 1)), BruiseHash(c + float3(1, 1, 1)), f.x), f.y), f.z);
+                return (half)saturate(k * _BruiseParams.z * (0.7 + 0.6 * n));
             }
 
             // Lit (1) / shade (0) factor for a given N.L, hard edge softened by _RampSmooth.
@@ -117,6 +145,13 @@ Shader "LightMMORPG/ToonLit"
             {
                 UNITY_SETUP_INSTANCE_ID(input);
                 half4 albedo = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv) * _BaseColor;
+                if (_BruiseParams.x > 0.5)
+                {
+                    // fresh bruise: deep red-purple at the centre, bluish at the edge
+                    half b = Bruise(input.bindPos);
+                    half3 tint = lerp(half3(0.72, 0.5, 0.66), half3(0.55, 0.28, 0.42), b);
+                    albedo.rgb = lerp(albedo.rgb, albedo.rgb * tint, saturate(b * 1.6));
+                }
                 half3 n = normalize(input.normalWS);
                 half3 v = GetWorldSpaceNormalizeViewDir(input.positionWS);
 
