@@ -1,0 +1,631 @@
+<title>Toon Head</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: a sticky 3D stage on top (the head is the page), one compact control panel under it. Same look as the other LightMMORPG benches. */
+:root{
+  --bg:#eef1f6; --panel:#ffffff; --ink:#1b2130; --muted:#5d6678; --line:#d8dde7; --chip:#f3f5f9;
+  --accent:#f26b1d; --accent-ink:#ffffff; --accent-soft:#fde3d2;
+  --stage-a:#cfe2f4; --stage-b:#f4e8dc; --guide:#3b6fd8;
+  --f-display:"M PLUS Rounded 1c","Segoe UI",system-ui,sans-serif;
+  --f-body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11141b; --panel:#191e29; --ink:#e7ebf3; --muted:#9aa3b6; --line:#2b3242; --chip:#222838;
+  --accent:#ff8a3d; --accent-ink:#1a1006; --accent-soft:#3a2416;
+  --stage-a:#1d2a40; --stage-b:#33283a; --guide:#7aa2ff; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11141b; --panel:#191e29; --ink:#e7ebf3; --muted:#9aa3b6; --line:#2b3242; --chip:#222838;
+  --accent:#ff8a3d; --accent-ink:#1a1006; --accent-soft:#3a2416;
+  --stage-a:#1d2a40; --stage-b:#33283a; --guide:#7aa2ff; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45}
+*{box-sizing:border-box}
+button,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.stage{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;height:clamp(340px,60svh,640px);overflow:hidden;border-bottom:1px solid var(--line);
+  background:radial-gradient(120% 90% at 50% 20%,var(--stage-b),var(--stage-a))}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--stage-a)}
+.stage canvas{display:block;width:100%;height:100%;touch-action:none}
+.hud{position:absolute;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.hud.tl{top:10px;left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px))}
+.hud.bl{bottom:10px;left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px))}
+.pill{border:1px solid color-mix(in srgb,var(--ink) 14%,transparent);background:color-mix(in srgb,var(--panel) 85%,transparent);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:600;white-space:nowrap}
+.pill.num{font-family:var(--f-mono);font-weight:500;font-variant-numeric:tabular-nums}
+.views{display:flex;gap:6px;flex-wrap:wrap}
+.views button{border:1px solid color-mix(in srgb,var(--ink) 14%,transparent);background:color-mix(in srgb,var(--panel) 85%,transparent);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border-radius:999px;padding:7px 14px;font-weight:600;font-size:13px}
+.views button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.panel{padding-block:18px 44px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:20px;max-width:880px;margin:0 auto}
+h1{font-family:var(--f-display);font-weight:800;font-size:26px;margin:0;text-wrap:balance;letter-spacing:.01em}
+h2{font-family:var(--f-display);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+p{margin:0;max-width:65ch}
+.lede{color:var(--muted)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--chip);border-radius:12px;padding:9px 14px;font-weight:600}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+.primary{border:0;background:var(--accent);color:var(--accent-ink);border-radius:12px;padding:10px 16px;font-weight:700}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px;min-width:0}
+.card dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0}
+.card dt{color:var(--muted)}
+.card dd{margin:0;font-family:var(--f-mono);font-variant-numeric:tabular-nums;text-align:right}
+ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:12px;background:var(--chip);padding:10px;font-family:var(--f-mono);font-size:11.5px;resize:vertical}
+.status{color:var(--muted);font-size:13px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+
+<div class="stage" id="stage">
+  <canvas id="c" aria-label="3D view of the head. Drag to turn it, pinch or scroll to zoom."></canvas>
+  <div class="hud tl">
+    <span class="pill num" id="counts">…</span>
+    <span class="pill" id="drag-hint">Drag to turn · pinch to zoom</span>
+  </div>
+  <div class="hud bl">
+    <div class="views" role="group" aria-label="Camera view">
+      <button id="v-front" aria-pressed="true">Front</button>
+      <button id="v-three">¾</button>
+      <button id="v-side">Side</button>
+      <button id="v-back">Back</button>
+    </div>
+  </div>
+</div>
+
+<main class="panel">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <h1>Toon Head</h1>
+    <p class="lede">A smooth anime head shaded the way modern cel-shaded action games do it: the face shadow comes from a painted shadow map instead of the 3D shape, eyes are painted textures, shadows are warm and tinted, and the outlines take the colour of what they outline. Our own face, built to carry hair and outfits next.</p>
+  </div>
+
+  <section>
+    <h2>Light</h2>
+    <div class="row" style="align-items:center">
+      <input type="range" id="light" min="-180" max="180" step="1" value="35" aria-label="Light direction (degrees around the head)" style="flex:1;min-width:180px;accent-color:var(--accent)">
+      <span class="pill num" id="light-val" style="min-width:64px;text-align:center">35°</span>
+      <button class="chip" id="sweep" aria-pressed="false">Sweep</button>
+    </div>
+    <p class="status" style="margin-top:8px">Move the light around and watch the face: the shadow edge slides across in clean, drawn shapes, with a small nose shadow first, instead of following the bumps of the mesh.</p>
+  </section>
+
+  <section>
+    <h2>Eye colour</h2>
+    <div class="row" role="group" aria-label="Eye colour" id="pick-eye"></div>
+  </section>
+
+  <section>
+    <h2>Look at it as</h2>
+    <div class="row" role="group" aria-label="Display">
+      <button class="chip" id="t-outline" aria-pressed="true">Outlines</button>
+      <button class="chip" id="t-map" aria-pressed="false">Show face shadow map</button>
+      <button class="chip" id="t-wire" aria-pressed="false">Show polygons</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>What makes the look</h2>
+    <ul>
+      <li><b>Painted face shadow.</b> The face ignores its own bumps. A shadow map, painted for this face, says how far the light has to turn before each spot goes dark, so the shadow always lands in a clean shape: nose shadow first, then a curve that wraps the cheek, then half the face.</li>
+      <li><b>Smooth, simple face.</b> Almost no nose or mouth in the mesh; the face reads from its outline, the painted features and the shadow.</li>
+      <li><b>Painted eyes.</b> Lid line with lashes and a flick, a gradient iris (dark at the top, glowing at the bottom), pupil and two highlights, laid on the face surface.</li>
+      <li><b>Two tones with warm shadows.</b> Lit skin and a rosy shadow tone with a soft, narrow edge, plus a faint rim light on the edges.</li>
+      <li><b>Coloured outlines.</b> A reddish brown on skin instead of black, thinner across the face than around the head.</li>
+    </ul>
+  </section>
+
+  <section class="grid">
+    <div class="card"><h2>Mesh</h2><dl id="mesh-stats"></dl></div>
+    <div class="card"><h2>Next</h2><ul><li>Hair, with a highlight band</li><li>Painted face shadow for the other head shapes</li><li>Same shader in the game (Unity)</li></ul></div>
+  </section>
+</main>
+
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+
+// ================================================================== head shape (head height crown→chin = 1)
+// The rounded Youth shape, softened: smooth cheeks, small soft chin. Rows: y, half width, front depth, back depth, front squareness.
+const H = {
+  // measured from your sketches: front view (width at each height) + side view (front and back at each height)
+  cranium: { y: 0.50, r: 0.50, w: 0.395, f: 0.450, b: 0.440, p: 2.6 },   // p > 2: flatter, boxier top
+  face: [
+    [0.50, 0.393, 0.470, 0.440, 2.20],
+    [0.40, 0.380, 0.500, 0.425, 2.60],
+    [0.33, 0.362, 0.505, 0.400, 2.80],
+    [0.26, 0.338, 0.500, 0.355, 2.80],
+    [0.19, 0.300, 0.488, 0.330, 2.70],
+    [0.135, 0.245, 0.474, 0.300, 2.50],
+    [0.07, 0.205, 0.456, 0.280, 2.40],
+    [0.00, 0.150, 0.430, 0.270, 2.30],
+  ],
+  jawCorner: { a: 0.50, y: 0.17 }, chinRound: 0.90, napeY: 0.26,
+  neck: { top: 0.00, nape: 0.22, bottom: -0.17, w: 0.160, f: 0.190, b: 0.190, z: -0.03 },
+  cheek: { y: 0.27, h: 0.07, a: 0.24, spread: 0.11, amount: 0.004 },
+  nose: { y: 0.40, h: 0.022, w: 0.018, len: 0.045 },
+  eye: { x: 0.170, y: 0.500, w: 0.235, h: 0.146 },
+  brow: { y: 0.615, w: 0.200, h: 0.052 },
+  mouth: { y: 0.200, w: 0.095, h: 0.034 },
+  ear: { y: 0.352, z: -0.06, su: 1.22, sv: 1.28, flare: 36 },
+};
+// Front-view outline measured from your front drawing: half width at each height (head height = 1).
+// Domed top, widest at the temples, sides tapering fairly straight to a low jaw corner, short straight lines to the chin.
+const FRONT_SIL = [[0.00, 0.015], [0.171, 0.288], [0.288, 0.318], [0.418, 0.344], [0.559, 0.371], [0.724, 0.376], [0.80, 0.360], [0.876, 0.330], [0.93, 0.300], [0.97, 0.250], [0.995, 0.140]];
+const LAYOUT = { cols: 72, craniumRows: 16, faceRows: 40, neckRows: 4, frontBias: 1.35 };
+
+const lerp = (a, b, t) => a + (b - a) * t;
+const clamp01 = t => Math.min(1, Math.max(0, t));
+const smooth = t => { t = clamp01(t); return t * t * (3 - 2 * t); };
+
+function faceAt(y) {
+  const cr = H.cranium;
+  if (y > cr.y) { const q = Math.pow(Math.max(0, 1 - Math.pow(Math.abs((y - cr.y) / cr.r), cr.p || 2)), 1 / (cr.p || 2)); return [cr.w * q, cr.f * q, cr.b * q, 2]; }
+  const T = H.face;
+  if (y <= T[T.length - 1][0]) return T[T.length - 1].slice(1);
+  let i = 0;
+  while (i < T.length - 2 && y < T[i + 1][0]) i++;
+  const p0 = T[Math.max(0, i - 1)], p1 = T[i], p2 = T[i + 1], p3 = T[Math.min(T.length - 1, i + 2)];
+  const t = (p1[0] - y) / (p1[0] - p2[0]), out = [];
+  for (let k = 1; k < 5; k++) { const a = p0[k], b = p1[k], c = p2[k], d = p3[k]; out.push(0.5 * ((2 * b) + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (-a + 3 * b - 3 * c + d) * t * t * t)); }
+  return out;
+}
+function section(theta, w, f, b, k) {
+  const s = Math.sin(theta), c = Math.cos(theta);
+  if (c >= 0) { const e = 2 / k; return [w * Math.sign(s) * Math.pow(Math.abs(s), e), f * Math.pow(c, e)]; }
+  return [w * s, b * c];
+}
+function jawY(a) {
+  const { a: ca, y: cy } = H.jawCorner;
+  if (a <= ca) { const t = a / ca, r = H.chinRound; return cy * (Math.sqrt(t * t + r * r) - r) / (Math.sqrt(1 + r * r) - r); }
+  return lerp(cy, H.napeY, smooth((a - ca) / (1 - ca)));
+}
+const neckTopY = a => lerp(H.neck.top, H.neck.nape, smooth(a));
+const neckPoint = (theta, y) => { const n = H.neck, s = Math.sin(theta), c = Math.cos(theta); return [n.w * s, y, n.z + (c >= 0 ? n.f * c : n.b * c)]; };
+function surface(theta, y) {
+  const [w, f, b, k] = faceAt(y);
+  let [x, z] = section(theta, w, f, b, k);
+  const ch = H.cheek, a = Math.abs(theta) / Math.PI;
+  const bulge = ch.amount * Math.exp(-(((y - ch.y) / ch.h) ** 2)) * Math.exp(-(((a - ch.a) / ch.spread) ** 2));
+  const len = Math.hypot(x, z) || 1;
+  x += x / len * bulge; z += z / len * bulge;
+  // the nose is only a soft bump: the painted shadow does the rest
+  const n = H.nose;
+  if (z > 0) z += n.h * Math.exp(-((x / n.w) ** 2)) * Math.exp(-(((y - n.y) / n.len) ** 2)) * (y < n.y ? 0.7 : 1);
+  return [x, y, z];
+}
+
+// ================================================================== mesh (head + neck + ears) with face mapping
+function buildHead() {
+  const pos = [], uvF = [], mask = [], idx = [];
+  const add = (p, theta) => {
+    pos.push(...p);
+    // face coordinates for the painted shadow map: u = across the face (-1 far edge … 1), v = height
+    const a = Math.abs(theta || 0);
+    const m = (1 - smooth((a - 0.75) / 0.45)) * smooth((p[1] + 0.02) / 0.08) * (1 - smooth((p[1] - 0.66) / 0.10));
+    uvF.push(Math.sin(theta || 0), p[1]); mask.push(theta === undefined ? 0 : m);
+    return pos.length / 3 - 1;
+  };
+  const N = LAYOUT.cols, thetas = [];
+  for (let j = 0; j < N; j++) { const u = -1 + 2 * j / N; thetas.push(Math.PI * Math.sign(u) * Math.pow(Math.abs(u), LAYOUT.frontBias)); }
+  const rows = [], cr = H.cranium;
+  const crown = add([0, cr.y + cr.r, 0]);
+  for (let i = 1; i <= LAYOUT.craniumRows; i++) {
+    const y = cr.y + cr.r * Math.cos((i / LAYOUT.craniumRows) * Math.PI / 2);
+    rows.push(thetas.map(t => add(surface(t, y), t)));
+  }
+  for (let i = 1; i <= LAYOUT.faceRows; i++) {
+    const s = i / LAYOUT.faceRows;
+    rows.push(thetas.map(t => add(surface(t, lerp(cr.y, jawY(Math.abs(t) / Math.PI), s)), t)));
+  }
+  const jaw = rows[rows.length - 1].map(i => pos.slice(i * 3, i * 3 + 3));
+  for (const t of [0.25, 0.5, 0.75])
+    rows.push(thetas.map((th, j) => {
+      const n = neckPoint(th, neckTopY(Math.abs(th) / Math.PI)), J = jaw[j];
+      return add([lerp(J[0], n[0], t), lerp(J[1], n[1], t) - 0.010 * Math.sin(Math.PI * t), lerp(J[2], n[2], t)]);
+    }));
+  const neckStart = pos.length / 3;
+  for (let i = 0; i <= LAYOUT.neckRows; i++) {
+    const t = i / LAYOUT.neckRows;
+    rows.push(thetas.map(th => add(neckPoint(th, lerp(neckTopY(Math.abs(th) / Math.PI), H.neck.bottom, t)))));
+  }
+  const bottom = add([0, H.neck.bottom, H.neck.z]);
+  for (let j = 0; j < N; j++) idx.push(crown, rows[0][j], rows[0][(j + 1) % N]);
+  for (let r = 0; r < rows.length - 1; r++)
+    for (let j = 0; j < N; j++) {
+      const a = rows[r][j], b = rows[r][(j + 1) % N], c = rows[r + 1][(j + 1) % N], d = rows[r + 1][j];
+      idx.push(a, d, c, a, c, b);
+    }
+  const last = rows[rows.length - 1];
+  for (let j = 0; j < N; j++) idx.push(bottom, last[(j + 1) % N], last[j]);
+  // Front-view shape (blended in by the shader as the camera faces the face): seen from the front, the lower face
+  // follows straight lines from the cheek (y = FRONT_JAW.y) down to the chin, the way the face is drawn from the
+  // front. From the side the base shape (jaw running back to a corner under the ear) shows instead.
+  const count = pos.length / 3, morph = new Array(count * 3).fill(0);
+  const bin = y => Math.round(y * 200), S = new Map();
+  for (let i = 0; i < neckStart; i++) {
+    const x = Math.abs(pos[i * 3]), y = pos[i * 3 + 1];
+    S.set(bin(y), Math.max(S.get(bin(y)) || 0, x));
+  }
+  const target = y => {
+    const T = FRONT_SIL;
+    if (y <= T[0][0]) return T[0][1];
+    for (let k = 1; k < T.length; k++) if (y <= T[k][0]) return lerp(T[k - 1][1], T[k][1], (y - T[k - 1][0]) / (T[k][0] - T[k - 1][0]));
+    return T[T.length - 1][1];
+  };
+  const silhouette = y => Math.max(S.get(bin(y) - 1) || 0, S.get(bin(y)) || 0, S.get(bin(y) + 1) || 0);
+  for (let i = 0; i < neckStart; i++) {
+    const x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2];
+    if (y > 0.995) continue;
+    const cur = silhouette(y);
+    if (cur < 1e-3) continue;
+    const scale = Math.min(1.45, Math.max(0.10, target(y) / cur));
+    // lower face: only the front and sides move (the back of the jaw stays put); skull: everything moves together
+    const wz = lerp(smooth((z + 0.3) / 0.3), 1, smooth((y - 0.25) / 0.15));
+    morph[i * 3] = x * (scale - 1) * wz;
+  }
+  return { pos, uvF, mask, idx, morph };
+}
+
+// smooth ears: a lofted, rounded shell on each side
+function buildEars() {
+  const pos = [], idx = [];
+  const outline = [[0.085,0.000],[0.104,0.030],[0.100,0.064],[0.076,0.091],[0.036,0.103],[-0.008,0.096],[-0.048,0.074],
+                   [-0.078,0.046],[-0.094,0.018],[-0.086,-0.003],[-0.046,-0.009],[0.000,-0.011],[0.046,-0.009]];
+  const dense = [];
+  for (let i = 0; i < outline.length; i++) {               // Catmull-Rom for a smooth rim
+    const p0 = outline[(i - 1 + outline.length) % outline.length], p1 = outline[i], p2 = outline[(i + 1) % outline.length], p3 = outline[(i + 2) % outline.length];
+    for (let k = 0; k < 3; k++) { const t = k / 3; dense.push([0, 1].map(j => 0.5 * ((2 * p1[j]) + (-p0[j] + p2[j]) * t + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * t * t + (-p0[j] + 3 * p1[j] - 3 * p2[j] + p3[j]) * t * t * t))); }
+  }
+  const rings = [[1.0, -0.015], [1.0, 0.035], [0.96, 0.048], [0.80, 0.044], [0.62, 0.032], [0.40, 0.020]];
+  const SU = H.ear.su, SV = H.ear.sv, cU = 0.004 * SU, cV = 0.046 * SV, tau = -12 * Math.PI / 180, flare = Math.tan(H.ear.flare * Math.PI / 180);
+  const up = [0, Math.cos(tau), Math.sin(tau)], back = [0, Math.sin(tau), -Math.cos(tau)];
+  for (const side of [-1, 1]) {
+    const base = pos.length / 3;
+    const place = (u, v, d) => {
+      const y = H.ear.y + u * up[1] + v * back[1], z = H.ear.z + u * up[2] + v * back[2];
+      const [w, , b] = faceAt(y), hx = w * Math.sqrt(Math.max(0, 1 - (Math.min(0, z) / b) ** 2));
+      const lift = 0.3 + 0.7 * smooth((v + 0.01) / (0.07 * SV));
+      return [side * (hx - 0.004 + d * lift * 1.4 + Math.max(0, v) * flare), y, z];
+    };
+    for (const [sc, d] of rings) for (const [u, v] of dense) pos.push(...place(cU + (u * SU - cU) * sc, cV + (v * SV - cV) * sc, d));
+    pos.push(...place(cU, cV, 0.014));
+    const M = dense.length, centre = base + rings.length * M;
+    for (let r = 0; r < rings.length - 1; r++)
+      for (let m = 0; m < M; m++) {
+        const n = (m + 1) % M, a = base + r * M + m, b = base + r * M + n, c = base + (r + 1) * M + n, d = base + (r + 1) * M + m;
+        if (side > 0) idx.push(a, c, b, a, d, c); else idx.push(a, b, c, a, c, d);
+      }
+    for (let m = 0; m < M; m++) { const a = base + (rings.length - 1) * M + m, b = base + (rings.length - 1) * M + (m + 1) % M; if (side > 0) idx.push(a, centre, b); else idx.push(a, b, centre); }
+  }
+  return { pos, idx };
+}
+
+// ================================================================== painted face shadow map
+// Value t at each face point = how far the light must swing to the far side before this point goes dark.
+// u: 0 = far edge of the face … 1 = near edge (mirrored by the shader to follow the light), v: face height.
+function faceShadowMap() {
+  const S = 256, data = new Uint8Array(S * S * 4);
+  // v covers -0.05 … 0.75 of the head height
+  for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
+    const u = i / (S - 1), v = j / (S - 1) * 0.8 - 0.05;
+    let t = u;
+    // the shadow edge wraps the cheek: it bows towards the lit side under the eye and back again at the jaw
+    t -= 0.10 * Math.exp(-(((v - 0.30) / 0.10) ** 2)) * Math.sin(Math.PI * u);
+    // forehead and eye line stay lit a little longer (they face the light more)
+    t += 0.06 * Math.exp(-(((v - (H.eye.y + 0.06)) / 0.08) ** 2)) * Math.sin(Math.PI * u);
+    // nose shadow: a small wedge just on the far side of the nose that darkens first
+    const nu = (u - 0.47) / (0.010 + 0.012 * clamp01((v - (H.nose.y - 0.065)) / 0.06)), nv = (v - (H.nose.y - 0.025)) / 0.035;
+    if (u < 0.5) t -= 0.22 * Math.exp(-(nu * nu) - (nv * nv)) * (v < H.nose.y - 0.005 ? 1 : Math.exp(-(((v - (H.nose.y - 0.005)) / 0.03) ** 2)));
+    // under the chin and the jaw edge tip into shadow early
+    t -= 0.12 * (1 - smooth((v + 0.01) / 0.08));
+    const val = Math.round(clamp01(t) * 255), k = (j * S + i) * 4;
+    data[k] = data[k + 1] = data[k + 2] = val; data[k + 3] = 255;
+  }
+  const tex = new THREE.DataTexture(data, S, S, THREE.RGBAFormat);
+  tex.minFilter = tex.magFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+// ================================================================== painted eye / brow / mouth textures (canvas)
+const EYE_COLORS = {
+  amber: { label: "Amber", top: "#5a2c10", mid: "#c8741e", glow: "#ffd27a" },
+  violet: { label: "Violet", top: "#2e1d4f", mid: "#7b5cc4", glow: "#d9c6ff" },
+  teal: { label: "Teal", top: "#0f3c40", mid: "#2f9a95", glow: "#a8f0e2" },
+  blue: { label: "Blue", top: "#14264f", mid: "#3f74c9", glow: "#b8dcff" },
+  green: { label: "Green", top: "#173a1f", mid: "#4f9a4f", glow: "#d0f2a6" },
+  red: { label: "Red", top: "#4a0f14", mid: "#c23a3a", glow: "#ffb59a" },
+  grey: { label: "Grey", top: "#26292f", mid: "#7b8390", glow: "#e3e8ee" },
+};
+let eyeColor = "amber";
+
+function eyeTexture(col) {
+  const W = 512, Hh = 256, cv = document.createElement("canvas");
+  cv.width = W; cv.height = Hh;
+  const g = cv.getContext("2d");
+  g.lineCap = "round"; g.lineJoin = "round";
+  // eye opening (almond, taller at the outer side): x inner 40 → outer 470
+  const open = () => { g.beginPath(); g.moveTo(48, 140); g.bezierCurveTo(110, 52, 330, 34, 462, 104); g.bezierCurveTo(440, 196, 300, 226, 180, 214); g.bezierCurveTo(110, 206, 70, 176, 48, 140); g.closePath(); };
+  g.save(); open(); g.clip();
+  g.fillStyle = "#fbf6f2"; g.fillRect(0, 0, W, Hh);
+  // soft lid shadow on the white
+  let sh = g.createLinearGradient(0, 40, 0, 130); sh.addColorStop(0, "rgba(120,110,140,0.55)"); sh.addColorStop(1, "rgba(120,110,140,0)");
+  g.fillStyle = sh; g.fillRect(0, 0, W, Hh);
+  // iris: dark top, colour, glowing bottom
+  const cx = 262, cy = 138, rx = 92, ry = 104;
+  let ir = g.createLinearGradient(0, cy - ry, 0, cy + ry);
+  ir.addColorStop(0, col.top); ir.addColorStop(0.42, col.mid); ir.addColorStop(0.86, col.glow); ir.addColorStop(1, col.mid);
+  g.fillStyle = ir; g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); g.fill();
+  g.lineWidth = 7; g.strokeStyle = col.top; g.stroke();
+  // pupil
+  g.fillStyle = col.top; g.beginPath(); g.ellipse(cx, cy - 6, 34, 52, 0, 0, Math.PI * 2); g.fill();
+  // lid shadow over the iris top
+  sh = g.createLinearGradient(0, 30, 0, 120); sh.addColorStop(0, "rgba(20,10,20,0.65)"); sh.addColorStop(1, "rgba(20,10,20,0)");
+  g.fillStyle = sh; g.fillRect(0, 0, W, Hh);
+  // highlights
+  g.fillStyle = "#ffffff"; g.beginPath(); g.ellipse(cx - 36, cy - 44, 24, 20, -0.3, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.ellipse(cx + 40, cy + 56, 10, 8, 0, 0, Math.PI * 2); g.fill();
+  g.restore();
+  // upper lid line: heavy, with a lash flick at the outer corner
+  g.strokeStyle = "#2a1712"; g.fillStyle = "#2a1712";
+  g.lineWidth = 16; g.beginPath(); g.moveTo(52, 138); g.bezierCurveTo(112, 50, 330, 30, 462, 104); g.stroke();
+  g.beginPath(); g.moveTo(420, 78); g.quadraticCurveTo(470, 86, 500, 70); g.quadraticCurveTo(486, 100, 468, 116); g.closePath(); g.fill();
+  g.lineWidth = 7; g.beginPath(); g.moveTo(380, 58); g.quadraticCurveTo(440, 48, 478, 30); g.stroke();
+  // lower lid: a short, soft line on the outer half
+  g.strokeStyle = "rgba(90,40,30,0.85)"; g.lineWidth = 5;
+  g.beginPath(); g.moveTo(240, 214); g.bezierCurveTo(320, 214, 400, 196, 446, 150); g.stroke();
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  return t;
+}
+
+function strokeTexture(draw, W, Hh) {
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = Hh;
+  const g = cv.getContext("2d"); g.lineCap = "round"; g.lineJoin = "round"; draw(g);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const browTex = strokeTexture(g => {
+  g.fillStyle = "#3a2218";
+  g.beginPath(); g.moveTo(20, 74); g.bezierCurveTo(120, 38, 300, 30, 492, 62); g.bezierCurveTo(300, 52, 130, 60, 20, 88); g.closePath(); g.fill();
+}, 512, 128);
+const mouthTex = strokeTexture(g => {
+  g.strokeStyle = "#8a3a30"; g.lineWidth = 9;
+  g.beginPath(); g.moveTo(70, 70); g.quadraticCurveTo(128, 84, 186, 66); g.stroke();
+}, 256, 128);
+
+// ================================================================== three.js scene
+const canvas = document.getElementById("c");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(28, 1, 0.05, 50);
+const root = new THREE.Group(); root.position.y = -0.42; scene.add(root);
+
+const light = { dir: new THREE.Vector3() };
+// how squarely the camera faces the face (0 side … 1 front); shared by the skin and outline shaders
+const front = { value: 1 };
+const shadowMap = faceShadowMap();
+const skinUniforms = {
+  uLight: { value: light.dir }, uShadowMap: { value: shadowMap },
+  uLit: { value: new THREE.Color("#ffe8dc") }, uShade: { value: new THREE.Color("#f2b3a6") },
+  uRim: { value: new THREE.Color("#fff3ea") }, uShowMap: { value: 0 }, uFront: front,
+};
+const skinMat = new THREE.ShaderMaterial({
+  uniforms: skinUniforms,
+  vertexShader: `
+    attribute vec2 faceUV; attribute float faceMask; attribute vec3 morph; uniform float uFront;
+    varying vec3 vN; varying vec3 vView; varying vec2 vF; varying float vM; varying vec3 vRight; varying vec3 vFwd;
+    void main(){
+      vN = normalize(mat3(modelMatrix) * normal);
+      vec4 wp = modelMatrix * vec4(position + morph * uFront, 1.0);
+      vView = normalize(cameraPosition - wp.xyz);
+      vF = faceUV; vM = faceMask;
+      vRight = normalize(mat3(modelMatrix) * vec3(1.0, 0.0, 0.0));
+      vFwd = normalize(mat3(modelMatrix) * vec3(0.0, 0.0, 1.0));
+      gl_Position = projectionMatrix * viewMatrix * wp;
+    }`,
+  fragmentShader: `
+    uniform vec3 uLight; uniform sampler2D uShadowMap; uniform vec3 uLit; uniform vec3 uShade; uniform vec3 uRim; uniform float uShowMap;
+    varying vec3 vN; varying vec3 vView; varying vec2 vF; varying float vM; varying vec3 vRight; varying vec3 vFwd;
+    void main(){
+      vec3 n = normalize(vN);
+      float body = smoothstep(-0.03, 0.05, dot(n, uLight));
+      // face: light angle around the head decides the threshold, the painted map decides the shape
+      float lx = dot(uLight, vRight), lz = dot(uLight, vFwd);
+      float th = (1.0 - lz / max(length(vec2(lx, lz)), 1e-4)) * 0.5;
+      float uNear = vF.x * (lx >= 0.0 ? 1.0 : -1.0);
+      float t = texture2D(uShadowMap, vec2(uNear * 0.5 + 0.5, (vF.y + 0.05) / 0.8)).r;
+      float faceLit = smoothstep(th - 0.012, th + 0.012, t);
+      float lit = mix(body, faceLit, vM);
+      vec3 col = mix(uShade, uLit, lit);
+      float rim = pow(1.0 - max(dot(n, normalize(vView)), 0.0), 4.0) * (0.35 + 0.65 * lit);
+      col = mix(col, uRim, rim * 0.35);
+      if (uShowMap > 0.5) col = mix(col, vec3(t), vM);
+      gl_FragColor = vec4(col, 1.0);
+      #include <colorspace_fragment>
+    }`,
+});
+const outlineMat = (color, scale) => new THREE.ShaderMaterial({
+  side: THREE.BackSide,
+  uniforms: { uColor: { value: new THREE.Color(color) }, uW: { value: scale }, uFront: front },
+  vertexShader: `attribute float faceMask; attribute vec3 morph; uniform float uW; uniform float uFront;
+    void main(){ float w = uW * (1.0 - 0.55 * faceMask); gl_Position = projectionMatrix * modelViewMatrix * vec4(position + morph * uFront + normal * w, 1.0); }`,
+  fragmentShader: `uniform vec3 uColor;
+    void main(){
+      gl_FragColor = vec4(uColor, 1.0);
+      #include <colorspace_fragment>
+    }`,
+});
+
+// head geometry
+const head = buildHead();
+const headGeo = new THREE.BufferGeometry();
+headGeo.setAttribute("position", new THREE.Float32BufferAttribute(head.pos, 3));
+headGeo.setAttribute("faceUV", new THREE.Float32BufferAttribute(head.uvF, 2));
+headGeo.setAttribute("faceMask", new THREE.Float32BufferAttribute(head.mask, 1));
+headGeo.setAttribute("morph", new THREE.Float32BufferAttribute(head.morph, 3));
+headGeo.setIndex(head.idx);
+headGeo.computeVertexNormals();
+const ears = buildEars();
+const earGeo = new THREE.BufferGeometry();
+earGeo.setAttribute("position", new THREE.Float32BufferAttribute(ears.pos, 3));
+earGeo.setAttribute("faceUV", new THREE.Float32BufferAttribute(new Array(ears.pos.length / 3 * 2).fill(0), 2));
+earGeo.setAttribute("faceMask", new THREE.Float32BufferAttribute(new Array(ears.pos.length / 3).fill(0), 1));
+earGeo.setAttribute("morph", new THREE.Float32BufferAttribute(new Array(ears.pos.length).fill(0), 3));
+earGeo.setIndex(ears.idx);
+earGeo.computeVertexNormals();
+
+const headMesh = new THREE.Mesh(headGeo, skinMat), earMesh = new THREE.Mesh(earGeo, skinMat);
+const skinOutline = outlineMat("#9c5446", 0.0065);
+const outlines = new THREE.Group();
+outlines.add(new THREE.Mesh(headGeo, skinOutline), new THREE.Mesh(earGeo, outlineMat("#9c5446", 0.004)));
+root.add(headMesh, earMesh, outlines);
+
+// face features: patches that follow the head surface (sampled from the actual mesh), textured and slightly in front
+const headTris = [];
+for (let i = 0; i < head.idx.length; i += 3) {
+  const P = [0, 1, 2].map(k => head.pos.slice(head.idx[i + k] * 3, head.idx[i + k] * 3 + 3));
+  if (P.some(p => p[2] > 0.15)) headTris.push(P);
+}
+function surfZ(x, y) {
+  let best = -Infinity;
+  for (const [A, B, C] of headTris) {
+    const d = (B[1] - C[1]) * (A[0] - C[0]) + (C[0] - B[0]) * (A[1] - C[1]);
+    if (Math.abs(d) < 1e-12) continue;
+    const l1 = ((B[1] - C[1]) * (x - C[0]) + (C[0] - B[0]) * (y - C[1])) / d, l2 = ((C[1] - A[1]) * (x - C[0]) + (A[0] - C[0]) * (y - C[1])) / d, l3 = 1 - l1 - l2;
+    if (l1 < -1e-6 || l2 < -1e-6 || l3 < -1e-6) continue;
+    best = Math.max(best, l1 * A[2] + l2 * B[2] + l3 * C[2]);
+  }
+  return best;
+}
+function featurePatch(cx, cy, w, h, lift, flipU, cols = 16, rows = 8) {
+  const pos = [], uv = [], idx = [];
+  for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
+    const u = c / cols, v = r / rows, x = cx + (u - 0.5) * w, y = cy + (v - 0.5) * h;
+    pos.push(x, y, surfZ(x, y) + lift); uv.push(flipU ? 1 - u : u, v);
+  }
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const a = r * (cols + 1) + c, b = a + 1, d = a + cols + 1, e = d + 1;
+    if (flipU) idx.push(a, e, b, a, d, e); else idx.push(a, b, e, a, e, d);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  return g;
+}
+const featureMat = map => new THREE.MeshBasicMaterial({ map, transparent: true, alphaTest: 0.35, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 });
+const eyeMat = featureMat(eyeTexture(EYE_COLORS[eyeColor]));
+for (const side of [-1, 1]) {
+  // texture is drawn as the right-hand eye (inner corner on the left); mirror it for the other side
+  root.add(new THREE.Mesh(featurePatch(side * H.eye.x, H.eye.y, H.eye.w, H.eye.h, 0.003, side < 0), eyeMat));
+  root.add(new THREE.Mesh(featurePatch(side * (H.eye.x + 0.01), H.brow.y, H.brow.w, H.brow.h, 0.003, side < 0, 14, 4), featureMat(browTex)));
+}
+root.add(new THREE.Mesh(featurePatch(0, H.mouth.y, H.mouth.w, H.mouth.h, 0.003, false, 8, 4), featureMat(mouthTex)));
+
+// wireframe on demand
+const wire = new THREE.LineSegments(new THREE.WireframeGeometry(headGeo), new THREE.LineBasicMaterial({ color: "#1b2130", transparent: true, opacity: 0.25 }));
+wire.visible = false; root.add(wire);
+
+// ================================================================== light + camera
+let lightDeg = 35, sweeping = false;
+function setLight(deg) {
+  lightDeg = deg;
+  const a = deg * Math.PI / 180;
+  light.dir.set(Math.sin(a), 0.45, Math.cos(a)).normalize();
+  document.getElementById("light-val").textContent = Math.round(deg) + "°";
+  document.getElementById("light").value = String(Math.round(deg));
+}
+setLight(35);
+
+const cam = { yaw: 0, pitch: 0.06, dist: 3.0, tYaw: 0, tPitch: 0.06, tDist: 3.0 };
+let baseDist = 3.0;
+function placeCamera() {
+  const cp = Math.cos(cam.pitch);
+  camera.position.set(Math.sin(cam.yaw) * cp * cam.dist, Math.sin(cam.pitch) * cam.dist + 0.02, Math.cos(cam.yaw) * cp * cam.dist);
+  camera.lookAt(0, 0, 0);
+}
+function resize() {
+  const r = canvas.getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / Math.max(1, r.height);
+  camera.updateProjectionMatrix();
+  if (!(r.width > 1 && r.height > 1)) return;
+  const next = 3.0 * Math.max(1, 1.25 / Math.sqrt(camera.aspect));
+  if (Math.abs(cam.tDist - baseDist) < 1e-3) { cam.tDist = next; cam.dist = next; }
+  baseDist = next;
+}
+new ResizeObserver(resize).observe(canvas);
+resize();
+
+const pointers = new Map();
+let pinch0 = 0, dist0 = 0;
+canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, [e.clientX, e.clientY]); if (pointers.size === 2) { pinch0 = pinchDist(); dist0 = cam.tDist; } });
+canvas.addEventListener("pointermove", e => {
+  if (!pointers.has(e.pointerId)) return;
+  const prev = pointers.get(e.pointerId);
+  pointers.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pointers.size === 1) { cam.tYaw -= (e.clientX - prev[0]) * 0.008; cam.tPitch = Math.max(-1.1, Math.min(1.1, cam.tPitch + (e.clientY - prev[1]) * 0.006)); setView(null); }
+  else if (pointers.size === 2 && pinch0 > 0) cam.tDist = clampDist(dist0 * pinch0 / pinchDist());
+});
+const lift = e => { pointers.delete(e.pointerId); pinch0 = 0; };
+canvas.addEventListener("pointerup", lift); canvas.addEventListener("pointercancel", lift);
+canvas.addEventListener("wheel", e => { e.preventDefault(); cam.tDist = clampDist(cam.tDist * Math.exp(e.deltaY * 0.001)); }, { passive: false });
+const pinchDist = () => { const [a, b] = [...pointers.values()]; return Math.hypot(a[0] - b[0], a[1] - b[1]); };
+const clampDist = d => Math.max(1.2, Math.min(9, d));
+const views = { "v-front": [0, 0.06], "v-three": [0.62, 0.1], "v-side": [Math.PI / 2, 0.04], "v-back": [Math.PI, 0.08] };
+function setView(id) { for (const k of Object.keys(views)) document.getElementById(k).setAttribute("aria-pressed", String(k === id)); }
+for (const [id, [yaw, pitch]] of Object.entries(views))
+  document.getElementById(id).addEventListener("click", () => {
+    const twoPi = Math.PI * 2;
+    cam.tYaw += ((yaw - cam.tYaw) % twoPi + twoPi * 1.5) % twoPi - Math.PI;
+    cam.tPitch = pitch; cam.tDist = baseDist; setView(id);
+  });
+
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let last = performance.now();
+(function frame(now) {
+  const dt = Math.min(0.05, ((now || performance.now()) - last) / 1000); last = now || performance.now();
+  if (sweeping) setLight(((lightDeg + 180 + dt * 40) % 360) - 180);
+  const k = reduce ? 1 : 0.18;
+  cam.yaw += (cam.tYaw - cam.yaw) * k; cam.pitch += (cam.tPitch - cam.pitch) * k; cam.dist += (cam.tDist - cam.dist) * k;
+  placeCamera();
+  const toCam = camera.position.clone().sub(root.position).normalize();
+  front.value = THREE.MathUtils.smoothstep(toCam.z, 0.55, 0.97);
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+})();
+
+// ================================================================== panel
+const tris = head.idx.length / 3 + ears.idx.length / 3;
+document.getElementById("counts").textContent = `${tris.toLocaleString()} triangles`;
+document.getElementById("mesh-stats").innerHTML =
+  `<dt>Head + neck</dt><dd>${(head.idx.length / 3).toLocaleString()} tris</dd><dt>Ears</dt><dd>${(ears.idx.length / 3).toLocaleString()} tris</dd>` +
+  `<dt>Face shadow map</dt><dd>256 × 256</dd><dt>Eye texture</dt><dd>512 × 256</dd>`;
+
+document.getElementById("light").addEventListener("input", e => { sweeping = false; document.getElementById("sweep").setAttribute("aria-pressed", "false"); setLight(Number(e.target.value)); });
+document.getElementById("sweep").addEventListener("click", e => { sweeping = !sweeping; e.currentTarget.setAttribute("aria-pressed", String(sweeping)); });
+const tog = (id, fn) => document.getElementById(id).addEventListener("click", e => { const on = e.currentTarget.getAttribute("aria-pressed") !== "true"; e.currentTarget.setAttribute("aria-pressed", String(on)); fn(on); });
+tog("t-outline", on => outlines.visible = on);
+tog("t-map", on => skinUniforms.uShowMap.value = on ? 1 : 0);
+tog("t-wire", on => wire.visible = on);
+
+const row = document.getElementById("pick-eye");
+for (const [k, v] of Object.entries(EYE_COLORS)) {
+  const b = document.createElement("button");
+  b.className = "chip"; b.id = "eye-" + k; b.textContent = v.label; b.setAttribute("aria-pressed", String(k === eyeColor));
+  const dot = document.createElement("span"); dot.setAttribute("aria-hidden", "true");
+  dot.style.cssText = `display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:8px;vertical-align:-2px;background:linear-gradient(${v.top},${v.mid} 50%,${v.glow})`;
+  b.prepend(dot);
+  b.addEventListener("click", () => {
+    eyeColor = k;
+    for (const c of row.children) c.setAttribute("aria-pressed", String(c === b));
+    const old = eyeMat.map; eyeMat.map = eyeTexture(v); eyeMat.needsUpdate = true; old.dispose();
+  });
+  row.appendChild(b);
+}
+window.setLight = setLight;
+</script>

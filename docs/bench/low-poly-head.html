@@ -1,0 +1,937 @@
+<title>Low-Poly Head</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: a sticky 3D stage on top (the head is the page), one compact control panel under it. Same look as the other LightMMORPG benches. */
+:root{
+  --bg:#eef1f6; --panel:#ffffff; --ink:#1b2130; --muted:#5d6678; --line:#d8dde7; --chip:#f3f5f9;
+  --accent:#f26b1d; --accent-ink:#ffffff; --accent-soft:#fde3d2;
+  --stage-a:#cfe2f4; --stage-b:#f4e8dc; --guide:#3b6fd8;
+  --f-display:"M PLUS Rounded 1c","Segoe UI",system-ui,sans-serif;
+  --f-body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11141b; --panel:#191e29; --ink:#e7ebf3; --muted:#9aa3b6; --line:#2b3242; --chip:#222838;
+  --accent:#ff8a3d; --accent-ink:#1a1006; --accent-soft:#3a2416;
+  --stage-a:#1d2a40; --stage-b:#33283a; --guide:#7aa2ff; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11141b; --panel:#191e29; --ink:#e7ebf3; --muted:#9aa3b6; --line:#2b3242; --chip:#222838;
+  --accent:#ff8a3d; --accent-ink:#1a1006; --accent-soft:#3a2416;
+  --stage-a:#1d2a40; --stage-b:#33283a; --guide:#7aa2ff; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45}
+*{box-sizing:border-box}
+button,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.stage{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;height:clamp(340px,60svh,640px);overflow:hidden;border-bottom:1px solid var(--line);
+  background:radial-gradient(120% 90% at 50% 20%,var(--stage-b),var(--stage-a))}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--stage-a)}
+.stage canvas{display:block;width:100%;height:100%;touch-action:none}
+.hud{position:absolute;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.hud.tl{top:10px;left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px))}
+.hud.bl{bottom:10px;left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px))}
+.pill{border:1px solid color-mix(in srgb,var(--ink) 14%,transparent);background:color-mix(in srgb,var(--panel) 85%,transparent);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:600;white-space:nowrap}
+.pill.num{font-family:var(--f-mono);font-weight:500;font-variant-numeric:tabular-nums}
+.views{display:flex;gap:6px;flex-wrap:wrap}
+.views button{border:1px solid color-mix(in srgb,var(--ink) 14%,transparent);background:color-mix(in srgb,var(--panel) 85%,transparent);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border-radius:999px;padding:7px 14px;font-weight:600;font-size:13px}
+.views button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.panel{padding-block:18px 44px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:20px;max-width:880px;margin:0 auto}
+h1{font-family:var(--f-display);font-weight:800;font-size:26px;margin:0;text-wrap:balance;letter-spacing:.01em}
+h2{font-family:var(--f-display);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+p{margin:0;max-width:65ch}
+.lede{color:var(--muted)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--chip);border-radius:12px;padding:9px 14px;font-weight:600}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+.primary{border:0;background:var(--accent);color:var(--accent-ink);border-radius:12px;padding:10px 16px;font-weight:700}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px;min-width:0}
+.card dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0}
+.card dt{color:var(--muted)}
+.card dd{margin:0;font-family:var(--f-mono);font-variant-numeric:tabular-nums;text-align:right}
+ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+textarea{width:100%;min-height:90px;border:1px solid var(--line);border-radius:12px;background:var(--chip);padding:10px;font-family:var(--f-mono);font-size:11.5px;resize:vertical}
+.status{color:var(--muted);font-size:13px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+
+<div class="stage" id="stage">
+  <canvas id="c" aria-label="3D view of the head. Drag to turn it, pinch or scroll to zoom."></canvas>
+  <div class="hud tl">
+    <span class="pill num" id="counts">…</span>
+    <span class="pill" id="drag-hint">Drag to turn · pinch to zoom</span>
+  </div>
+  <div class="hud bl">
+    <div class="views" role="group" aria-label="Camera view">
+      <button id="v-front" aria-pressed="true">Front</button>
+      <button id="v-three">¾</button>
+      <button id="v-side">Side</button>
+      <button id="v-back">Back</button>
+    </div>
+  </div>
+</div>
+
+<main class="panel">
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <h1>Low-Poly Head</h1>
+    <p class="lede">Fighters are built from swappable parts: a head shape, a nose and a pair of ears, each its own piece that snaps onto fixed points on the head. Eyes and hair come later as more parts. Mostly quads, so every piece opens cleanly in Blockbench and still looks smooth in the toon shader.</p>
+  </div>
+
+  <section>
+    <h2>Head</h2>
+    <div class="row" role="group" aria-label="Head shape" id="pick-head"></div>
+  </section>
+  <section>
+    <h2>Nose</h2>
+    <div class="row" role="group" aria-label="Nose" id="pick-nose"></div>
+  </section>
+  <section>
+    <h2>Ears</h2>
+    <div class="row" role="group" aria-label="Ears" id="pick-ears"></div>
+  </section>
+  <section>
+    <h2>Eyes</h2>
+    <div class="row" role="group" aria-label="Eyes" id="pick-eyes"></div>
+  </section>
+  <section>
+    <h2>Eye colour</h2>
+    <div class="row" role="group" aria-label="Eye colour" id="pick-eyeColor"></div>
+  </section>
+  <section>
+    <h2>Eyebrows</h2>
+    <div class="row" role="group" aria-label="Eyebrows" id="pick-brows"></div>
+  </section>
+
+  <section>
+    <h2>Look at it as</h2>
+    <div class="row" role="group" aria-label="Display">
+      <button class="chip" id="m-toon" aria-pressed="true">Toon (in-game)</button>
+      <button class="chip" id="m-clay" aria-pressed="false">Clay</button>
+      <button class="chip" id="t-wire" aria-pressed="false">Show polygons</button>
+      <button class="chip" id="t-flat" aria-pressed="false">Faceted</button>
+      <button class="chip" id="t-guide" aria-pressed="false">Proportion lines</button>
+    </div>
+  </section>
+
+  <section class="grid">
+    <div class="card">
+      <h2>Mesh</h2>
+      <dl id="mesh-stats"></dl>
+    </div>
+    <div class="card">
+      <h2>Proportions (head height = 1)</h2>
+      <dl id="props"></dl>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>This combination</h2>
+    <ul id="notes"></ul>
+  </section>
+
+  <section class="card">
+    <h2>How the parts fit</h2>
+    <ul>
+      <li>Each head shape carries two attach points: the nose point (where the nose tip sits) and the ear point (one per side). Noses and ears are built around those points, so any nose or ear fits any head.</li>
+      <li>Noses and ears hug the head surface underneath them, so they sit flush whatever the cheek or skull curve.</li>
+      <li>The neck is a short stub cut at the bottom, where the body's neck will join.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>Open it in Blockbench</h2>
+    <p class="status" style="margin-bottom:10px">Copy the OBJ for the combination shown, save it as <code>head.obj</code>, then in Blockbench use File › Import › OBJ Model. It comes in as four parts: head, nose, ear_L, ear_R. The default (Youth, Pointed nose, Round ears) is also in the project at <code>docs/bench/low-poly-head.obj</code>.</p>
+    <div class="row" style="margin-bottom:10px">
+      <button class="primary" id="copy">Copy OBJ</button>
+      <span class="status" id="copy-status" role="status"></span>
+    </div>
+    <textarea id="obj" readonly aria-label="OBJ mesh text"></textarea>
+  </section>
+</main>
+
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+
+// ================================================================== part library (head height crown→chin = 1)
+// Heads: shape tables + attach points. Rows of `face`: y, half width, front depth, back depth,
+// front sharpness (2 = round section, lower = more pointed, higher = squarer).
+const HEADS = {
+  youth: {
+    label: "Youth",
+    notes: ["Big round skull, deeper at the back so hair has room.", "A flat, upright face front with a brow ridge and shallow eye sockets, defined cheekbones, full cheeks, a jaw that runs back flat under the chin to a corner below the ear, and a wide rounded chin."],
+    cranium: { y: 0.55, r: 0.45, w: 0.46, f: 0.42, b: 0.52 },
+    face: [
+      [0.55, 0.460, 0.420, 0.520, 2.00],
+      [0.50, 0.457, 0.442, 0.505, 2.50],
+      [0.43, 0.450, 0.428, 0.478, 2.70],
+      [0.36, 0.438, 0.432, 0.448, 2.70],
+      [0.30, 0.420, 0.430, 0.415, 2.60],
+      [0.24, 0.398, 0.424, 0.380, 2.50],
+      [0.17, 0.368, 0.414, 0.335, 2.45],
+      [0.11, 0.330, 0.404, 0.300, 2.40],
+      [0.05, 0.262, 0.394, 0.270, 2.30],
+      [0.00, 0.176, 0.384, 0.255, 2.20],
+    ],
+    jawCorner: { a: 0.48, y: 0.12 }, chinRound: 0.45, napeY: 0.27,
+    neck: { top: -0.02, nape: 0.18, bottom: -0.15, w: 0.158, f: 0.148, b: 0.165, z: -0.05 },
+    cheek: { y: 0.30, h: 0.06, a: 0.25, spread: 0.10, amount: 0.003 },
+    cheekbone: { y: 0.37, h: 0.035, a: 0.30, spread: 0.07, amount: 0.012 },
+    hollow: { y: 0.25, h: 0.04, a: 0.32, spread: 0.08, amount: -0.006 },
+    noseY: 0.318, ear: { y: 0.385, z: -0.02 }, eyeY: 0.43, socket: { depth: 0.016, rx: 0.070, ry: 0.045, ridge: 0.008 },
+    eye: { x: 0.170, scale: 1.00 },
+  },
+  slim: {
+    label: "Slim",
+    notes: ["Lean teen: a slightly smaller skull and a narrow oval face.", "A flat, upright face front with a brow ridge and shallow eye sockets, lean slightly hollow cheeks, a flat jaw underside and a soft, rounded chin."],
+    cranium: { y: 0.56, r: 0.44, w: 0.43, f: 0.41, b: 0.50 },
+    face: [
+      [0.56, 0.430, 0.410, 0.500, 2.00],
+      [0.50, 0.428, 0.432, 0.486, 2.40],
+      [0.43, 0.420, 0.420, 0.458, 2.60],
+      [0.36, 0.405, 0.424, 0.425, 2.60],
+      [0.30, 0.385, 0.422, 0.395, 2.55],
+      [0.24, 0.362, 0.416, 0.365, 2.50],
+      [0.17, 0.336, 0.406, 0.325, 2.45],
+      [0.11, 0.300, 0.396, 0.290, 2.40],
+      [0.05, 0.235, 0.386, 0.265, 2.30],
+      [0.00, 0.158, 0.376, 0.255, 2.20],
+    ],
+    jawCorner: { a: 0.48, y: 0.13 }, chinRound: 0.45, napeY: 0.26,
+    neck: { top: -0.02, nape: 0.17, bottom: -0.15, w: 0.145, f: 0.138, b: 0.155, z: -0.05 },
+    cheek: { y: 0.33, h: 0.05, a: 0.25, spread: 0.10, amount: 0.0 },
+    cheekbone: { y: 0.37, h: 0.032, a: 0.31, spread: 0.07, amount: 0.012 },
+    hollow: { y: 0.25, h: 0.045, a: 0.33, spread: 0.08, amount: -0.009 },
+    noseY: 0.31, ear: { y: 0.375, z: -0.025 }, eyeY: 0.44, socket: { depth: 0.016, rx: 0.066, ry: 0.044, ridge: 0.008 },
+    eye: { x: 0.160, scale: 0.95 },
+  },
+  adult: {
+    label: "Adult",
+    notes: ["Smaller skull and a longer face: the eye line sits higher.", "Lean cheeks with a hint of cheekbone, a wide square jaw and a broad, flat-fronted chin."],
+    cranium: { y: 0.57, r: 0.43, w: 0.425, f: 0.40, b: 0.50 },
+    face: [
+      [0.57, 0.425, 0.400, 0.500, 2.00],
+      [0.50, 0.422, 0.416, 0.484, 1.95],
+      [0.43, 0.414, 0.418, 0.458, 2.05],
+      [0.36, 0.408, 0.420, 0.425, 2.15],
+      [0.29, 0.392, 0.414, 0.392, 2.25],
+      [0.21, 0.365, 0.402, 0.355, 2.40],
+      [0.13, 0.318, 0.388, 0.320, 2.50],
+      [0.06, 0.240, 0.374, 0.290, 2.30],
+      [0.00, 0.150, 0.360, 0.280, 2.10],
+    ],
+    jawCorner: { a: 0.46, y: 0.20 }, chinRound: 0.34, napeY: 0.25,
+    neck: { top: -0.03, nape: 0.16, bottom: -0.16, w: 0.19, f: 0.172, b: 0.19, z: -0.06 },
+    cheek: { y: 0.37, h: 0.035, a: 0.30, spread: 0.08, amount: 0.007 },
+    noseY: 0.30, ear: { y: 0.37, z: -0.035 }, eyeY: 0.47, socket: { depth: 0.014, rx: 0.065, ry: 0.042, ridge: 0.010 },
+    eye: { x: 0.155, scale: 0.86 },
+  },
+};
+
+// Noses: lengths are measured from the head's nose point (the tip). shape = how pointed the ridge is (1 = sharp, 2 = round).
+const NOSES = {
+  pointed:  { label: "Pointed",  top: 0.070, base: -0.026, height: 0.042, width: 0.028, bridge: 2.4, under: 0.42, shape: 1.1,
+              note: "Pointed nose: the classic anime nose, almost no bridge, a sharp tip that turns up slightly and stands off the face." },
+  small:    { label: "Small",    top: 0.082, base: -0.024, height: 0.026, width: 0.030, bridge: 1.7, under: 0.65, shape: 1.2,
+              note: "Small nose: a tiny wedge with a sharp tip and almost no bridge." },
+  straight: { label: "Straight", top: 0.150, base: -0.028, height: 0.040, width: 0.038, bridge: 1.05, under: 0.6, shape: 1.35,
+              note: "Straight nose: a long, clear bridge from the brow to a defined tip." },
+  button:   { label: "Button",   top: 0.050, base: -0.030, height: 0.030, width: 0.042, bridge: 1.2, under: 0.8, shape: 2.2,
+              note: "Button nose: short and round, no bridge to speak of." },
+};
+
+// Ears: one outline (u up, v back) scaled per preset; flare = how far the back edge stands off the head.
+const EAR_OUTLINE = [[0.085,0.000],[0.104,0.030],[0.100,0.064],[0.076,0.091],[0.036,0.103],[-0.008,0.096],[-0.048,0.074],
+                     [-0.078,0.046],[-0.094,0.018],[-0.086,-0.003],[-0.046,-0.009],[0.000,-0.011],[0.046,-0.009]];
+const EARS = {
+  round: { label: "Round", su: 1.00, sv: 1.00, flare: 28, tilt: 12, lobe: 0.0, note: "Round ears from the eye line to the nose, flaring out at the back." },
+  long:  { label: "Long",  su: 1.18, sv: 0.86, flare: 22, tilt: 16, lobe: 0.018, note: "Long ears: taller and narrower, with a longer lobe." },
+  small: { label: "Small", su: 0.80, sv: 0.82, flare: 18, tilt: 10, lobe: 0.0, note: "Small ears that sit close to the head." },
+};
+const EAR_RINGS = [[1.00,-0.015],[1.00,0.050],[0.74,0.043],[0.46,0.027]];
+
+// Eyes: drawn flat in "eye space" (u: 0 inner corner → 1 outer corner, v: up; both measured in eye widths,
+// v = 0 at the iris centre), then laid onto the face around the head's eye spot, so any eye fits any head.
+// Strokes are lines with a thickness per point: [u, v, thickness].
+const EYES = {
+  drawn: {
+    label: "Drawn",
+    note: "Drawn eye (traced from your sketch): a thin-to-heavy upper lid that hooks down at the outer corner, a separate lower lid line that dips in the middle, and a tall oval iris floating between them.",
+    width: 0.17, tilt: 0,
+    upper: [[0.000, -0.002, 0.010], [0.076, 0.068, 0.016], [0.156, 0.158, 0.022], [0.256, 0.268, 0.028], [0.356, 0.344, 0.034],
+            [0.496, 0.388, 0.040], [0.636, 0.348, 0.050], [0.756, 0.248, 0.058], [0.856, 0.128, 0.064], [0.956, 0.010, 0.066],
+            [0.990, -0.020, 0.062], [0.966, -0.092, 0.040], [0.926, -0.192, 0.006]],
+    lower: [[0.056, -0.356, 0.006], [0.136, -0.422, 0.016], [0.256, -0.456, 0.018], [0.396, -0.492, 0.018], [0.536, -0.528, 0.018],
+            [0.636, -0.452, 0.017], [0.736, -0.382, 0.014], [0.806, -0.336, 0.005]],
+    iris: { u: 0.466, v: 0.000, rx: 0.180, ry: 0.232, ring: 0.026 },
+    shine: [[0.40, 0.10, 0.055], [0.53, -0.12, 0.025]],
+    colors: { white: "#fbf8f4", iris: "#a7a4c2", ring: "#3b3550", shine: "#ffffff", lid: "#1d1616" },
+  },
+  tall: {
+    label: "Tall",
+    note: "Tall eye (traced from your second sketch): one big arch, heaviest across the top and inner side, curling down to a point on the outer side, no lower lid, a tall oval iris with a dark top half and a grey shadow under the lid.",
+    width: 0.165, tilt: 0, shift: -0.10,
+    upper: [[0.000, 0.191, 0.035], [0.027, 0.300, 0.050], [0.100, 0.427, 0.062], [0.200, 0.555, 0.066], [0.309, 0.627, 0.066],
+            [0.436, 0.660, 0.062], [0.564, 0.642, 0.056], [0.691, 0.600, 0.050], [0.800, 0.527, 0.050], [0.891, 0.409, 0.046],
+            [0.955, 0.264, 0.046], [0.982, 0.100, 0.041], [0.982, -0.064, 0.035], [0.955, -0.191, 0.025], [0.909, -0.300, 0.010]],
+    lower: null,
+    whiteTop: [[0.005, 0.20], [0.10, 0.41], [0.20, 0.535], [0.309, 0.605], [0.436, 0.640], [0.564, 0.622], [0.691, 0.582],
+               [0.80, 0.51], [0.891, 0.392], [0.955, 0.248], [0.968, 0.10], [0.968, -0.06]],
+    whiteBottom: [[0.005, 0.17], [0.03, -0.15], [0.10, -0.38], [0.22, -0.47], [0.367, -0.485], [0.60, -0.47], [0.80, -0.42], [0.92, -0.33], [0.968, -0.16]],
+    whiteRange: [0.005, 0.968],
+    lidShade: [[0.0, 0.03], [0.30, 0.08], [0.60, 0.14], [0.85, 0.22], [0.97, 0.26]],
+    iris: { u: 0.367, v: 0.000, rx: 0.269, ry: 0.464, ring: 0.030, darkTop: 0.48 },
+    shine: [[0.27, 0.24, 0.085], [0.47, -0.30, 0.030]],
+    colors: { white: "#fbf8f4", lidShade: "#b9bcc8", shine: "#ffffff", lid: "#1d1616" },
+  },
+  wide: {
+    label: "Wide",
+    note: "Wide eye (traced from your third sketch): a long upper lid that starts thin, runs flat across the top and ends in a heavy arrowhead wing with a stroke dropping from it, a round iris with a hooked shine in its top-left, and a separate curved lower lid.",
+    width: 0.19, tilt: 0, shift: 0.04,
+    upper: [[0.000, 0.030, 0.008], [0.068, 0.118, 0.013], [0.160, 0.217, 0.018], [0.291, 0.289, 0.021], [0.423, 0.291, 0.021],
+            [0.554, 0.276, 0.024], [0.672, 0.223, 0.040], [0.764, 0.164, 0.056], [0.843, 0.085, 0.068], [0.915, 0.050, 0.060],
+            [1.000, 0.026, 0.010]],
+    extra: [[[0.930, 0.040, 0.064], [0.880, 0.000, 0.058], [0.840, -0.070, 0.036], [0.816, -0.120, 0.020], [0.790, -0.164, 0.005]]],
+    lower: [[0.127, -0.295, 0.008], [0.200, -0.335, 0.016], [0.252, -0.360, 0.016], [0.383, -0.387, 0.014], [0.514, -0.361, 0.012],
+            [0.619, -0.325, 0.005]],
+    whiteTop: [[0.0, 0.030], [0.068, 0.110], [0.160, 0.208], [0.291, 0.279], [0.423, 0.281], [0.554, 0.264], [0.672, 0.207],
+               [0.764, 0.145], [0.843, 0.063], [0.900, 0.030]],
+    whiteBottom: [[0.0, 0.030], [0.06, -0.150], [0.127, -0.290], [0.252, -0.360], [0.383, -0.382], [0.514, -0.356], [0.619, -0.320],
+                  [0.720, -0.240], [0.800, -0.160], [0.900, 0.020]],
+    whiteRange: [0.0, 0.90],
+    lidShade: [[0.0, 0.02], [0.5, 0.06], [0.85, 0.08]],
+    iris: { u: 0.383, v: 0.000, rx: 0.223, ry: 0.252, ring: 0.020, darkTop: 0.45 },
+    shine: [[0.252, 0.125, 0.075]],
+    colors: { white: "#fbf8f4", lidShade: "#c4c2c8", shine: "#ffffff", lid: "#1d1616" },
+  },
+};
+
+// Eye colour: its own choice, used by every eye shape (iris fill + a darker outline ring).
+const EYE_COLORS = {
+  lilac:  { label: "Lilac",  iris: "#a7a4c2", ring: "#3b3550" },
+  brown:  { label: "Brown",  iris: "#8a5a36", ring: "#3a2416" },
+  amber:  { label: "Amber",  iris: "#d39a3a", ring: "#5a3a12" },
+  green:  { label: "Green",  iris: "#5f9a62", ring: "#22422a" },
+  blue:   { label: "Blue",   iris: "#5b8fd1", ring: "#1f3561" },
+  grey:   { label: "Grey",   iris: "#9aa3ad", ring: "#3a4048" },
+  red:    { label: "Red",    iris: "#c8484a", ring: "#4e1618" },
+  black:  { label: "Black",  iris: "#3b3638", ring: "#121012" },
+};
+
+// Eyebrows: their own part. Same eye space as the eyes (u: 0 inner → 1 outer, v: up, in eye widths), measured
+// from the head's eye spot, so any brow sits right with any eye shape. line = centre line, thick = [inner, outer].
+const BROW_WIDTH = 0.178;
+const BROWS = {
+  soft:   { label: "Soft",   line: [[-0.06, 0.62], [0.25, 0.72], [0.60, 0.75], [1.08, 0.60]], thick: [0.050, 0.030],
+            note: "Soft brows: thin and gently arched." },
+  fierce: { label: "Fierce", line: [[-0.06, 0.52], [0.35, 0.63], [0.75, 0.72], [1.10, 0.70]], thick: [0.080, 0.040],
+            note: "Fierce brows: angled down towards the nose for a determined look." },
+  bold:   { label: "Bold",   line: [[-0.06, 0.62], [0.40, 0.69], [0.80, 0.69], [1.06, 0.62]], thick: [0.105, 0.070],
+            note: "Bold brows: thick and nearly straight." },
+};
+const BROW_COLOR = "#2a1d17";
+const EAR_CENTRE = [0.004, 0.046];
+
+const LAYOUT = { cols: 32, craniumRows: 8, faceRows: 22, neckRows: 3, frontBias: 1.5 };
+const pick = { head: "youth", nose: "pointed", ears: "round", eyes: "drawn", eyeColor: "lilac", brows: "soft" };
+let H = HEADS[pick.head];
+
+// ================================================================== head surface
+const lerp = (a, b, t) => a + (b - a) * t;
+const clamp01 = t => Math.min(1, Math.max(0, t));
+const smooth = t => { t = clamp01(t); return t * t * (3 - 2 * t); };
+
+function faceAt(y) {
+  const cr = H.cranium;
+  if (y > cr.y) {
+    const q = Math.sqrt(Math.max(0, 1 - ((y - cr.y) / cr.r) ** 2));
+    return [cr.w * q, cr.f * q, cr.b * q, 2];
+  }
+  const T = H.face;
+  if (y <= T[T.length - 1][0]) return T[T.length - 1].slice(1);
+  let i = 0;
+  while (i < T.length - 2 && y < T[i + 1][0]) i++;
+  const p0 = T[Math.max(0, i - 1)], p1 = T[i], p2 = T[i + 1], p3 = T[Math.min(T.length - 1, i + 2)];
+  const t = (p1[0] - y) / (p1[0] - p2[0]);
+  const out = [];
+  for (let k = 1; k < 5; k++) {
+    const a = p0[k], b = p1[k], c = p2[k], d = p3[k];
+    out.push(0.5 * ((2 * b) + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (-a + 3 * b - 3 * c + d) * t * t * t));
+  }
+  return out;
+}
+
+function section(theta, w, f, b, k) {
+  const s = Math.sin(theta), c = Math.cos(theta);
+  if (c >= 0) { const e = 2 / k; return [w * Math.sign(s) * Math.pow(Math.abs(s), e), f * Math.pow(c, e)]; }
+  return [w * s, b * c];
+}
+
+function jawY(a) {
+  const { a: ca, y: cy } = H.jawCorner;
+  if (a <= ca) {
+    const t = a / ca, r = H.chinRound;
+    return cy * (Math.sqrt(t * t + r * r) - r) / (Math.sqrt(1 + r * r) - r);
+  }
+  return lerp(cy, H.napeY, smooth((a - ca) / (1 - ca)));
+}
+const neckTopY = a => lerp(H.neck.top, H.neck.nape, smooth(a));
+function neckPoint(theta, y) {
+  const n = H.neck, s = Math.sin(theta), c = Math.cos(theta);
+  return [n.w * s, y, n.z + (c >= 0 ? n.f * c : n.b * c)];
+}
+
+function cheekPush(x, y, z, theta) {
+  const a = Math.abs(theta) / Math.PI;
+  let bulge = 0;
+  for (const ch of [H.cheek, H.cheekbone, H.hollow]) {
+    if (!ch || !ch.amount) continue;
+    bulge += ch.amount * Math.exp(-(((y - ch.y) / ch.h) ** 2)) * Math.exp(-(((a - ch.a) / ch.spread) ** 2));
+  }
+  if (Math.abs(bulge) < 1e-5) return [x, z];
+  const len = Math.hypot(x, z) || 1;
+  return [x + x / len * bulge, z + z / len * bulge];
+}
+
+// brow ridge + eye sockets: a shallow dent where each eye sits and a ridge above it (front of the face only)
+function socketZ(x, y, z) {
+  const S = H.socket;
+  if (!S || z <= 0) return 0;
+  const ax = Math.abs(x), front = clamp01(z / 0.25);
+  const dent = -S.depth * Math.exp(-(((ax - H.eye.x) / S.rx) ** 2) - (((y - H.eyeY) / S.ry) ** 2));
+  const ridge = S.ridge * Math.exp(-(((ax - H.eye.x * 0.9) / (S.rx * 1.4)) ** 2) - (((y - (H.eyeY + 0.075)) / 0.03) ** 2));
+  return (dent + ridge) * front;
+}
+
+function facePoint(theta, y) {
+  const [w, f, b, k] = faceAt(y);
+  let [x, z] = section(theta, w, f, b, k);
+  [x, z] = cheekPush(x, y, z, theta);
+  return [x, y, z + socketZ(x, y, z)];
+}
+
+// front surface depth at (x, y), for laying the nose on the face
+function faceZ(x, y) {
+  const [w, f, , k] = faceAt(y);
+  const s = Math.pow(Math.min(1, Math.abs(x) / w), k / 2);
+  const c = Math.sqrt(Math.max(0, 1 - s * s));
+  const theta = Math.atan2(s * Math.sign(x || 1), c);
+  const z = cheekPush(x, y, f * Math.pow(c, 2 / k), theta)[1];
+  return z + socketZ(x, y, z);
+}
+
+// side surface at (y, z), for laying the ears on the skull
+function headX(y, z) {
+  const [w, f, b, k] = faceAt(y);
+  if (z < 0) return w * Math.sqrt(Math.max(0, 1 - (z / b) ** 2));
+  const c = Math.pow(Math.min(1, z / f), k / 2);
+  return w * Math.pow(Math.sqrt(Math.max(0, 1 - c * c)), 2 / k);
+}
+
+// ================================================================== parts → one mesh with named objects
+function buildMesh() {
+  const pos = [], faces = [], parts = [];
+  const add = p => (pos.push(p), pos.length - 1);
+  const part = (name, fn, outward, color) => {
+    const v0 = pos.length, f0 = faces.length;
+    fn();
+    // one consistent winding per part: check the face nearest the part's "out" direction and flip all if needed
+    let best = -1, bestDot = -Infinity;
+    for (let i = f0; i < faces.length; i++) {
+      const c = centroid(faces[i]), d = dot(c, outward.dir) ;
+      if (d > bestDot) { bestDot = d; best = i; }
+    }
+    const n = normal(faces[best]);
+    if (dot(n, outward.dir) < 0) for (let i = f0; i < faces.length; i++) faces[i].reverse();
+    parts.push({ name, v0, v1: pos.length, f0, f1: faces.length, color });
+  };
+  const centroid = f => f.reduce((s, i) => [s[0] + pos[i][0] / f.length, s[1] + pos[i][1] / f.length, s[2] + pos[i][2] / f.length], [0, 0, 0]);
+  const normal = f => cross(sub(pos[f[1]], pos[f[0]]), sub(pos[f[2]], pos[f[0]]));
+
+  // ---- head
+  part("head", () => {
+    const N = LAYOUT.cols, thetas = [];
+    for (let j = 0; j < N; j++) { const u = -1 + 2 * j / N; thetas.push(Math.PI * Math.sign(u) * Math.pow(Math.abs(u), LAYOUT.frontBias)); }
+    const rows = [], cr = H.cranium;
+    const crown = add([0, cr.y + cr.r, 0]);
+    for (let i = 1; i <= LAYOUT.craniumRows; i++) {
+      const y = cr.y + cr.r * Math.cos((i / LAYOUT.craniumRows) * Math.PI / 2);
+      rows.push(thetas.map(t => add(facePoint(t, y))));
+    }
+    for (let i = 1; i <= LAYOUT.faceRows; i++) {
+      const s = i / LAYOUT.faceRows;
+      rows.push(thetas.map(t => add(facePoint(t, lerp(cr.y, jawY(Math.abs(t) / Math.PI), s)))));
+    }
+    const jaw = rows[rows.length - 1].map(i => pos[i]);
+    for (const t of [1 / 3, 2 / 3])
+      rows.push(thetas.map((th, j) => {
+        const n = neckPoint(th, neckTopY(Math.abs(th) / Math.PI)), J = jaw[j];
+        return add([lerp(J[0], n[0], t), lerp(J[1], n[1], t) - 0.022 * Math.sin(Math.PI * t), lerp(J[2], n[2], t)]);
+      }));
+    for (let i = 0; i <= LAYOUT.neckRows; i++) {
+      const t = i / LAYOUT.neckRows;
+      rows.push(thetas.map(th => add(neckPoint(th, lerp(neckTopY(Math.abs(th) / Math.PI), H.neck.bottom, t)))));
+    }
+    const bottom = add([0, H.neck.bottom, H.neck.z]);
+    for (let j = 0; j < N; j++) faces.push([crown, rows[0][(j + 1) % N], rows[0][j]]);
+    for (let r = 0; r < rows.length - 1; r++)
+      for (let j = 0; j < N; j++) faces.push([rows[r][j], rows[r][(j + 1) % N], rows[r + 1][(j + 1) % N], rows[r + 1][j]]);
+    const last = rows[rows.length - 1];
+    for (let j = 0; j < N; j++) faces.push([bottom, last[j], last[(j + 1) % N]]);
+  }, { dir: [0, 1, 0] });
+
+  // Everything laid on the face (nose, eyes, brows) follows the head mesh as it is drawn (its flat triangles),
+  // not the ideal curved surface, so nothing sinks into the face between the head's corner points.
+  const head = parts[0], front = [];
+  for (let i = head.f0; i < head.f1; i++) {
+    const f = faces[i], P = f.map(k => pos[k]);
+    if (P.every(p => p[2] < 0.12)) continue;
+    if (f.length === 3) front.push(P);
+    else if (dist2(P[0], P[2]) <= dist2(P[1], P[3])) front.push([P[0], P[1], P[2]], [P[0], P[2], P[3]]);
+    else front.push([P[0], P[1], P[3]], [P[1], P[2], P[3]]);
+  }
+  const surfZ = (x, y) => {
+    let best = -Infinity;
+    for (const [A, B, C] of front) {
+      const d = (B[1] - C[1]) * (A[0] - C[0]) + (C[0] - B[0]) * (A[1] - C[1]);
+      if (Math.abs(d) < 1e-12) continue;
+      const l1 = ((B[1] - C[1]) * (x - C[0]) + (C[0] - B[0]) * (y - C[1])) / d;
+      const l2 = ((C[1] - A[1]) * (x - C[0]) + (A[0] - C[0]) * (y - C[1])) / d;
+      const l3 = 1 - l1 - l2;
+      if (l1 < -1e-6 || l2 < -1e-6 || l3 < -1e-6) continue;
+      best = Math.max(best, l1 * A[2] + l2 * B[2] + l3 * C[2]);
+    }
+    return best > -Infinity ? best : faceZ(x, y);
+  };
+
+  // One smooth surface per eye / brow: a quadratic fitted to the drawn face over the area it covers, lifted so it
+  // never dips behind the face. All layers of that eye stack on it, so they can't poke through each other.
+  const fitSurface = (x0, x1, y0, y1) => {
+    const rows = [], N = 9;
+    for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) {
+      const x = lerp(x0, x1, i / N), y = lerp(y0, y1, j / N);
+      rows.push([x, y, surfZ(x, y)]);
+    }
+    const basis = (x, y) => [1, x, y, x * x, x * y, y * y];
+    const M = Array.from({ length: 6 }, () => new Array(7).fill(0));
+    for (const [x, y, z] of rows) {
+      const b = basis(x, y);
+      for (let r = 0; r < 6; r++) { for (let c = 0; c < 6; c++) M[r][c] += b[r] * b[c]; M[r][6] += b[r] * z; }
+    }
+    for (let c = 0; c < 6; c++) {                        // Gaussian elimination with partial pivoting
+      let piv = c;
+      for (let r = c + 1; r < 6; r++) if (Math.abs(M[r][c]) > Math.abs(M[piv][c])) piv = r;
+      [M[c], M[piv]] = [M[piv], M[c]];
+      for (let r = 0; r < 6; r++) if (r !== c) { const k = M[r][c] / M[c][c]; for (let q = c; q < 7; q++) M[r][q] -= k * M[c][q]; }
+    }
+    const coef = M.map((r, i) => r[6] / r[i]);
+    const fz = (x, y) => basis(x, y).reduce((a, b, i) => a + b * coef[i], 0);
+    let lift = 0;
+    for (const [x, y, z] of rows) lift = Math.max(lift, z - fz(x, y));
+    return (x, y) => fz(x, y) + lift + 0.0006;
+  };
+
+  // ---- nose: a patch laid on the face around the head's nose point
+  const NZ = NOSES[pick.nose];
+  part("nose", () => {
+    const tip = H.noseY, top = tip + NZ.top, base = tip + NZ.base;
+    const ts = [0, 0.3, 0.55, 0.75, 0.88, 0.96, 1.0];               // top → tip (denser near the tip)
+    const us = [0.4, 0.75, 1.0];                                     // tip → base
+    const ys = [...ts.map(t => lerp(top, tip, t)), ...us.map(t => lerp(tip, base, t))];
+    const cols = [-1, -0.7, -0.4, -0.15, 0, 0.15, 0.4, 0.7, 1];
+    const h = y => y >= tip ? NZ.height * Math.pow(clamp01((top - y) / (top - tip)), NZ.bridge)
+                            : NZ.height * Math.pow(clamp01((y - base) / (tip - base)), NZ.under);
+    const grid = ys.map(y => {
+      const wy = NZ.width * (0.7 + 0.3 * clamp01((y - base) / (top - base))) * (y < tip ? 1.0 : 0.9);
+      return cols.map(s => {
+        const x = s * wy, ridge = Math.max(0, 1 - Math.pow(Math.abs(s), NZ.shape));
+        return add([x, y, surfZ(x, y) + h(y) * ridge - 0.004]);
+      });
+    });
+    for (let r = 0; r < grid.length - 1; r++)
+      for (let c = 0; c < cols.length - 1; c++) faces.push([grid[r][c], grid[r + 1][c], grid[r + 1][c + 1], grid[r][c + 1]]);
+  }, { dir: [0, 0, 1] });
+
+  // ---- eyes around the head's eye spots
+  const ES = EYES[pick.eyes];
+  const piecewise = pts => u => {
+    if (u <= pts[0][0]) return pts[0][1];
+    for (let i = 1; i < pts.length; i++)
+      if (u <= pts[i][0]) { const [a, b] = [pts[i - 1], pts[i]]; return lerp(a[1], b[1], (u - a[0]) / (b[0] - a[0])); }
+    return pts[pts.length - 1][1];
+  };
+  // smooth a stroke: Catmull-Rom through the traced points (thickness interpolated too)
+  const densify = (pts, n, closed) => {
+    const out = [], N = pts.length, at = i => closed ? pts[(i + N) % N] : pts[Math.max(0, Math.min(N - 1, i))];
+    for (let i = 0; i < (closed ? N : N - 1); i++)
+      for (let k = 0; k < n; k++) {
+        const t = k / n, p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
+        out.push(p1.map((_, j) => 0.5 * (2 * p1[j] + (-p0[j] + p2[j]) * t + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * t * t + (-p0[j] + 3 * p1[j] - 3 * p2[j] + p3[j]) * t * t * t)));
+      }
+    if (!closed) out.push(pts[N - 1]);
+    return out;
+  };
+  for (const side of [-1, 1]) {
+    const W = ES.width * H.eye.scale, tilt = ES.tilt * Math.PI / 180, tag = side < 0 ? "L" : "R";
+    const toXY = (u, v) => {
+      const du = (u - 0.5) * W, dv = (v + (ES.shift || 0)) * W;
+      return [side * (H.eye.x + du * Math.cos(tilt) - dv * Math.sin(tilt)), H.eyeY + du * Math.sin(tilt) + dv * Math.cos(tilt)];
+    };
+    const corners = [[-0.1, -0.6], [1.15, -0.6], [-0.1, 0.8], [1.15, 0.8]].map(([u, v]) => toXY(u, v));
+    const eyeSurf = fitSurface(Math.min(...corners.map(c => c[0])), Math.max(...corners.map(c => c[0])),
+                               Math.min(...corners.map(c => c[1])), Math.max(...corners.map(c => c[1])));
+    const place = (u, v, d) => { const [x, y] = toXY(u, v); return [x, y, eyeSurf(x, y) + d]; };
+    // filled area between two curves over u0..u1
+    const fill = (name, u0, u1, bot, top, d, color, cols = 14, rows = 3) => part(`eye_${tag}_${name}`, () => {
+      const grid = [];
+      for (let c = 0; c <= cols; c++) {
+        const u = lerp(u0, u1, c / cols), b = bot(u), t = Math.max(b, top(u));
+        grid.push(Array.from({ length: rows + 1 }, (_, r) => add(place(u, lerp(b, t, r / rows), d))));
+      }
+      for (let c = 0; c < cols; c++)
+        for (let r = 0; r < rows; r++) faces.push([grid[c][r], grid[c + 1][r], grid[c + 1][r + 1], grid[c][r + 1]]);
+    }, { dir: [0, 0, 1] }, color);
+    // a line with thickness along traced points
+    const stroke = (name, pts, d, color, closed = false) => part(`eye_${tag}_${name}`, () => {
+      const P = densify(pts, 4, closed), M = P.length, A = [], B = [];
+      for (let i = 0; i < M; i++) {
+        const p = closed ? P[(i - 1 + M) % M] : P[Math.max(0, i - 1)], q = closed ? P[(i + 1) % M] : P[Math.min(M - 1, i + 1)];
+        let tx = q[0] - p[0], ty = q[1] - p[1];
+        const l = Math.hypot(tx, ty) || 1; tx /= l; ty /= l;
+        const h = Math.max(0, P[i][2]) / 2;
+        A.push(add(place(P[i][0] - ty * h, P[i][1] + tx * h, d)));
+        B.push(add(place(P[i][0] + ty * h, P[i][1] - tx * h, d)));
+      }
+      for (let i = 0; i < (closed ? M : M - 1); i++) { const j = (i + 1) % M; faces.push([B[i], B[j], A[j], A[i]]); }
+    }, { dir: [0, 0, 1] }, color);
+    const C = ES.colors, I = ES.iris;
+    // white: under the upper lid down to the lower lid (or to the shape's own bottom edge when it has no lower lid)
+    let whiteTop, whiteBot, wr = ES.whiteRange || [0, 0.94];
+    if (ES.whiteTop) { whiteTop = piecewise(ES.whiteTop); whiteBot = piecewise(ES.whiteBottom); }
+    else {
+      const upperLine = piecewise(ES.upper), up = ES.upper, lo = ES.lower;
+      const wb = piecewise([[up[0][0], up[0][1]], ...lo.map(p => [p[0], p[1]]), [0.94, -0.17]]);
+      whiteTop = u => upperLine(u) - 0.004; whiteBot = u => wb(u) + 0.008;
+    }
+    fill("white", wr[0], wr[1], whiteBot, whiteTop, 0.0020, C.white, 18, 3);
+    if (ES.lidShade) {
+      const band = Array.isArray(ES.lidShade) ? piecewise(ES.lidShade) : () => ES.lidShade;
+      fill("lid_shade", wr[0], wr[1], u => Math.max(whiteBot(u), whiteTop(u) - band(u)), whiteTop, 0.0026, C.lidShade, 18, 2);
+    }
+    const ell = (cu, cv, rx, ry) => [u => cv - ry * Math.sqrt(Math.max(0, 1 - ((u - cu) / rx) ** 2)), u => cv + ry * Math.sqrt(Math.max(0, 1 - ((u - cu) / rx) ** 2))];
+    const [ib, it] = ell(I.u, I.v, I.rx, I.ry);
+    const EC = EYE_COLORS[pick.eyeColor];
+    fill("iris", I.u - I.rx, I.u + I.rx, ib, it, 0.0032, EC.iris, 14, 4);
+    if (I.darkTop) fill("iris_dark", I.u - I.rx, I.u + I.rx, u => Math.max(ib(u), I.v + I.ry * (1 - 2 * I.darkTop)), it, 0.0036, EC.ring, 14, 2);
+    const ring = Array.from({ length: 16 }, (_, k) => { const a = k / 16 * Math.PI * 2; return [I.u + I.rx * Math.cos(a), I.v + I.ry * Math.sin(a), I.ring]; });
+    stroke("iris_ring", ring, 0.0040, EC.ring, true);
+    ES.shine.forEach(([su, sv, sr], i) => { const [sb, st] = ell(su, sv, sr, sr); fill("shine" + (i + 1), su - sr, su + sr, sb, st, 0.0050, C.shine, 8, 2); });
+    stroke("lid_upper", ES.upper, 0.0060, C.lid);
+    (ES.extra || []).forEach((pts, i) => stroke("lid_extra" + (i + 1), pts, 0.0060, C.lid));
+    if (ES.lower) stroke("lid_lower", ES.lower, 0.0060, C.lid);
+
+    // eyebrow: its own part, placed from the head's eye spot (not from the eye shape)
+    const eyeTop = e => e.width * (Math.max(...e.upper.map(p => p[1] + p[2] / 2)) + (e.shift || 0));
+    const browLift = Math.max(0, eyeTop(ES) - eyeTop(EYES.drawn)) * H.eye.scale;
+    const B = BROWS[pick.brows], BW = BROW_WIDTH * H.eye.scale, line = piecewise(B.line);
+    const u0 = B.line[0][0], u1 = B.line[B.line.length - 1][0];
+    const bxy = (u, v) => [side * (H.eye.x + (u - 0.5) * BW), H.eyeY + v * BW + browLift];
+    const bc = [[u0, 0.4], [u1, 0.4], [u0, 1.1], [u1, 1.1]].map(([u, v]) => bxy(u, v));
+    const browSurf = fitSurface(Math.min(...bc.map(c => c[0])), Math.max(...bc.map(c => c[0])), Math.min(...bc.map(c => c[1])), Math.max(...bc.map(c => c[1])));
+    const bplace = (u, v) => { const [x, y] = bxy(u, v); return [x, y, browSurf(x, y) + 0.002]; };
+    part(`brow_${tag}`, () => {
+      const cols = 14, rows = 2, grid = [];
+      for (let c = 0; c <= cols; c++) {
+        const t = c / cols, u = lerp(u0, u1, t);
+        // full thickness through the middle, tapering to a point at the outer end and a blunt end at the inner
+        const th = lerp(B.thick[0], B.thick[1], t) * Math.min(1, smooth(t / 0.08) * 0.6 + 0.4) * smooth((1 - t) / 0.25);
+        const v = line(u);
+        grid.push(Array.from({ length: rows + 1 }, (_, r) => add(bplace(u, v - th / 2 + th * r / rows))));
+      }
+      for (let c = 0; c < cols; c++)
+        for (let r = 0; r < rows; r++) faces.push([grid[c][r], grid[c + 1][r], grid[c + 1][r + 1], grid[c][r + 1]]);
+    }, { dir: [0, 0, 1] }, BROW_COLOR);
+  }
+
+  // ---- ears around the head's ear points
+  const EP = EARS[pick.ears];
+  for (const side of [-1, 1]) part(side < 0 ? "ear_L" : "ear_R", () => {
+    const tau = -EP.tilt * Math.PI / 180, flare = Math.tan(EP.flare * Math.PI / 180);
+    const up = [0, Math.cos(tau), Math.sin(tau)], back = [0, Math.sin(tau), -Math.cos(tau)];
+    const outline = EAR_OUTLINE.map(([u, v]) => [u * EP.su - (u < -0.04 ? EP.lobe * (-u - 0.04) / 0.055 : 0), v * EP.sv]);
+    const cU = EAR_CENTRE[0] * EP.su, cV = EAR_CENTRE[1] * EP.sv;
+    const place = (u, v, d) => {
+      const y = H.ear.y + u * up[1] + v * back[1], z = H.ear.z + u * up[2] + v * back[2];
+      const lift = 0.25 + 0.75 * smooth((v + 0.01) / 0.07);
+      return [side * (headX(y, z) - 0.012 + d * lift + Math.max(0, v) * flare), y, z];
+    };
+    const rings = EAR_RINGS.map(([sc, d]) => outline.map(([u, v]) => add(place(cU + (u - cU) * sc, cV + (v - cV) * sc, d))));
+    const centre = add(place(cU, cV, 0.017)), backing = add(place(cU, cV, -0.02));
+    const M = outline.length;
+    for (let r = 0; r < rings.length - 1; r++)
+      for (let m = 0; m < M; m++) { const n = (m + 1) % M; faces.push([rings[r][m], rings[r][n], rings[r + 1][n], rings[r + 1][m]]); }
+    const inner = rings[rings.length - 1];
+    for (let m = 0; m < M; m++) faces.push([inner[m], inner[(m + 1) % M], centre]);
+    for (let m = 0; m < M; m++) faces.push([rings[0][(m + 1) % M], rings[0][m], backing]);
+  }, { dir: [side, 0, 0] });
+
+  return { pos, faces, parts };
+}
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+function toObj(mesh) {
+  const lines = [`# LightMMORPG low-poly head: ${HEADS[pick.head].label} head, ${NOSES[pick.nose].label} nose, ${EARS[pick.ears].label} ears`,
+                 "# head height crown-to-chin = 1 unit, Y up, the face looks towards +Z"];
+  mesh.pos.forEach(p => lines.push(`v ${p[0].toFixed(5)} ${p[1].toFixed(5)} ${p[2].toFixed(5)}`));
+  for (const pt of mesh.parts) {
+    lines.push(`o ${pt.name}`);
+    for (let i = pt.f0; i < pt.f1; i++) lines.push("f " + mesh.faces[i].map(k => k + 1).join(" "));
+  }
+  return lines.join("\n") + "\n";
+}
+
+// ================================================================== three.js
+const canvas = document.getElementById("c");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(28, 1, 0.05, 50);
+
+const dist2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+function geometryFor(mesh, pt, flat) {
+  const p = [], idx = [], map = new Map();
+  const vid = i => { if (!map.has(i)) { map.set(i, map.size); p.push(...mesh.pos[i]); } return map.get(i); };
+  for (let f = pt.f0; f < pt.f1; f++) {
+    const F = mesh.faces[f].map(vid), P = mesh.faces[f].map(i => mesh.pos[i]);
+    if (F.length === 3) idx.push(F[0], F[1], F[2]);
+    else if (dist2(P[0], P[2]) <= dist2(P[1], P[3])) idx.push(F[0], F[1], F[2], F[0], F[2], F[3]);
+    else idx.push(F[0], F[1], F[3], F[1], F[2], F[3]);
+  }
+  let g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(p, 3));
+  g.setIndex(idx);
+  if (flat) g = g.toNonIndexed();
+  g.computeVertexNormals();
+  return g;
+}
+
+const ramp = new THREE.DataTexture(new Uint8Array([95, 95, 95, 255, 175, 175, 175, 255, 255, 255, 255, 255]), 3, 1, THREE.RGBAFormat);
+ramp.minFilter = ramp.magFilter = THREE.NearestFilter;
+ramp.needsUpdate = true;
+const toonMat = new THREE.MeshToonMaterial({ color: new THREE.Color("#f3c9a6"), gradientMap: ramp });
+const clayMat = new THREE.MeshStandardMaterial({ color: "#c9ccd3", roughness: 0.8, metalness: 0 });
+const outlineMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide,
+  uniforms: { thickness: { value: 0.0075 }, color: { value: new THREE.Color("#2a1a14") } },
+  vertexShader: "uniform float thickness; void main(){ vec3 p = position + normal * thickness; gl_Position = projectionMatrix * modelViewMatrix * vec4(p,1.0); }",
+  fragmentShader: "uniform vec3 color; void main(){ gl_FragColor = vec4(color,1.0); }",
+});
+const colorMats = new Map();
+const flatColor = c => {
+  if (!colorMats.has(c)) colorMats.set(c, new THREE.MeshBasicMaterial({ color: new THREE.Color(c), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
+  return colorMats.get(c);
+};
+const wireMat = new THREE.LineBasicMaterial({ color: "#1b2130", transparent: true, opacity: 0.35 });
+
+const root = new THREE.Group();
+root.position.y = -0.42;
+scene.add(root);
+const model = new THREE.Group();
+root.add(model);
+const state = { mode: "toon", wire: false, flat: false, guides: false };
+let mesh, edgeCount = 0;
+
+function rebuildModel() {
+  for (const o of [...model.children]) { model.remove(o); o.geometry.dispose(); }
+  const mat = state.mode === "toon" ? toonMat : clayMat;
+  mat.flatShading = state.flat; mat.needsUpdate = true;
+  for (const pt of mesh.parts) {
+    const g = geometryFor(mesh, pt, state.flat);
+    if (pt.color) { model.add(new THREE.Mesh(g, flatColor(pt.color))); continue; }
+    model.add(new THREE.Mesh(g, mat));
+    // the nose patch gets no outline of its own (it would draw a ring on the face); its shading carries it
+    if (state.mode === "toon" && pt.name !== "nose") model.add(new THREE.Mesh(state.flat ? geometryFor(mesh, pt, false) : g.clone(), outlineMat));
+  }
+  if (state.wire) {
+    const seen = new Set(), pts = [];
+    for (const f of mesh.faces)
+      for (let i = 0; i < f.length; i++) {
+        const a = f[i], b = f[(i + 1) % f.length], key = a < b ? a + "_" + b : b + "_" + a;
+        if (!seen.has(key)) { seen.add(key); pts.push(...mesh.pos[a], ...mesh.pos[b]); }
+      }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+    const w = new THREE.LineSegments(g, wireMat);
+    w.scale.setScalar(1.002);
+    model.add(w);
+  }
+}
+
+const guides = new THREE.Group();
+guides.visible = false;
+root.add(guides);
+function rebuildGuides() {
+  for (const o of [...guides.children]) { guides.remove(o); o.geometry.dispose(); }
+  const m = new THREE.LineBasicMaterial({ color: "#3b6fd8" });
+  for (const y of [1.0, H.eyeY, H.noseY, H.jawCorner.y, 0.0]) {
+    guides.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-0.62, y, 0), new THREE.Vector3(0.62, y, 0)]), m));
+    guides.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, y, -0.62), new THREE.Vector3(0, y, 0.62)]), m));
+  }
+}
+
+scene.add(new THREE.HemisphereLight("#fff6ee", "#6b7a99", 0.9));
+const key = new THREE.DirectionalLight("#ffffff", 2.2);
+key.position.set(-1.2, 1.6, 2.2);
+scene.add(key);
+const rim = new THREE.DirectionalLight("#bcd4ff", 0.8);
+rim.position.set(1.5, 0.8, -2);
+scene.add(rim);
+
+// ================================================================== camera
+// tall phone screens need the camera further back so the whole head clears the buttons
+let baseDist = 3.0;
+const cam = { yaw: 0, pitch: 0.06, dist: 3.0, tYaw: 0, tPitch: 0.06, tDist: 3.0 };
+function placeCamera() {
+  const cp = Math.cos(cam.pitch);
+  camera.position.set(Math.sin(cam.yaw) * cp * cam.dist, Math.sin(cam.pitch) * cam.dist + 0.02, Math.cos(cam.yaw) * cp * cam.dist);
+  camera.lookAt(0, 0, 0);
+}
+function resize() {
+  const r = canvas.getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / Math.max(1, r.height);
+  camera.fov = 28;
+  camera.updateProjectionMatrix();
+  if (!(r.width > 1 && r.height > 1)) return; // not laid out yet
+  const next = 3.0 * Math.max(1, 1.25 / Math.sqrt(camera.aspect));
+  if (Math.abs(cam.tDist - baseDist) < 1e-3) { cam.tDist = next; cam.dist = next; }
+  baseDist = next;
+}
+new ResizeObserver(resize).observe(canvas);
+resize();
+
+const pointers = new Map();
+let pinch0 = 0, dist0 = 0;
+canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, [e.clientX, e.clientY]); if (pointers.size === 2) { pinch0 = pinchDist(); dist0 = cam.tDist; } });
+canvas.addEventListener("pointermove", e => {
+  if (!pointers.has(e.pointerId)) return;
+  const prev = pointers.get(e.pointerId);
+  pointers.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pointers.size === 1) {
+    cam.tYaw -= (e.clientX - prev[0]) * 0.008;
+    cam.tPitch = Math.max(-1.1, Math.min(1.1, cam.tPitch + (e.clientY - prev[1]) * 0.006));
+    setView(null);
+  } else if (pointers.size === 2 && pinch0 > 0) cam.tDist = clampDist(dist0 * pinch0 / pinchDist());
+});
+const lift = e => { pointers.delete(e.pointerId); pinch0 = 0; };
+canvas.addEventListener("pointerup", lift);
+canvas.addEventListener("pointercancel", lift);
+canvas.addEventListener("wheel", e => { e.preventDefault(); cam.tDist = clampDist(cam.tDist * Math.exp(e.deltaY * 0.001)); }, { passive: false });
+const pinchDist = () => { const [a, b] = [...pointers.values()]; return Math.hypot(a[0] - b[0], a[1] - b[1]); };
+const clampDist = d => Math.max(1.3, Math.min(9, d));
+
+const views = { "v-front": [0, 0.06], "v-three": [0.62, 0.1], "v-side": [Math.PI / 2, 0.04], "v-back": [Math.PI, 0.08] };
+function setView(id) { for (const k of Object.keys(views)) document.getElementById(k).setAttribute("aria-pressed", String(k === id)); }
+for (const [id, [yaw, pitch]] of Object.entries(views))
+  document.getElementById(id).addEventListener("click", () => {
+    const twoPi = Math.PI * 2;
+    cam.tYaw += ((yaw - cam.tYaw) % twoPi + twoPi * 1.5) % twoPi - Math.PI;
+    cam.tPitch = pitch; cam.tDist = baseDist;
+    setView(id);
+  });
+
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+(function frame() {
+  const k = reduce ? 1 : 0.18;
+  cam.yaw += (cam.tYaw - cam.yaw) * k;
+  cam.pitch += (cam.tPitch - cam.pitch) * k;
+  cam.dist += (cam.tDist - cam.dist) * k;
+  placeCamera();
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+})();
+
+// ================================================================== panel
+const f2 = v => v.toFixed(2);
+function refresh() {
+  H = HEADS[pick.head];
+  mesh = buildMesh();
+  window.headMesh = mesh;
+  window.headObj = toObj(mesh);
+  rebuildModel();
+  rebuildGuides();
+
+  const quads = mesh.faces.filter(f => f.length === 4).length, tris = mesh.faces.length - quads;
+  const edges = new Set();
+  for (const f of mesh.faces) for (let i = 0; i < f.length; i++) { const a = f[i], b = f[(i + 1) % f.length]; edges.add(a < b ? a + "_" + b : b + "_" + a); }
+  document.getElementById("counts").textContent = `${mesh.faces.length.toLocaleString()} faces · ${mesh.pos.length.toLocaleString()} verts`;
+  const eyeFaces = mesh.parts.filter(p => /^(eye|brow)_/.test(p.name)).reduce((n, p) => n + p.f1 - p.f0, 0);
+  const per = mesh.parts.filter(p => !/^(eye|brow)_/.test(p.name)).map(p => `${p.name.replace("_", " ")} ${p.f1 - p.f0}`).concat(`eyes and brows ${eyeFaces}`).join(" · ");
+  document.getElementById("mesh-stats").innerHTML =
+    `<dt>Faces (Blockbench)</dt><dd>${mesh.faces.length.toLocaleString()}</dd>` +
+    `<dt>Quads / triangles</dt><dd>${quads.toLocaleString()} / ${tris.toLocaleString()}</dd>` +
+    `<dt>Triangles in game</dt><dd>${(quads * 2 + tris).toLocaleString()}</dd>` +
+    `<dt>Vertices</dt><dd>${mesh.pos.length.toLocaleString()}</dd>` +
+    `<dt>Edges</dt><dd>${edges.size.toLocaleString()}</dd>` +
+    `<dt>Faces per part</dt><dd style="text-align:left;grid-column:1/-1;font-size:12px">${per}</dd>`;
+
+  const ear = mesh.parts.find(p => p.name === "ear_R");
+  let lo = Infinity, hi = -Infinity;
+  for (let i = ear.v0; i < ear.v1; i++) { lo = Math.min(lo, mesh.pos[i][1]); hi = Math.max(hi, mesh.pos[i][1]); }
+  document.getElementById("props").innerHTML =
+    `<dt>Crown</dt><dd>1.00</dd><dt>Eye line (no eyes yet)</dt><dd>${f2(H.eyeY)}</dd>` +
+    `<dt>Ears</dt><dd>${f2(lo)} – ${f2(hi)}</dd><dt>Nose tip</dt><dd>${f2(H.noseY)}</dd>` +
+    `<dt>Jaw corner</dt><dd>${f2(H.jawCorner.y)}</dd><dt>Chin</dt><dd>0.00</dd><dt>Neck cut</dt><dd>${f2(H.neck.bottom)}</dd>`;
+  document.getElementById("notes").innerHTML = [...H.notes, NOSES[pick.nose].note, EARS[pick.ears].note, EYES[pick.eyes].note, BROWS[pick.brows].note].map(t => `<li>${t}</li>`).join("");
+  document.getElementById("obj").value = window.headObj;
+}
+
+function chips(id, lib, keyName) {
+  const row = document.getElementById(id);
+  for (const [k, v] of Object.entries(lib)) {
+    const b = document.createElement("button");
+    b.className = "chip"; b.id = `${keyName}-${k}`; b.textContent = v.label;
+    if (v.iris) {
+      const dot = document.createElement("span");
+      dot.setAttribute("aria-hidden", "true");
+      dot.style.cssText = `display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:8px;vertical-align:-2px;background:${v.iris};box-shadow:inset 0 0 0 2px ${v.ring}`;
+      b.prepend(dot);
+    }
+    b.setAttribute("aria-pressed", String(pick[keyName] === k));
+    b.addEventListener("click", () => {
+      pick[keyName] = k;
+      for (const c of row.children) c.setAttribute("aria-pressed", String(c === b));
+      refresh();
+    });
+    row.appendChild(b);
+  }
+}
+chips("pick-head", HEADS, "head");
+chips("pick-nose", NOSES, "nose");
+chips("pick-ears", EARS, "ears");
+chips("pick-eyes", EYES, "eyes");
+chips("pick-eyeColor", EYE_COLORS, "eyeColor");
+chips("pick-brows", BROWS, "brows");
+
+function toggle(id, on) { document.getElementById(id).setAttribute("aria-pressed", String(on)); }
+document.getElementById("m-toon").addEventListener("click", () => { state.mode = "toon"; toggle("m-toon", true); toggle("m-clay", false); rebuildModel(); });
+document.getElementById("m-clay").addEventListener("click", () => { state.mode = "clay"; toggle("m-toon", false); toggle("m-clay", true); rebuildModel(); });
+document.getElementById("t-flat").addEventListener("click", () => { state.flat = !state.flat; toggle("t-flat", state.flat); rebuildModel(); });
+document.getElementById("t-wire").addEventListener("click", () => { state.wire = !state.wire; toggle("t-wire", state.wire); rebuildModel(); });
+document.getElementById("t-guide").addEventListener("click", () => { state.guides = !state.guides; toggle("t-guide", state.guides); guides.visible = state.guides; });
+document.getElementById("copy").addEventListener("click", async () => {
+  const s = document.getElementById("copy-status"), ta = document.getElementById("obj");
+  try { await navigator.clipboard.writeText(window.headObj); s.textContent = "Copied. Paste it into a file named head.obj."; }
+  catch { ta.focus(); ta.select(); s.textContent = "Copy was blocked here. The text below is selected: copy it by hand."; }
+});
+
+refresh();
+// for the build scripts: every combination's OBJ
+window.objFor = (head, nose, ears, eyes = "drawn", brows = "soft", eyeColor = "lilac") => { Object.assign(pick, { head, nose, ears, eyes, brows, eyeColor }); H = HEADS[head]; const m = buildMesh(); return toObj(m); };
+</script>
