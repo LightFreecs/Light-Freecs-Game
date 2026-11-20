@@ -1,0 +1,351 @@
+<title>Battle HUD Bench</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700;0,900;1,900&display=swap">
+<style>
+  :root {
+    --page: #eef0f4; --panel: #ffffff; --ink: #161a24; --muted: #5d6475; --line: #d8dce5; --btn: #f3f5f9; --btn-on: #173f75; --btn-on-ink: #fff;
+    /* HUD (the game look, same in both page themes) */
+    --hp-a: #c6ff5c; --hp-b: #36d98a; --low-a: #ffb03d; --low-b: #ff4d43; --en-a: #6fe6ff; --en-b: #2c8dff;
+    --guard: #ffd25a; --ko: #ff4d43; --back: rgba(7, 11, 24, .74); --edge: rgba(255, 255, 255, .22);
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #0d1018; --panel: #161a25; --ink: #eef1f8; --muted: #9aa2b6; --line: #2a3040; --btn: #1d2230; --btn-on: #ffc48a; --btn-on-ink: #17223a; color-scheme: dark; } }
+  :root[data-theme="dark"] { --page: #0d1018; --panel: #161a25; --ink: #eef1f8; --muted: #9aa2b6; --line: #2a3040; --btn: #1d2230; --btn-on: #ffc48a; --btn-on-ink: #17223a; color-scheme: dark; }
+  body { background: var(--page); color: var(--ink); font: 15px/1.5 Roboto, system-ui, sans-serif; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding-block: 20px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  header h1 { font: 900 italic 34px/1 Roboto, sans-serif; letter-spacing: .01em; margin: 0 0 6px; text-wrap: balance; }
+  header p { margin: 0 0 16px; color: var(--muted); max-width: 72ch; }
+
+  /* ---------- stage: a 1920x1080 game screen scaled to fit ---------- */
+  .viewport { position: relative; width: 100%; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,.18); }
+  .stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; overflow: hidden;
+    font-family: Roboto, sans-serif; color: #fff; user-select: none; }
+  .sky { position: absolute; inset: 0; background: linear-gradient(#5fa6e8 0%, #9fd0f3 46%, #e9e2c8 62%, #8fb36a 62.2%, #5f8a48 100%); }
+  .stage.night .sky { background: linear-gradient(#070b1d 0%, #1b2450 50%, #3a3a5a 62%, #22301f 62.2%, #121a12 100%); }
+  .cloud { position: absolute; background: rgba(255,255,255,.75); border-radius: 999px; filter: blur(2px); }
+  .stage.night .cloud { background: rgba(160,170,220,.12); }
+  .foe { position: absolute; left: 1180px; top: 380px; width: 150px; height: 300px; }
+  .lock { position: absolute; left: 1205px; top: 470px; width: 100px; height: 100px; border: 3px solid rgba(255,90,70,.9); border-radius: 50%;
+    box-shadow: 0 0 12px rgba(255,90,70,.6); }
+  .lock::before, .lock::after { content: ""; position: absolute; background: rgba(255,90,70,.9); }
+  .lock::before { left: 45px; top: -16px; width: 4px; height: 22px; box-shadow: 0 112px 0 rgba(255,90,70,.9); } .lock::after { top: 45px; left: -16px; height: 4px; width: 22px; box-shadow: 112px 0 0 rgba(255,90,70,.9); }
+
+  /* shared bar look: a slanted plate with a dark back, white edge, fill and a damage trail */
+  .bar { position: absolute; transform: skewX(-20deg); background: var(--back); box-shadow: 0 0 0 2px var(--edge), 0 4px 10px rgba(0,0,0,.35); overflow: hidden; }
+  .bar .trail, .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; }
+  .bar .trail { background: #fff; opacity: .9; }
+  .bar .fill::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 38%; background: rgba(255,255,255,.35); }
+  .bar .ticks { position: absolute; inset: 0; pointer-events: none; }
+  .bar .ticks i { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(0,0,0,.28); }
+  .num { position: absolute; font: 900 italic 30px/1 Roboto, sans-serif; letter-spacing: .01em; text-shadow: 0 2px 0 rgba(0,0,0,.55), 0 0 8px rgba(0,0,0,.4); white-space: nowrap; }
+  .tag { position: absolute; font: 700 15px/1 Roboto, sans-serif; letter-spacing: .18em; text-transform: uppercase; text-shadow: 0 2px 0 rgba(0,0,0,.6); white-space: nowrap; }
+
+  /* ---------- player cluster ---------- */
+  .gauge { position: absolute; left: 44px; top: 34px; width: 168px; height: 168px; }
+  .gauge svg { position: absolute; inset: 0; overflow: visible; }
+  .gauge .val { position: absolute; left: 0; right: 0; top: 46px; text-align: center; font: 900 italic 58px/1 Roboto, sans-serif;
+    text-shadow: 0 3px 0 rgba(0,0,0,.55), 0 0 14px rgba(0,0,0,.35); }
+  .gauge .val small { font-size: 26px; margin-left: 2px; }
+  .gauge .lbl { position: absolute; left: 0; right: 0; top: 108px; text-align: center; font: 700 14px/1 Roboto, sans-serif; letter-spacing: .24em; text-shadow: 0 2px 0 rgba(0,0,0,.6); }
+  .gauge.exhausted .val, .gauge.exhausted .lbl { color: #ff8a7a; }
+  .gauge .charge { position: absolute; left: 50%; top: -6px; width: 0; height: 0; opacity: 0; transition: opacity .15s; }
+  .gauge.charging .charge { opacity: 1; }
+  .chev { position: absolute; left: -11px; width: 22px; height: 12px; clip-path: polygon(0 100%, 50% 0, 100% 100%, 80% 100%, 50% 40%, 20% 100%); animation: rise .6s linear infinite; }
+  @keyframes rise { from { transform: translateY(6px); opacity: 0 } 30% { opacity: 1 } to { transform: translateY(-22px); opacity: 0 } }
+
+  .name { left: 240px; top: 34px; font-size: 19px; }
+  .name b { font-weight: 900; letter-spacing: .06em; }
+  .name span { color: rgba(255,255,255,.75); margin-left: 10px; }
+  #hp { left: 246px; top: 66px; width: 620px; height: 40px; }
+  #hpNum { left: 640px; top: 71px; width: 210px; text-align: right; }
+  #guard { left: 236px; top: 112px; width: 300px; height: 10px; }
+  #guardTag { left: 552px; top: 108px; color: var(--ko); display: none; }
+  #en { left: 226px; top: 132px; width: 520px; height: 20px; }
+  #enNum { left: 760px; top: 132px; font-size: 22px; }
+  #aura { left: 216px; top: 162px; width: 520px; height: 16px; }
+  #auraTag { left: 756px; top: 161px; font-size: 14px; }
+  #auraTag b { font: 900 italic 20px/1 Roboto, sans-serif; letter-spacing: 0; margin-right: 8px; }
+  #aura .ember { position: absolute; top: -6px; bottom: -6px; width: 26px; margin-left: -13px; border-radius: 50%; filter: blur(5px); opacity: 0; }
+  #surge { left: 236px; top: 192px; display: none; }
+  #surge .t { display: inline-block; height: 8px; width: 200px; margin-left: 12px; vertical-align: middle; background: rgba(0,0,0,.45); transform: skewX(-20deg); box-shadow: 0 0 0 2px var(--edge); position: relative; overflow: hidden; }
+  #surge .t i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #ff9a3d, #ffe07a); }
+
+  /* ---------- target (top centre) ---------- */
+  .target { position: absolute; left: 1236px; top: 40px; width: 640px; height: 90px; }
+  .target .tname { position: absolute; right: 26px; top: 0; text-align: right; font: 700 22px/1 Roboto, sans-serif; letter-spacing: .06em; text-shadow: 0 2px 0 rgba(0,0,0,.6); }
+  .target .tname span { color: rgba(255,255,255,.7); font-weight: 500; margin-left: 8px; }
+  .target .pill { position: absolute; top: 26px; left: 0; height: 32px; padding: 0 14px; display: flex; align-items: center; gap: 6px;
+    font: 900 italic 22px/1 Roboto, sans-serif; background: var(--back); box-shadow: 0 0 0 2px var(--edge); transform: skewX(20deg); }
+  .target .pill > * { transform: skewX(-20deg); }
+  .target .pill em { font: 700 11px/1 Roboto, sans-serif; letter-spacing: .2em; font-style: normal; opacity: .8; }
+  /* mirrored: slants the other way and empties towards the right edge */
+  .target .bar { transform: skewX(20deg); }
+  .target .bar .fill, .target .bar .trail { left: auto; right: 0; }
+  #thp { left: 118px; top: 26px; width: 500px; height: 32px; }
+  #thpNum { left: 136px; top: 30px; font-size: 24px; }
+  #tguard { left: 418px; top: 66px; width: 200px; height: 8px; }
+
+  /* ---------- name plate over the foe ---------- */
+  .plate { position: absolute; left: 1150px; top: 330px; width: 210px; text-align: center; }
+  .plate .pn { font: 700 17px/1 Roboto, sans-serif; text-shadow: 0 2px 0 rgba(0,0,0,.6); }
+  .plate .pn span { font-weight: 900; font-style: italic; color: #ffe07a; margin-left: 6px; }
+  #php { position: relative; left: 25px; top: 8px; width: 160px; height: 10px; }
+
+  .center { position: absolute; left: 0; right: 0; top: 400px; text-align: center; font: 900 italic 64px/1 Roboto, sans-serif; text-shadow: 0 4px 0 rgba(0,0,0,.5); pointer-events: none; }
+
+  /* ---------- controls ---------- */
+  .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+  .card h2 { margin: 0 0 8px; font: 700 11px/1.2 Roboto, sans-serif; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+  .btns { display: flex; flex-wrap: wrap; gap: 6px; }
+  .btns button { padding: 7px 11px; border-radius: 7px; border: 1px solid var(--line); background: var(--btn); color: var(--ink); font: 500 13px Roboto, sans-serif; cursor: pointer; touch-action: none; }
+  .btns button[aria-pressed="true"] { background: var(--btn-on); color: var(--btn-on-ink); border-color: var(--btn-on); }
+  .btns button kbd { font: 700 11px Roboto, sans-serif; opacity: .6; margin-left: 4px; }
+  .sw { width: 28px; height: 28px; padding: 0 !important; border-radius: 6px !important; }
+  .sw[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--ink); }
+  .readout { font: 13px/1.6 Roboto, sans-serif; color: var(--muted); }
+  .readout b { color: var(--ink); font-weight: 700; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Battle HUD</h1>
+    <p>The in-game health and resource bars, redesigned. This is a 1920×1080 game screen running the real rules: strength starts at 10% and Charge raises it, the aura reserve never refills, energy attacks cost energy and aura, and an empty reserve brings exhaustion. Hold <b>Charge</b> (C) and <b>Block</b> (R), and press the attack and hit buttons to see every state.</p>
+  </header>
+
+  <div class="viewport" id="vp">
+    <div class="stage" id="stage">
+      <div class="sky"></div>
+      <div class="cloud" style="left:180px;top:300px;width:260px;height:60px"></div>
+      <div class="cloud" style="left:1420px;top:240px;width:340px;height:70px"></div>
+      <div class="cloud" style="left:860px;top:420px;width:200px;height:44px"></div>
+      <svg class="foe" viewBox="0 0 150 300" aria-hidden="true"><g fill="#2a2433" opacity=".88">
+        <circle cx="75" cy="42" r="26"/><path d="M40 78h70l14 92-16 4-8-58-6 60 10 118H84l-9-96-9 96H46l10-118-6-60-8 58-16-4z"/></g></svg>
+      <div class="lock"></div>
+      <div class="plate"><div class="pn">Sparring Rival<span id="pPow">PL 38%</span></div><div class="bar" id="php"><div class="trail"></div><div class="fill"></div></div></div>
+
+      <!-- player -->
+      <div class="gauge" id="gauge">
+        <svg viewBox="0 0 168 168">
+          <defs>
+            <filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          </defs>
+          <circle cx="84" cy="84" r="70" fill="rgba(7,11,24,.74)" stroke="rgba(255,255,255,.22)" stroke-width="2"/>
+          <circle cx="84" cy="84" r="60" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="12"/>
+          <circle id="ring" cx="84" cy="84" r="60" fill="none" stroke-width="12" stroke-linecap="butt" transform="rotate(-90 84 84)" filter="url(#glow)"/>
+          <g id="notches"></g>
+          <circle id="surgeRing" cx="84" cy="84" r="78" fill="none" stroke="#ffb347" stroke-width="5" transform="rotate(-90 84 84)" opacity="0"/>
+        </svg>
+        <div class="val" id="powVal">10<small>%</small></div>
+        <div class="lbl" id="powLbl">POWER</div>
+        <div class="charge" id="chev"><div class="chev" style="top:0"></div><div class="chev" style="top:0;animation-delay:.2s"></div><div class="chev" style="top:0;animation-delay:.4s"></div></div>
+      </div>
+      <div class="tag name"><b>LIGHTFREECS</b><span>Lv 12</span></div>
+      <div class="bar" id="hp"><div class="trail"></div><div class="fill"></div><div class="ticks"></div></div>
+      <div class="num" id="hpNum">1000<span style="font-size:20px;opacity:.75"> / 1000</span></div>
+      <div class="bar" id="guard"><div class="fill"></div></div>
+      <div class="tag" id="guardTag">Guard break</div>
+      <div class="bar" id="en"><div class="trail"></div><div class="fill"></div><div class="ticks"></div></div>
+      <div class="num" id="enNum">100 <span style="font-size:13px;letter-spacing:.18em;font-style:normal;font-weight:700">EN</span></div>
+      <div class="bar" id="aura"><div class="fill"></div><div class="ember"></div></div>
+      <div class="tag" id="auraTag"><b>1000</b>AURA</div>
+      <div class="tag" id="surge">Surge<span class="t"><i></i></span></div>
+
+      <!-- target -->
+      <div class="target">
+        <div class="tname">Sparring Rival<span>Lv 9</span></div>
+        <div class="pill"><em>PL</em><span id="tPow">38%</span></div>
+        <div class="bar" id="thp"><div class="trail"></div><div class="fill"></div><div class="ticks"></div></div>
+        <div class="num" id="thpNum">1000</div>
+        <div class="bar" id="tguard"><div class="fill"></div></div>
+      </div>
+      <div class="center" id="center"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="card"><h2>You</h2><div class="btns">
+      <button id="bCharge">Charge <kbd>C</kbd></button><button id="bBlock">Block <kbd>R</kbd></button>
+      <button id="bBlast">Blast <kbd>1</kbd></button><button id="bBeam">Beam <kbd>2</kbd></button><button id="bSurge">Surge <kbd>3</kbd></button>
+    </div></div>
+    <div class="card"><h2>Get hit / hit back</h2><div class="btns">
+      <button id="bHit">Take a punch <kbd>H</kbd></button><button id="bHeavy">Take a heavy</button><button id="bStrike">Punch the rival <kbd>J</kbd></button>
+    </div></div>
+    <div class="card"><h2>Jump to a state</h2><div class="btns">
+      <button id="bEmpty">Aura nearly spent</button><button id="bLow">Low health</button><button id="bReset">New battle</button>
+    </div></div>
+    <div class="card"><h2>Aura colour · scene</h2><div class="btns" id="swatches"></div>
+      <div class="btns" style="margin-top:8px"><button id="bDay" aria-pressed="true">Day</button><button id="bNight">Night</button></div></div>
+    <div class="card"><h2>Live numbers</h2><div class="readout" id="readout"></div></div>
+  </div>
+</div>
+
+<script>
+// ---- the game's rules (CombatConstants / AuraReserve / PlayerStats), so the bars move like they will in the game ----
+const R = { startPower: .1, powerPerSec: .25, auraMax: 1000, upkeepFull: 10, upkeepExp: 1.5, exhaustRamp: 30, exStr: .4, exDef: .4,
+  hpMax: 1000, enMax: 100, enRegen: 4, enCharge: 30, guardMax: 100, guardRecover: 20, blockReduce: .8, guardPerBlocked: .5,
+  blast: { en: 10, aura: 20, dmg: 45 }, beam: { en: 35, aura: 90, dmg: 300 }, surge: { en: 50, aura: 120, dur: 10 } };
+const AURA_COLORS = [["Gold","#ffd91a"],["Flame","#ff7314"],["Crimson","#ff1f26"],["Rose","#ff59bf"],["Violet","#9e4dff"],
+  ["Blue","#336bff"],["Sky","#4dc7ff"],["Emerald","#33ff73"],["Lime","#b3ff33"],["White","#ebf2ff"]];
+
+const S = { hp: 1000, hpTrail: 1000, hpHold: 0, en: 100, enTrail: 100, enHold: 0, guard: 100, broken: 0, aura: 1000, power: .1, exh: 0, surge: 0,
+  charging: false, blocking: false, t: { hp: 1000, trail: 1000, hold: 0, guard: 100, power: .38 }, aColor: AURA_COLORS[0][1] };
+const upkeep = p => R.upkeepFull * Math.pow(Math.max(0, Math.min(1, (p - R.startPower) / (1 - R.startPower))), R.upkeepExp);
+const strength = () => S.power * (1 - R.exStr * S.exh);
+
+function tick(dt) {
+  if (S.surge > 0) S.surge = Math.max(0, S.surge - dt);
+  if (S.surge <= 0) S.en = Math.min(R.enMax, S.en + (S.charging ? R.enCharge : R.enRegen) * dt);
+  if (S.aura > 0) {
+    if (S.charging) S.power = Math.min(1, S.power + R.powerPerSec * dt);
+    S.aura = Math.max(0, S.aura - upkeep(S.power) * dt);
+  } else S.exh = Math.min(1, S.exh + dt / R.exhaustRamp);
+  if (S.broken > 0) { S.broken -= dt; if (S.broken <= 0) S.guard = R.guardMax * .25; }
+  else if (!S.blocking) S.guard = Math.min(R.guardMax, S.guard + R.guardRecover * dt);
+  // damage trails: hold for 0.5 s, then catch up
+  for (const [v, tr, hold] of [["hp", "hpTrail", "hpHold"], ["en", "enTrail", "enHold"]]) {
+    if (S[tr] < S[v]) S[tr] = S[v];
+    else if (S[hold] > 0) S[hold] -= dt; else S[tr] = Math.max(S[v], S[tr] - (v === "hp" ? 900 : 120) * dt);
+  }
+  if (S.t.trail < S.t.hp) S.t.trail = S.t.hp; else if (S.t.hold > 0) S.t.hold -= dt; else S.t.trail = Math.max(S.t.hp, S.t.trail - 900 * dt);
+  S.t.guard = Math.min(R.guardMax, S.t.guard + R.guardRecover * dt);
+}
+
+function takeHit(base) {
+  let dmg = base * (1 + R.exDef * S.exh);
+  if (S.blocking && S.broken <= 0) {
+    const blocked = dmg * R.blockReduce; dmg -= blocked;
+    S.guard -= blocked * R.guardPerBlocked;
+    if (S.guard <= 0) { S.guard = 0; S.broken = 1.0; flash("GUARD BREAK", "#ff6a5a"); }
+  }
+  if (S.hpTrail <= S.hp + .5) S.hpTrail = S.hp;
+  S.hp = Math.max(0, S.hp - dmg); S.hpHold = .5;
+  if (S.hp <= 0) { flash("K.O.!", "#fff"); setTimeout(newBattle, 1600); }
+}
+function spend(a) {
+  if (S.en < a.en || S.aura < a.aura) { flash(S.aura < a.aura ? "NO AURA" : "NO ENERGY", "#9ad8ff"); return false; }
+  if (S.enTrail <= S.en + .5) S.enTrail = S.en;
+  S.en -= a.en; S.enHold = .35; S.aura -= a.aura; return true;
+}
+function strike(base) { if (S.t.trail <= S.t.hp + .5) S.t.trail = S.t.hp; S.t.hp = Math.max(0, S.t.hp - base * strength()); S.t.hold = .5; if (S.t.hp <= 0) setTimeout(() => S.t.hp = 1000, 900); }
+function newBattle() { Object.assign(S, { hp: 1000, hpTrail: 1000, en: 100, enTrail: 100, guard: 100, broken: 0, aura: 1000, power: .1, exh: 0, surge: 0 }); S.t.hp = S.t.trail = 1000; }
+let flashUntil = 0;
+function flash(text, color) { const c = $("center"); c.textContent = text; c.style.color = color; flashUntil = performance.now() + 900; }
+
+// ---- view ----
+const $ = id => document.getElementById(id);
+function ticks(el, n) { const t = el.querySelector(".ticks"); if (!t) return; for (let i = 1; i < n; i++) { const k = document.createElement("i"); k.style.left = (i / n * 100) + "%"; t.appendChild(k); } }
+ticks($("hp"), 10); ticks($("en"), 10); ticks($("thp"), 10);
+const notches = $("notches");
+for (let i = 0; i < 10; i++) {   // ring notches every 10 %, the 10 % start mark brighter
+  const a = (i / 10) * Math.PI * 2 - Math.PI / 2, r0 = 53, r1 = 67;
+  const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  l.setAttribute("x1", 84 + Math.cos(a) * r0); l.setAttribute("y1", 84 + Math.sin(a) * r0);
+  l.setAttribute("x2", 84 + Math.cos(a) * r1); l.setAttribute("y2", 84 + Math.sin(a) * r1);
+  l.setAttribute("stroke", i === 1 ? "rgba(255,255,255,.85)" : "rgba(7,11,24,.8)"); l.setAttribute("stroke-width", i === 1 ? 3 : 2);
+  notches.appendChild(l);
+}
+const C = 2 * Math.PI * 60, CS = 2 * Math.PI * 78;
+$("ring").setAttribute("stroke-dasharray", C); $("surgeRing").setAttribute("stroke-dasharray", CS);
+
+function setBar(id, frac, trail) {
+  const el = $(id);
+  el.querySelector(".fill").style.width = (Math.max(0, Math.min(1, frac)) * 100) + "%";
+  const t = el.querySelector(".trail"); if (t) t.style.width = (Math.max(0, Math.min(1, trail ?? frac)) * 100) + "%";
+}
+function hpFill(id, frac, now) {
+  const f = $(id).querySelector(".fill"), low = frac < .3;
+  f.style.background = low ? "linear-gradient(90deg, var(--low-b), var(--low-a))" : "linear-gradient(90deg, var(--hp-b), var(--hp-a))";
+  f.style.filter = low ? `brightness(${1 + .25 * (0.5 + 0.5 * Math.sin(now / 130))})` : "";
+}
+
+function render(now) {
+  const ac = S.aColor, exhausted = S.aura <= 0;
+  // power gauge
+  const g = $("gauge"), pct = Math.round(strength() * 100);
+  $("ring").setAttribute("stroke", exhausted ? "#ff5a4a" : ac);
+  $("ring").setAttribute("stroke-dashoffset", C * (1 - strength()));
+  $("powVal").innerHTML = pct + "<small>%</small>";
+  $("powLbl").textContent = exhausted ? (S.exh > 0 ? "EXHAUSTED" : "AURA SPENT") : S.power >= .999 ? "FULL POWER" : "POWER";
+  $("powLbl").style.color = !exhausted && S.power >= .999 ? ac : "";
+  g.classList.toggle("exhausted", exhausted);
+  const charging = S.charging && !exhausted && S.power < 1;
+  g.classList.toggle("charging", charging);
+  document.querySelectorAll(".chev").forEach(c => c.style.background = ac);
+  $("ring").style.filter = charging ? `drop-shadow(0 0 ${6 + 4 * Math.sin(now / 90)}px ${ac})` : "";
+  $("surgeRing").setAttribute("opacity", S.surge > 0 ? 1 : 0);
+  $("surgeRing").setAttribute("stroke-dashoffset", CS * (1 - S.surge / R.surge.dur));
+  // health + guard
+  setBar("hp", S.hp / R.hpMax, S.hpTrail / R.hpMax); hpFill("hp", S.hp / R.hpMax, now);
+  $("hp").querySelector(".trail").style.background = S.hpHold > 0 ? "#fff" : "#ff5a4a";
+  $("hpNum").innerHTML = Math.ceil(S.hp) + '<span style="font-size:20px;opacity:.75"> / ' + R.hpMax + "</span>";
+  setBar("guard", S.guard / R.guardMax);
+  const gf = $("guard").querySelector(".fill");
+  gf.style.background = S.broken > 0 ? "repeating-linear-gradient(90deg, var(--ko) 0 10px, #7a1b16 10px 20px)" : "var(--guard)";
+  if (S.broken > 0) gf.style.width = "100%";
+  $("guardTag").style.display = S.broken > 0 ? "block" : "none";
+  $("guard").style.opacity = S.guard >= R.guardMax - .01 && S.broken <= 0 && !S.blocking ? .55 : 1;
+  // energy
+  setBar("en", S.en / R.enMax, S.enTrail / R.enMax);
+  $("en").querySelector(".fill").style.background = "linear-gradient(90deg, var(--en-b), var(--en-a))";
+  $("en").querySelector(".trail").style.background = "rgba(255,255,255,.75)";
+  $("enNum").firstChild.nodeValue = Math.floor(S.en) + " ";
+  // aura reserve: only ever goes down; burning shows an ember at its end and the burn rate
+  const af = $("aura").querySelector(".fill"), frac = S.aura / R.auraMax, burn = upkeep(S.power);
+  af.style.width = (frac * 100) + "%";
+  af.style.background = `linear-gradient(90deg, color-mix(in srgb, ${ac} 55%, #000), ${ac})`;
+  const ember = $("aura").querySelector(".ember");
+  ember.style.left = (frac * 100) + "%"; ember.style.background = ac;
+  ember.style.opacity = burn > 0 && !exhausted ? .55 + .35 * Math.sin(now / 70) : 0;
+  $("auraTag").innerHTML = exhausted ? '<b style="color:#ff8a7a">0</b>AURA SPENT' :
+    "<b>" + Math.ceil(S.aura) + "</b>AURA" + (burn > 0.05 ? ` <span style="opacity:.75;letter-spacing:.04em">−${burn.toFixed(1)}/s</span>` : "");
+  $("auraTag").style.color = exhausted ? "#ff8a7a" : "";
+  // surge
+  $("surge").style.display = S.surge > 0 ? "block" : "none";
+  $("surge").querySelector("i").style.width = (S.surge / R.surge.dur * 100) + "%";
+  // target + plate
+  setBar("thp", S.t.hp / R.hpMax, S.t.trail / R.hpMax); hpFill("thp", S.t.hp / R.hpMax, now);
+  $("thp").querySelector(".trail").style.background = S.t.hold > 0 ? "#fff" : "#ff5a4a";
+  $("thpNum").textContent = Math.ceil(S.t.hp);
+  setBar("tguard", S.t.guard / R.guardMax); $("tguard").querySelector(".fill").style.background = "var(--guard)";
+  setBar("php", S.t.hp / R.hpMax, S.t.trail / R.hpMax); hpFill("php", S.t.hp / R.hpMax, now);
+  $("php").querySelector(".trail").style.background = S.t.hold > 0 ? "#fff" : "#ff5a4a";
+  if (now > flashUntil) $("center").textContent = "";
+  $("readout").innerHTML = `Strength <b>${pct}%</b> (power ${Math.round(S.power * 100)}%, exhaustion ${Math.round(S.exh * 100)}%)<br>` +
+    `Aura <b>${Math.ceil(S.aura)}</b> burning <b>${burn.toFixed(1)}/s</b><br>Damage taken <b>×${(1 + R.exDef * S.exh).toFixed(2)}</b>`;
+}
+
+let last = performance.now();
+function frame(now) { const dt = Math.min(.1, (now - last) / 1000); last = now; tick(dt); render(now); requestAnimationFrame(frame); }
+requestAnimationFrame(frame);
+
+// ---- controls ----
+function hold(id, key, on) {
+  const b = $(id);
+  const set = v => { S[on] = v; b.setAttribute("aria-pressed", v); };
+  b.addEventListener("pointerdown", e => { e.preventDefault(); set(true); b.setPointerCapture(e.pointerId); });
+  b.addEventListener("pointerup", () => set(false)); b.addEventListener("pointercancel", () => set(false));
+  addEventListener("keydown", e => { if (e.key.toLowerCase() === key && !e.repeat) set(true); });
+  addEventListener("keyup", e => { if (e.key.toLowerCase() === key) set(false); });
+}
+hold("bCharge", "c", "charging"); hold("bBlock", "r", "blocking");
+const act = { blast: () => spend(R.blast) && strike(R.blast.dmg), beam: () => spend(R.beam) && strike(R.beam.dmg),
+  surge: () => S.surge <= 0 && spend(R.surge) && (S.surge = R.surge.dur), hit: () => takeHit(60), heavy: () => takeHit(110), strike: () => strike(60) };
+$("bBlast").onclick = act.blast; $("bBeam").onclick = act.beam; $("bSurge").onclick = act.surge;
+$("bHit").onclick = act.hit; $("bHeavy").onclick = act.heavy; $("bStrike").onclick = act.strike;
+$("bEmpty").onclick = () => { S.aura = Math.min(S.aura, 40); if (S.power < .7) S.power = .7; };
+$("bLow").onclick = () => { S.hp = S.hpTrail = 220; };
+$("bReset").onclick = newBattle;
+addEventListener("keydown", e => { const m = { "1": act.blast, "2": act.beam, "3": act.surge, h: act.hit, j: act.strike }[e.key.toLowerCase()]; if (m && !e.repeat) m(); });
+const sw = $("swatches");
+AURA_COLORS.forEach(([n, c], i) => { const b = document.createElement("button"); b.className = "sw"; b.style.background = c; b.title = n; b.setAttribute("aria-label", n);
+  b.setAttribute("aria-pressed", i === 0); b.onclick = () => { S.aColor = c; sw.querySelectorAll(".sw").forEach(x => x.setAttribute("aria-pressed", x === b)); }; sw.appendChild(b); });
+$("bDay").onclick = () => { $("stage").classList.remove("night"); $("bDay").setAttribute("aria-pressed", true); $("bNight").setAttribute("aria-pressed", false); };
+$("bNight").onclick = () => { $("stage").classList.add("night"); $("bNight").setAttribute("aria-pressed", true); $("bDay").setAttribute("aria-pressed", false); };
+
+// ---- fit the 1920x1080 stage to the page ----
+const vp = $("vp"), stage = $("stage");
+// window.hudScale: debug hook (1 = actual size)
+function fit() { const s = window.hudScale ?? vp.clientWidth / 1920; stage.style.transform = `scale(${s})`; vp.style.height = (1080 * s) + "px"; }
+new ResizeObserver(fit).observe(vp); fit(); window.fit = fit;
+window.hud = S;   // debug hook
+</script>
