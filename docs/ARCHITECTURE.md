@@ -707,6 +707,11 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     - `FollowArm` forward / back now follows the arm's swing from rest (clamp((z − 0.14) × 17, −8°, 14°)), so walking arms
       roll the shoulders a little instead of leaving them fixed.
     - Knee / elbow / leg checks above still 0 bad frames.
+  - Elbows (owner: "the elbow bend looks too rubbery ... flattens when it gets bent"): the heat weights blended upper arm →
+    forearm over ±8 cm of a ~9 cm thick arm on every side, so a bent elbow became a long soft U. `tools/joint_weights.py`
+    (applied to `BaseBody.bytes`) re-splits the two bones by distance along the limb and round it: ±1.2 cm at the back (the
+    point rides with the forearm, centre −0.8 cm) widening to ±4.5 cm on the inside of the bend (no pinch). Only the split
+    changes (sum kept, so the bind shape is untouched). `--knees` does the same for knees (not applied; ask the owner).
   - `tools/basebody_blender.py`: `import` → `ArtSource/Player/player.blend` (body + trunks + band, the game's 42 bones as
     "PlayerRig", weights as vertex groups, game coordinates with a display turn), `export` writes edited shapes / weights back
     into `BaseBody.bytes` (same vertex layout), `check` round-trips (positions exact, weights within 6e-8).
