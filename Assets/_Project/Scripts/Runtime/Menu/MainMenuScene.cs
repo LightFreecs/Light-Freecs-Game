@@ -83,7 +83,7 @@ namespace LightMMORPG.Menu
             float t = Time.time - _t0;
             bool customize = UI != null && UI.Current == MainMenuUI.State.Customize;
             _closeUp = Mathf.MoveTowards(_closeUp, customize ? 1f : 0f, Time.unscaledDeltaTime / 0.7f);
-            _bodyView = Mathf.MoveTowards(_bodyView, customize && UI.BodyTabOpen ? 1f : 0f, Time.unscaledDeltaTime / 0.5f);
+            _bodyView = Mathf.MoveTowards(_bodyView, customize && UI.WholeFighterView ? 1f : 0f, Time.unscaledDeltaTime / 0.5f);
             if (_fighter != null) _fighter.ShowAura = customize && UI.BodyTabOpen && !_injuryCapture;
             UpdateTurn(customize);
             UpdateCamera(t);
@@ -235,6 +235,7 @@ namespace LightMMORPG.Menu
                 ("Customize", SkyId.Day, MainMenuUI.State.Customize),
                 ("Customize_Side", SkyId.Day, MainMenuUI.State.Customize),
                 ("Customize_Jaw", SkyId.Dusk, MainMenuUI.State.Customize),
+                ("Customize_Skin", SkyId.Day, MainMenuUI.State.Customize),
             };
             SkyId saved = MenuSky.Saved;
             foreach (var size in sizes)
@@ -249,7 +250,7 @@ namespace LightMMORPG.Menu
                     Sky.Apply(shot.sky);
                     // -menuCaptureFace '<FaceCustomization json>' previews other face choices without touching the saved ones
                     string faceJson = Arg("-menuCaptureFace");
-                    if (shot.state == MainMenuUI.State.Customize) UI.ShowCustomize(faceJson != null ? PlayerAppearance.FromJson(faceJson) : PlayerAppearance.Load(), shot.name.EndsWith("_Jaw") ? 3 : 0);
+                    if (shot.state == MainMenuUI.State.Customize) UI.ShowCustomize(faceJson != null ? PlayerAppearance.FromJson(faceJson) : PlayerAppearance.Load(), shot.name.EndsWith("_Jaw") ? 3 : shot.name.EndsWith("_Skin") ? 8 : 0);
                     else if (shot.name == "Stats") UI.ShowStatsPreview(Core.Progression.XpForLevel(24) + 600, new Core.StatAllocation(8, 6, 3, 4, 0));
                     else if (shot.name == "Stats_Guest") UI.ShowStatsGuest();
                     else UI.SetState(shot.state, instant: true);
@@ -257,6 +258,7 @@ namespace LightMMORPG.Menu
                     if (_fighter != null) _fighter.Turn = shot.name.EndsWith("_Side") ? 90f : 0f;
                     for (int i = 0; i < 8; i++) yield return null;
                     while (_fighter != null && _fighter.Rebuilding) yield return null;
+                    _bodyView = shot.name.EndsWith("_Skin") ? 1f : 0f;   // the Skin tab shows the whole fighter
                     UpdateCamera(Time.time - _t0);
                     _camera.Render();
                     var prev = RenderTexture.active;

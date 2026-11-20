@@ -90,6 +90,8 @@ namespace LightMMORPG.Characters
         public int hairColor;
         /// <summary>Index into <see cref="PlayerAppearance.AuraColors"/> (0 = gold, also what older saves load as).</summary>
         public int auraColor;
+        /// <summary>Index into <see cref="PlayerAppearance.SkinTones"/> (0 = the default hero's skin, also what older saves load as).</summary>
+        public int skinTone;
         public FaceSliders sliders;
 
         /// <summary>Copy with every slider clamped to -1..1 and a valid eye style (values can come from other players).</summary>
@@ -106,6 +108,7 @@ namespace LightMMORPG.Characters
             if (!Enum.IsDefined(typeof(PlayerHair), f.hair)) f.hair = PlayerHair.Light;
             if (f.hairColor < 0 || f.hairColor >= PlayerAppearance.HairColors.Length) f.hairColor = 0;
             if (f.auraColor < 0 || f.auraColor >= PlayerAppearance.AuraColors.Length) f.auraColor = 0;
+            if (f.skinTone < 0 || f.skinTone >= PlayerAppearance.SkinTones.Length) f.skinTone = 0;
             return f;
         }
     }
@@ -187,6 +190,21 @@ namespace LightMMORPG.Characters
             ("Rose", new Color32(0xd9, 0x84, 0xa2, 0xff)),
             ("Crimson", new Color32(0x8e, 0x26, 0x32, 0xff)),
             ("Violet", new Color32(0x5b, 0x43, 0x90, 0xff)),
+        };
+
+        /// <summary>Skin tones for the Customize screen (Skin tab): the default hero's first, then light to deep.</summary>
+        public static readonly (string name, Color color)[] SkinTones =
+        {
+            ("Peach", new Color(1f, 0.85f, 0.72f)),
+            ("Porcelain", new Color(1f, 0.91f, 0.85f)),
+            ("Rosy", new Color(1f, 0.81f, 0.74f)),
+            ("Golden", new Color(0.97f, 0.8f, 0.6f)),
+            ("Tan", new Color(0.89f, 0.69f, 0.51f)),
+            ("Olive", new Color(0.8f, 0.66f, 0.47f)),
+            ("Bronze", new Color(0.72f, 0.52f, 0.36f)),
+            ("Brown", new Color(0.58f, 0.4f, 0.28f)),
+            ("Deep", new Color(0.43f, 0.29f, 0.21f)),
+            ("Ebony", new Color(0.31f, 0.21f, 0.16f)),
         };
 
         /// <summary>Aura colours for the Customize screen (Body tab), as shown on the swatches; the aura draws them HDR-bright.</summary>
@@ -287,6 +305,7 @@ namespace LightMMORPG.Characters
             recipe.hairStyle = ToHairStyle(f.hair);
             recipe.hairColor = recipe.hairTipColor = HairColors[f.hairColor].color;
             recipe.auraColor = AuraColor(f.auraColor);
+            recipe.skinTone = SkinTones[f.skinTone].color;
             for (int i = 0; i < FaceSliders.HeadCount; i++)
             {
                 var d = Sliders[i];

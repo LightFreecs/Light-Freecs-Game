@@ -10,7 +10,7 @@ namespace LightMMORPG.Menu
 {
     /// <summary>
     /// Customize (Fighters item), design bench <c>docs/bench/customize-ui.html</c>, "Bevel" style with no panel: eight
-    /// icon tabs (six head tabs, Hair, Body) floating along the top left, Random top right, and a frameless column on the right with (Eyes, Brows, Head, Jaw &amp; Chin, Nose &amp; Mouth, Ears &amp; Neck), eye- and brow-style tiles
+    /// icon tabs (six head tabs, Hair, Body, Skin) floating along the top left, Random top right, and a frameless column on the right with (Eyes, Brows, Head, Jaw &amp; Chin, Nose &amp; Mouth, Ears &amp; Neck), eye- and brow-style tiles
     /// showing the real painted eyes, slider rows with − / + buttons, a centred fill, a value tag and a per-row reset,
     /// and Random / Reset all / Done. Buttons are 9-sliced boxes with two cut corners (<see cref="MenuUi.BevelFill"/>).
     /// Keys: Z / C or LB / RB switch tabs, R / Y random, Backspace / X reset all, Enter / Start done, Esc / B done.
@@ -50,12 +50,15 @@ namespace LightMMORPG.Menu
             ("Ears & Neck", MenuUi.IconKind.Ear, new[] { 18, 19, 20, 21 }),
             ("Hair", MenuUi.IconKind.Hair, new int[0]),
             ("Body", MenuUi.IconKind.Body, new[] { 22, 23, 24, 25 }),
+            ("Skin", MenuUi.IconKind.Skin, new int[0]),
         };
 
-        private const int BrowTab = 1, HairTab = 6, BodyTab = 7;
+        private const int BrowTab = 1, HairTab = 6, BodyTab = 7, SkinTab = 8;
 
-        /// <summary>The Body tab is open on Customize (the menu camera pulls back to show the whole fighter).</summary>
+        /// <summary>The Body tab is open on Customize (aura colour preview).</summary>
         public bool BodyTabOpen => Current == State.Customize && _custTab == BodyTab;
+        /// <summary>The Body or Skin tab is open (the menu camera pulls back to show the whole fighter).</summary>
+        public bool WholeFighterView => Current == State.Customize && (_custTab == BodyTab || _custTab == SkinTab);
 
         private const float CustPW = 880f, CustPad = 40f, CustW = CustPW - CustPad * 2f, RowStep = 72f, RowH = 66f;
 
@@ -68,6 +71,7 @@ namespace LightMMORPG.Menu
         private readonly List<CustButton> _hairTiles = new();
         private readonly List<CustButton> _hairColorTiles = new();
         private readonly List<CustButton> _auraColorTiles = new();
+        private readonly List<CustButton> _skinTiles = new();
         private readonly List<Image> _hairPreviews = new();
         private Texture2D[] _hairTex;
         private string _hairPreviewKey;
@@ -260,6 +264,11 @@ namespace LightMMORPG.Menu
                     y -= cw + 22f;
                     continue;
                 }
+                else if (t == SkinTab)
+                {
+                    BuildSkinTones(page, y);
+                    continue;
+                }
                 else SectionHead(page, CustTabs[t].name.ToUpperInvariant(), y);
                 y -= 32f;
                 foreach (int idx in CustTabs[t].rows)
@@ -281,6 +290,37 @@ namespace LightMMORPG.Menu
 
             Bind(_ => { RefreshCust(); foreach (var r in _faceRows) ShowSliderValue(r); });
             SetCustTab(0, false);
+        }
+
+        /// <summary>Skin tab: the skin tones, two rows of big swatches with their names.</summary>
+        private void BuildSkinTones(RectTransform page, float y)
+        {
+            SectionHead(page, "SKIN TONE", y);
+            y -= 32f;
+            const float g = 14f, h = 150f;
+            int n = PlayerAppearance.SkinTones.Length, perRow = (n + 1) / 2;
+            float w = (CustW - g * (perRow - 1)) / perRow;
+            for (int i = 0; i < n; i++)
+            {
+                int si = i, row = i / perRow, col = i % perRow;
+                var b = CustomButton(page, "Skin_" + PlayerAppearance.SkinTones[i].name, new Vector2(col * (w + g), y - row * (h + g)), new Vector2(w, h), 10,
+                    () => { _face.skinTone = si; RefreshCust(); FaceChanged(); }, () => _face.skinTone == si);
+                var sw = MenuUi.Img(b.rt, "Swatch", MenuUi.RoundedRect(6), PlayerAppearance.SkinTones[i].color, true);
+                sw.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -14f), new Vector2(w - 28f, h - 56f));
+                var ring = MenuUi.Img(b.rt, "Ring", MenuUi.RoundedRectOutline(6, 1.2f), A(Color.white, 0.35f), true);
+                ring.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -14f), new Vector2(w - 28f, h - 56f));
+                var name = MenuUi.Label(b.rt, "Name", PlayerAppearance.SkinTones[i].name, T.bodyFont, 17, Color.white, TextAnchor.MiddleCenter, 0.06f);
+                name.rectTransform.Place(new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 10f), new Vector2(w, 24f));
+                b.ink.Add((name, 1f));
+                var badge = MenuUi.Img(b.rt, "Badge", null, Color.white);
+                badge.rectTransform.Place(new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-6f, -6f), new Vector2(22f, 22f));
+                Bind(p => badge.color = p.accent);
+                var check = MenuUi.Img(badge.transform, "Check", MenuUi.Icon(MenuUi.IconKind.Check), Color.white);
+                check.rectTransform.Fill(3f);
+                Bind(p => { var d = p.dialog; d.a = 1f; check.color = d; });
+                b.extra = _ => badge.gameObject.SetActive(_face.skinTone == si);
+                _skinTiles.Add(b);
+            }
         }
 
         /// <summary>Body tab: the aura colour swatches (the menu fighter shows the aura while the Body tab is open).</summary>
@@ -507,7 +547,8 @@ namespace LightMMORPG.Menu
             for (int t = 0; t < _tabDots.Count; t++)
             {
                 bool changed = (t == 0 && _face.eyeStyle != ToonEyeStyle.Drawn) || (t == BrowTab && _face.browStyle != ToonBrowStyle.Classic)
-                    || (t == HairTab && (_face.hair != PlayerHair.Light || _face.hairColor != 0)) || (t == BodyTab && _face.auraColor != 0);
+                    || (t == HairTab && (_face.hair != PlayerHair.Light || _face.hairColor != 0)) || (t == BodyTab && _face.auraColor != 0)
+                    || (t == SkinTab && _face.skinTone != 0);
                 foreach (int i in CustTabs[t].rows) changed |= _face.sliders[i] != 0f;
                 _tabDots[t].gameObject.SetActive(changed);
             }
@@ -540,9 +581,10 @@ namespace LightMMORPG.Menu
             Selectable brow = _browTiles[(int)_face.browStyle].sel;
             Selectable hair = _hairTiles[(int)_face.hair].sel;
             Selectable colour = _hairColorTiles[_face.hairColor].sel;
-            Selectable first = _custTab == 0 ? eye : _custTab == BrowTab ? brow : _custTab == HairTab ? hair : rows[0].s;
+            Selectable skinSel = _skinTiles[_face.skinTone].sel;
+            Selectable first = _custTab == 0 ? eye : _custTab == BrowTab ? brow : _custTab == HairTab ? hair : _custTab == SkinTab ? skinSel : rows[0].s;
             Selectable aura = _auraColorTiles[_face.auraColor].sel;
-            Selectable last = _custTab == BodyTab ? aura : rows.Count > 0 ? rows[^1].s : _custTab == HairTab ? colour : tab;
+            Selectable last = _custTab == BodyTab ? aura : rows.Count > 0 ? rows[^1].s : _custTab == HairTab ? colour : _custTab == SkinTab ? skinSel : tab;
             for (int i = 0; i < _tabButtons.Count; i++)
                 Nav(_tabButtons[i].sel, _custRandom.sel, first, i > 0 ? _tabButtons[i - 1].sel : null, i < _tabButtons.Count - 1 ? _tabButtons[i + 1].sel : null);
             Nav(_custRandom.sel, null, tab, null, null);
@@ -558,6 +600,17 @@ namespace LightMMORPG.Menu
             if (_custTab == HairTab)
                 for (int i = 0; i < _hairColorTiles.Count; i++)
                     Nav(_hairColorTiles[i].sel, hair, _custDone.sel, i > 0 ? _hairColorTiles[i - 1].sel : null, i < _hairColorTiles.Count - 1 ? _hairColorTiles[i + 1].sel : null);
+            if (_custTab == SkinTab)
+            {
+                int per = (_skinTiles.Count + 1) / 2;
+                for (int i = 0; i < _skinTiles.Count; i++)
+                {
+                    int r = i / per, c = i % per;
+                    Selectable up = r == 0 ? tab : _skinTiles[i - per].sel;
+                    Selectable down = r == 0 && i + per < _skinTiles.Count ? _skinTiles[i + per].sel : _custDone.sel;
+                    Nav(_skinTiles[i].sel, up, down, c > 0 ? _skinTiles[i - 1].sel : null, c < per - 1 && i + 1 < _skinTiles.Count ? _skinTiles[i + 1].sel : null);
+                }
+            }
             if (_custTab == BodyTab)
                 for (int i = 0; i < _auraColorTiles.Count; i++)
                     Nav(_auraColorTiles[i].sel, rows[^1].s, _custDone.sel, i > 0 ? _auraColorTiles[i - 1].sel : null, i < _auraColorTiles.Count - 1 ? _auraColorTiles[i + 1].sel : null);
@@ -581,6 +634,7 @@ namespace LightMMORPG.Menu
             _face.hair = (PlayerHair)UnityEngine.Random.Range(0, PlayerAppearance.HairNames.Length);
             _face.hairColor = UnityEngine.Random.Range(0, PlayerAppearance.HairColors.Length);
             _face.auraColor = UnityEngine.Random.Range(0, PlayerAppearance.AuraColors.Length);
+            _face.skinTone = UnityEngine.Random.Range(0, PlayerAppearance.SkinTones.Length);
             for (int i = 0; i < FaceSliders.Count; i++) _face.sliders[i] = Mathf.Round(UnityEngine.Random.Range(-0.7f, 0.7f) * 100f) / 100f;
             SyncFaceControls();
             RebuildCustNav();

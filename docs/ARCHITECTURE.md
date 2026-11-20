@@ -810,3 +810,4 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     The face layout is jittered by a per-battle seed (`_Injury.w`), body marks by per-hit seeds. Note: `line` is reserved
     in HLSL (it broke the face shader once).
   - Verified: Windows build + `-injuryCapture` screenshots at 85 / 50 / 20 / 8 % health (preset hits, menu fighter).
+- Skin tone (2026-11-20; owner: "give the players the option to change skin color"): `FaceCustomization.skinTone` -> `PlayerAppearance.SkinTones` (Peach = the default hero, also older saves; Porcelain, Rosy, Golden, Tan, Olive, Bronze, Brown, Deep, Ebony) -> `recipe.skinTone` (body skin slot + painted face), synced with the face JSON. Customize: a ninth tab `Skin` (drop icon, `MenuUi.IconKind.Skin`), two rows of named swatches, the camera pulls back to the whole fighter (`WholeFighterView`); Random picks one too. `-menuCapture` adds `Customize_Skin`. Verified: Windows build + PC / iPhone captures.
