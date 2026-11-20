@@ -800,3 +800,13 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     cheekbone, then a scratch over the nose bridge as the fighter gets more hurt (`_Injury.x`). The hurt eye shuts from
     30 % health (fully at 20 %) as a straight horizontal line at the iris height (owner: "make the eye a horizontal line"):
     the painted outline / lashes round it are hidden (eye mask dilated 0.024 uv), the white becomes skin.
+  - More damage, cuts and variety (2026-11-20; owner: "the more damage, the more scratches ... blood lines on the face ...
+    not always the same"): up to 16 body marks (`InjuryVisuals.MaxBruises`), strokes per mark 3 / 5 / 7 as hits stack on
+    it, up to 3 satellite clusters round a well-beaten spot; low health scatters scratches all over the skin
+    (`_BruiseScatter`: bind-pose cells, a new set each battle). Fighter meshes carry bind normals in UV3 so strokes lie in
+    the skin's tangent plane everywhere. Head hits put marks where they struck the face (`_FaceMarks[6]`, head units via
+    `ToonFaceAnimator.ToHeadUnits`): scratches, then a cut with a blood trickle once the spot has taken a few. Low-health
+    face: cheeks, brow, nose bridge, then cuts bleeding down the face (over the shut eye: the lids carry the blood too).
+    The face layout is jittered by a per-battle seed (`_Injury.w`), body marks by per-hit seeds. Note: `line` is reserved
+    in HLSL (it broke the face shader once).
+  - Verified: Windows build + `-injuryCapture` screenshots at 85 / 50 / 20 / 8 % health (preset hits, menu fighter).

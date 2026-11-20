@@ -233,6 +233,7 @@ namespace LightMMORPG.Characters
             mesh.SetUVs(0, g.Uvs);
             mesh.SetUVs(1, g.FaceCoords);
             mesh.SetUVs(2, g.Positions);   // the bind pose again, so skin effects (bruises) stick to the body as it moves
+            mesh.SetUVs(3, g.Normals);     // and its normals (battle damage strokes lie flat on the skin)
             mesh.SetTangents(g.Tangents);
             mesh.boneWeights = g.Weights;
             mesh.subMeshCount = g.Triangles.Length;

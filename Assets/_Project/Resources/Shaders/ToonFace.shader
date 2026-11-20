@@ -92,8 +92,11 @@ Shader "LightMMORPG/ToonFace"
             float4 _BrowXform;
             float4 _BrowBend0;
             float4 _BrowBend1;
-            // injuries (InjuryVisuals): x = face damage 0..1, y = one eye shut 0..1, z = which eye (+1 / -1)
+            // injuries (InjuryVisuals): x = face damage 0..1, y = one eye shut 0..1, z = which eye (+1 / -1), w = this battle's
+            // seed; _FaceMarks = where head hits landed: xy = face position (head units, the face texture's space), z =
+            // strength (scratches, then a cut that bleeds), w = seed
             float4 _Injury;
+            float4 _FaceMarks[6];
         CBUFFER_END
 
         TEXTURE2D(_BaseMap);
@@ -178,8 +181,8 @@ Shader "LightMMORPG/ToonFace"
             float HatchHash(float n) { return frac(sin(n * 12.9898 + 4.1414) * 43758.5453); }
 
             // anime damage marks: a little cluster of short parallel strokes (n of them, odd), slanted by ang, in some 2D
-            // space q (relative to the cluster's centre); spacing / length / width in the same units. 0..1 coverage.
-            float Hatch(float2 q, float ang, float n, float spacing, float len, float width, float seed)
+            // space q (relative to the cluster's centre); spacing / length / width / aa (one pixel) in the same units
+            float Hatch(float2 q, float ang, float n, float spacing, float len, float width, float seed, float aa)
             {
                 float c = cos(ang), s = sin(ang);
                 q = float2(c * q.x + s * q.y, -s * q.x + c * q.y);
@@ -187,12 +190,33 @@ Shader "LightMMORPG/ToonFace"
                 float i = clamp(round(q.y / spacing), -h, h);
                 float r1 = HatchHash(i + seed * 17.0), r2 = HatchHash(i * 3.7 + seed * 5.0);
                 float halfLen = len * (0.32 + 0.22 * r1) * (1.0 - 0.35 * abs(i) / max(h, 1.0));
-                float x = q.x - (r2 - 0.5) * len * 0.35;                   // strokes start a little staggered
+                float x = q.x - (r2 - 0.5) * len * 0.35;
                 float y = q.y - i * spacing - (r1 - 0.5) * spacing * 0.25;
-                float t = saturate(1.0 - (x / max(halfLen, 1e-5)) * (x / max(halfLen, 1e-5)));   // tapered at both ends
-                float w = width * (0.45 + 0.55 * sqrt(t));
-                float aa = max(fwidth(y), 1e-5);
+                float u = x / max(halfLen, 1e-5);
+                float w = width * (0.45 + 0.55 * sqrt(saturate(1.0 - u * u)));
                 return smoothstep(w + aa, w - aa, abs(y)) * step(abs(x), halfLen);
+            }
+
+            // a cut: one slash, thick in the middle, sharp at both ends
+            float Cut(float2 q, float ang, float len, float width, float aa)
+            {
+                float c = cos(ang), s = sin(ang);
+                q = float2(c * q.x + s * q.y, -s * q.x + c * q.y);
+                float u = q.x / (len * 0.5);
+                float w = width * (0.3 + 0.7 * sqrt(saturate(1.0 - u * u)));
+                return smoothstep(w + aa, w - aa, abs(q.y)) * step(abs(u), 1.0);
+            }
+
+            // a thin line of blood running down from q = 0 (wavering a little, thinning), with a drop at the end
+            float Trickle(float2 q, float len, float width, float seed, float aa)
+            {
+                float t = -q.y / max(len, 1e-5);
+                if (t < -0.05 || t > 1.15) return 0.0;
+                float x = q.x - sin(t * 5.0 + seed * 3.0) * width * 0.9 - t * t * len * 0.08 * (HatchHash(seed) - 0.5);
+                float w = width * lerp(1.0, 0.6, saturate(t));
+                float stroke = smoothstep(w + aa, w - aa, abs(x)) * step(0.0, t) * step(t, 1.0);
+                float drop = smoothstep(width * 1.6 + aa, width * 1.6 - aa, length(float2(x, (t - 1.0) * len)));
+                return max(stroke, drop);
             }
 
             half3 LiveIris(half3 col, float2 e, float px, half m, float side)
@@ -313,31 +337,76 @@ Shader "LightMMORPG/ToonFace"
                 float W = max(_EyeGeo.z, 1e-4);
                 float2 e = float2((side * hp.x - _EyeGeo.x) / W + 0.5, (hp.y - _EyeGeo.y) / W - _EyeGeo.w);
                 float px = max(max(fwidth(e.x), fwidth(e.y)), 1e-5);   // eye widths per screen pixel
-                // injuries (anime battle damage): red scratch strokes on the cheeks and over the brow of the shut eye, a faint
-                // brownish-purple smudge under them; more of them the more hurt the fighter is (_Injury.x)
+                // injuries (anime battle damage): red scratch strokes over a faint brownish-purple smudge, and cuts that bleed
+                // thin lines down the face. Where head hits landed (_FaceMarks), plus more all over the face the more hurt
+                // the fighter is (_Injury.x), laid out a little differently every battle (_Injury.w).
                 float hurtSide = _Injury.z >= 0.0 ? 1.0 : -1.0;
-                if (_Injury.x > 0.001)
+                if (_Injury.x > 0.001 || _FaceMarks[0].z > 0.001)
                 {
-                    float k = _Injury.x;
+                    float k = _Injury.x, sd = _Injury.w;
                     bool hurt = side == hurtSide;
+                    float so = hurt ? 0.0 : 31.0;   // the two sides differ
+                    float2 jit1 = (float2(HatchHash(sd + so + 1.0), HatchHash(sd + so + 2.0)) - 0.5) * float2(0.4, 0.35);
+                    float2 jit2 = (float2(HatchHash(sd + so + 3.0), HatchHash(sd + so + 4.0)) - 0.5) * float2(0.35, 0.25);
                     // per side: the cheek under the eye, then (more hurt) the brow above it / the cheekbone
-                    float2 c1 = hurt ? float2(0.62, -0.85) : float2(0.42, -0.95);
-                    float2 c2 = hurt ? float2(0.45, 1.25) : float2(0.85, -0.25);
+                    float2 c1 = (hurt ? float2(0.62, -0.85) : float2(0.42, -0.95)) + jit1;
+                    float2 c2 = (hurt ? float2(0.45, 1.25) : float2(0.85, -0.25)) + jit2;
                     float k1 = saturate((k - (hurt ? 0.25 : 0.05)) * 3.0), k2 = saturate((k - (hurt ? 0.45 : 0.65)) * 3.0);
-                    half sm = 0.0, st = 0.0;
+                    half sm = 0.0, st = 0.0, bl = 0.0, ct = 0.0;
                     float2 d1 = (e - c1) / float2(0.55, 0.42), d2 = (e - c2) / float2(0.5, 0.32);
                     sm = max(sm, k1 * 0.75 * saturate(1.0 - dot(d1, d1)));
                     sm = max(sm, k2 * 0.7 * saturate(1.0 - dot(d2, d2)));
-                    st = max(st, k1 * Hatch(e - c1, -0.65 + (hurt ? 0.0 : 0.25), k > 0.6 ? 5.0 : 3.0, 0.12, 0.8, 0.03, hurt ? 3.0 : 7.0));
-                    st = max(st, k2 * Hatch(e - c2, -0.5, 3.0, 0.11, 0.65, 0.028, hurt ? 11.0 : 13.0));
+                    float a1 = -0.65 + (HatchHash(sd + so + 5.0) - 0.5) * 0.6, a2 = -0.5 + (HatchHash(sd + so + 6.0) - 0.5) * 0.6;
+                    st = max(st, k1 * Hatch(e - c1, a1, k > 0.6 ? 5.0 : 3.0, 0.12, 0.8, 0.03, sd + so + 3.0, px));
+                    st = max(st, k2 * Hatch(e - c2, a2, k > 0.8 ? 5.0 : 3.0, 0.11, 0.65, 0.028, sd + so + 11.0, px));
                     // badly hurt: a scratch over the bridge of the nose / forehead on the shut-eye side
                     float k3 = saturate((k - 0.55) * 3.0);
-                    if (hurt) st = max(st, k3 * Hatch(e - float2(-0.35, 0.55), -0.9, 3.0, 0.1, 0.55, 0.026, 19.0));
-                    sm *= front; st *= front;
+                    if (hurt) st = max(st, k3 * Hatch(e - float2(-0.35, 0.55) - jit2 * 0.5, -0.9, 3.0, 0.1, 0.55, 0.026, sd + 19.0, px));
+                    // cuts that bleed: over the brow of the shut eye (the blood runs down over it), then the other cheekbone
+                    float kc1 = saturate((k - 0.5) * 3.0), kc2 = saturate((k - 0.72) * 3.0);
+                    if (hurt && kc1 > 0.0)
+                    {
+                        float2 cc = float2(0.58, 1.12) + jit2 * 0.4;
+                        ct = max(ct, kc1 * Cut(e - cc, -0.35 + (HatchHash(sd + 7.0) - 0.5) * 0.5, 0.6, 0.04, px));
+                        bl = max(bl, kc1 * Trickle(e - (cc + float2(0.08, -0.04)), lerp(0.6, 1.8, kc1), 0.042, sd + 1.0, px));
+                    }
+                    if (!hurt && kc2 > 0.0)
+                    {
+                        float2 cc = float2(0.78, -0.35) + jit1 * 0.4;
+                        ct = max(ct, kc2 * Cut(e - cc, -0.6 + (HatchHash(sd + 8.0) - 0.5) * 0.5, 0.5, 0.036, px));
+                        bl = max(bl, kc2 * Trickle(e - (cc + float2(-0.05, -0.05)), lerp(0.4, 1.1, kc2), 0.036, sd + 2.0, px));
+                    }
+                    // where head hits landed: scratches, and a cut that bleeds once the spot has taken a few
+                    float pxh = px * W;   // head units per pixel
+                    [loop] for (int fi = 0; fi < 6; fi++)
+                    {
+                        float4 fm = _FaceMarks[fi];
+                        if (fm.z <= 0.001) break;
+                        float2 q = hp - fm.xy;
+                        if (dot(q, q) > 0.16 * 0.16) continue;
+                        float ang = -0.7 + (HatchHash(fm.w) - 0.5) * 0.8;
+                        float fs = saturate(fm.z);
+                        float dq = length(q) / 0.07;
+                        sm = max(sm, fs * 0.7 * saturate(1.0 - dq * dq));
+                        st = max(st, saturate(fs * 1.6) * Hatch(q, ang, fs < 0.5 ? 3.0 : 5.0, 0.019, 0.12, 0.005, fm.w, pxh));
+                        float fc = saturate((fs - 0.4) * 2.5);
+                        if (fc > 0.0)
+                        {
+                            float2 cq = q - float2(HatchHash(fm.w + 1.0) - 0.5, HatchHash(fm.w + 2.0) - 0.5) * 0.04;
+                            ct = max(ct, fc * Cut(cq, ang + 0.4, 0.075, 0.0065, pxh));
+                            bl = max(bl, fc * Trickle(cq - float2(0.01, -0.006), lerp(0.07, 0.22, fc), 0.0065, fm.w, pxh));
+                        }
+                    }
+                    sm *= front; st *= front; bl *= front; ct *= front;
                     half3 smudge = lerp(half3(1, 1, 1), half3(0.74, 0.55, 0.6), sm);
                     color *= smudge;
                     skin *= smudge;
                     color = lerp(color, half3(0.55, 0.09, 0.08) * featLight, st * 0.95);
+                    color = lerp(color, half3(0.6, 0.03, 0.05) * featLight, bl * 0.95);    // blood
+                    color = lerp(color, half3(0.32, 0.03, 0.04) * featLight, ct);          // the cut itself
+                    // lids are repainted from skin: the blood runs over them too
+                    skin = lerp(skin, half3(0.6, 0.03, 0.05) * featLight, bl * 0.95);
+                    skin = lerp(skin, half3(0.32, 0.03, 0.04) * featLight, ct);
                 }
                 half4 em = half4(0, 0, 0, 0);
                 if (_EyeLive > 0.5)

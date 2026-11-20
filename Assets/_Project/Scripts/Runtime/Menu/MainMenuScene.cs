@@ -177,7 +177,7 @@ namespace LightMMORPG.Menu
             rt.Create();
             _camera.targetTexture = rt;
             Sky.Apply(SkyId.Day);
-            var stages = new (string name, float hp, int bruises)[] { ("1_Hits_85hp", 0.85f, 4), ("2_Half_50hp", 0.5f, 6), ("3_Heavy_20hp", 0.2f, 8), ("4_NearKO_8hp", 0.08f, 8) };
+            var stages = new (string name, float hp, int bruises, int face)[] { ("1_Hits_85hp", 0.85f, 4, 1), ("2_Half_50hp", 0.5f, 7, 2), ("3_Heavy_20hp", 0.2f, 9, 3), ("4_NearKO_8hp", 0.08f, 10, 3) };
             foreach (var st in stages)
             {
                 foreach (int tab in new[] { 0, 7 })   // face close-up, then the Body tab (whole fighter)
@@ -188,7 +188,7 @@ namespace LightMMORPG.Menu
                     if (_fighter != null) _fighter.Turn = 0f;
                     for (int i = 0; i < 8; i++) yield return null;
                     _bodyView = tab == 7 ? 1f : 0f;
-                    VFX.InjuryVisuals.ApplyPreview(_fighter != null ? _fighter.Rig : null, st.hp, st.bruises);
+                    VFX.InjuryVisuals.ApplyPreview(_fighter != null ? _fighter.Rig : null, st.hp, st.bruises, st.face);
                     yield return null;
                     UpdateCamera(Time.time - _t0);
                     _camera.Render();

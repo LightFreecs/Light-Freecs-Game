@@ -175,6 +175,12 @@ namespace LightMMORPG.Characters
             _blinkAt = now + Random.Range(1.5f, 4f);
         }
 
+        /// <summary>
+        /// A world point in head units (the face texture's space: x across the face, -0.5..0.5, y up from the chin, -0.1..0.9,
+        /// z out of the face); null before <see cref="Init"/>. Used to put battle damage where a head hit landed.
+        /// </summary>
+        public Vector3? ToHeadUnits(Vector3 world) => _head != null ? (_head.InverseTransformPoint(world) - _origin) / _unit : null;
+
         /// <summary>Plays an expression: it pops in, plays <see cref="ExpressionHold"/> seconds and relaxes (unless held).</summary>
         public void Play(ToonExpression e, bool hold = false)
         {
