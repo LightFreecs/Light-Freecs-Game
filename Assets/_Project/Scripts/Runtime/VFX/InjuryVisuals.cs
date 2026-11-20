@@ -192,6 +192,55 @@ namespace LightMMORPG.VFX
             }
         }
 
+        // ---------------- preview (dev screenshots: -injuryCapture) ----------------
+
+        // where the preview bruises sit: bone + offset from its bind position (front = +Z, the fighter's right = +X), strength
+        private static readonly (CharacterBone bone, Vector3 off, float w)[] PreviewSpots =
+        {
+            (CharacterBone.UpperChest, new Vector3(-0.09f, -0.02f, 0.13f), 0.7f),   // left pec
+            (CharacterBone.Spine, new Vector3(0.06f, 0.04f, 0.14f), 0.85f),        // gut, right of centre
+            (CharacterBone.RightUpperArm, new Vector3(0.05f, -0.12f, 0.03f), 0.5f), // right upper arm
+            (CharacterBone.LeftLowerArm, new Vector3(-0.02f, -0.1f, 0.04f), 0.6f),  // left forearm (blocking)
+            (CharacterBone.Chest, new Vector3(0.14f, 0.02f, 0.06f), 0.55f),         // right ribs
+            (CharacterBone.LeftUpperLeg, new Vector3(-0.04f, -0.15f, 0.08f), 0.45f),// left thigh
+            (CharacterBone.RightLowerArm, new Vector3(0.02f, -0.12f, 0.04f), 0.4f), // right forearm
+            (CharacterBone.Hips, new Vector3(-0.12f, 0.08f, 0.1f), 0.5f),           // left hip
+        };
+
+        /// <summary>
+        /// Shows injuries on a rig without a fight (screenshots): the first <paramref name="bruises"/> preset bruises and the
+        /// low-health look for <paramref name="healthFraction"/> (face bruises below 60 %, the eye swelling shut under 30 %).
+        /// </summary>
+        public static void ApplyPreview(CharacterRig rig, float healthFraction, int bruises)
+        {
+            if (rig == null || rig.Body == null) return;
+            var arr = new Vector4[MaxBruises];
+            int n = Mathf.Clamp(bruises, 0, Mathf.Min(MaxBruises, PreviewSpots.Length));
+            float hs = rig.Height / 2.3f;
+            for (int i = 0; i < n; i++)
+            {
+                var (bone, off, w) = PreviewSpots[i];
+                Vector3 p = rig.BindPosition(bone) + off * hs;
+                arr[i] = new Vector4(p.x, p.y, p.z, w);
+            }
+            float low = Mathf.Clamp01((BruiseBelow - healthFraction) / BruiseBelow);
+            float eye = Mathf.InverseLerp(EyeStart, EyeShut, healthFraction);
+            var mpb = new MaterialPropertyBlock();
+            foreach (int slot in rig.SkinSlots)
+            {
+                rig.Body.GetPropertyBlock(mpb, slot);
+                mpb.SetVectorArray(BruisesId, arr);
+                mpb.SetVector(BruiseParamsId, new Vector4(n, 0.085f * hs, 1f + low, 0f));
+                rig.Body.SetPropertyBlock(mpb, slot);
+            }
+            if (rig.FaceSlot >= 0)
+            {
+                rig.Body.GetPropertyBlock(mpb, rig.FaceSlot);
+                mpb.SetVector(InjuryId, new Vector4(Mathf.Clamp01(low * 0.9f), eye, 1f, 0f));
+                rig.Body.SetPropertyBlock(mpb, rig.FaceSlot);
+            }
+        }
+
         // the hero is rebuilt when its looks change: pick up the new rig (and push the injuries onto it again)
         private static CharacterRig FindRigCached(PlayerStats p, State s)
         {

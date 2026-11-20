@@ -791,3 +791,4 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     swells shut (fully at 15 %, a slit left; the upper lid ignores expressions and blinks); shut while knocked out.
     Back to full health (respawn, dummy refill) clears it all.
   - Verified: headless compile only (owner tests by hand).
+  - Dev screenshots: player `-injuryCapture <dir>` renders the menu fighter's face and body at 85 / 50 / 20 / 8 % health with preset bruises (`InjuryVisuals.ApplyPreview`) and quits.

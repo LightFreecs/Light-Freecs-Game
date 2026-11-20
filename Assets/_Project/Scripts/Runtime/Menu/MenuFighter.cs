@@ -52,6 +52,8 @@ namespace LightMMORPG.Menu
         public Vector3 HeadPosition => _rig != null ? _rig[CharacterBone.Head].position : transform.position + Vector3.up * _height * 0.9f;
         /// <summary>True while a face change is still being built.</summary>
         public bool Rebuilding => _job != null;
+        /// <summary>The hero's rig (null until built).</summary>
+        public CharacterRig Rig => _rig;
 
         /// <summary>Shows the anime flame aura in the chosen aura colour (Customize: while the Body tab with the aura colours is open).</summary>
         public bool ShowAura { get; set; }

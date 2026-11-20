@@ -15,7 +15,8 @@ namespace LightMMORPG.Menu
     /// player's fighter, cel-shaded clouds — drifts the camera slowly, and builds <see cref="MainMenuUI"/>.
     /// <c>-menuCapture &lt;dir&gt;</c> renders the screenshot set (title, menu in each sky, Play Online, Settings, Stats, Customize) at
     /// 1920×1080 and iPhone landscape 2532×1170 (with notch / home-bar safe area) and quits; <c>-menuCaptureFace json</c>
-    /// shows other face choices on the Customize shots.
+    /// shows other face choices on the Customize shots. <c>-injuryCapture &lt;dir&gt;</c> renders the bruises / swollen eye
+    /// (<see cref="VFX.InjuryVisuals.ApplyPreview"/>) on the menu fighter's face and body at four health levels and quits.
     /// </summary>
     public sealed class MainMenuScene : MonoBehaviour
     {
@@ -31,7 +32,7 @@ namespace LightMMORPG.Menu
         private MenuFighter _fighter;
         /// <summary>0 = normal menu framing, 1 = Customize close-up on the fighter's face.</summary>
         private float _closeUp, _bodyView;
-        private bool _dragging;
+        private bool _dragging, _injuryCapture;
         private Vector2 _pressAt;
         private float _pressTime, _pressTravel;
 
@@ -71,6 +72,8 @@ namespace LightMMORPG.Menu
 
             string capture = Arg("-menuCapture");
             if (capture != null) StartCoroutine(Capture(capture));
+            string injury = Arg("-injuryCapture");
+            if (injury != null) StartCoroutine(InjuryCapture(injury));
             string auto = Arg("-menuAutoplay");
             if (auto != null) StartCoroutine(AutoPlay(auto, Arg("-menuAutoplayIp")));
         }
@@ -81,7 +84,7 @@ namespace LightMMORPG.Menu
             bool customize = UI != null && UI.Current == MainMenuUI.State.Customize;
             _closeUp = Mathf.MoveTowards(_closeUp, customize ? 1f : 0f, Time.unscaledDeltaTime / 0.7f);
             _bodyView = Mathf.MoveTowards(_bodyView, customize && UI.BodyTabOpen ? 1f : 0f, Time.unscaledDeltaTime / 0.5f);
-            if (_fighter != null) _fighter.ShowAura = customize && UI.BodyTabOpen;
+            if (_fighter != null) _fighter.ShowAura = customize && UI.BodyTabOpen && !_injuryCapture;
             UpdateTurn(customize);
             UpdateCamera(t);
             if (_islandRoot != null)
@@ -162,6 +165,51 @@ namespace LightMMORPG.Menu
         }
 
         // ---------------- screenshots ----------------
+
+        /// <summary>Dev screenshots of the injury look: face close-up and whole body at 85 / 50 / 20 / 8 % health.</summary>
+        private IEnumerator InjuryCapture(string dir)
+        {
+            Directory.CreateDirectory(dir);
+            _injuryCapture = true;
+            for (int i = 0; i < 30; i++) yield return null;
+            while (_fighter != null && (_fighter.Rebuilding || _fighter.Rig == null)) yield return null;
+            var rt = new RenderTexture(1920, 1080, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB) { antiAliasing = 4 };
+            rt.Create();
+            _camera.targetTexture = rt;
+            Sky.Apply(SkyId.Day);
+            var stages = new (string name, float hp, int bruises)[] { ("1_Hits_85hp", 0.85f, 4), ("2_Half_50hp", 0.5f, 6), ("3_Heavy_20hp", 0.2f, 8), ("4_NearKO_8hp", 0.08f, 8) };
+            foreach (var st in stages)
+            {
+                foreach (int tab in new[] { 0, 7 })   // face close-up, then the Body tab (whole fighter)
+                {
+                    UI.ShowCustomize(PlayerAppearance.Load(), tab);
+                    _closeUp = 1f;
+                    _bodyView = tab == 7 ? 1f : 0f;
+                    if (_fighter != null) _fighter.Turn = 0f;
+                    for (int i = 0; i < 8; i++) yield return null;
+                    _bodyView = tab == 7 ? 1f : 0f;
+                    VFX.InjuryVisuals.ApplyPreview(_fighter != null ? _fighter.Rig : null, st.hp, st.bruises);
+                    yield return null;
+                    UpdateCamera(Time.time - _t0);
+                    _camera.Render();
+                    var prev = RenderTexture.active;
+                    RenderTexture.active = rt;
+                    var tex = new Texture2D(1920, 1080, TextureFormat.RGB24, false);
+                    tex.ReadPixels(new Rect(0, 0, 1920, 1080), 0, 0);
+                    tex.Apply();
+                    RenderTexture.active = prev;
+                    string file = Path.Combine(dir, "Injury_" + st.name + (tab == 7 ? "_Body" : "_Face") + ".png");
+                    File.WriteAllBytes(file, tex.EncodeToPNG());
+                    Destroy(tex);
+                    Debug.Log("[Menu] Injury capture: wrote " + file);
+                }
+            }
+            _camera.targetTexture = null;
+            rt.Release();
+            Destroy(rt);
+            Debug.Log("[Menu] Injury capture done");
+            Application.Quit();
+        }
 
         private IEnumerator Capture(string dir)
         {
