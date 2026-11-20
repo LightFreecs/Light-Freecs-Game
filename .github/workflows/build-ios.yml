@@ -5,9 +5,10 @@ name: Build iOS
 # Install it with a sideloading tool (e.g. Sideloadly / AltStore), which
 # re-signs it with your own Apple ID. No paid Apple Developer account needed.
 #
-# Speed (2026-11-20, was ~17 min): IL2CPP "faster (smaller) builds" for iOS (less generated C++), ccache on the
-# macOS compile (the engine / package C++ barely changes between builds, so warm builds mostly hit the cache),
-# `xcodebuild build` instead of `archive`, no dSYM / index store, and no pointless Docker-image cleanup.
+# Speed (2026-11-20, was ~17 min, now ~8 min warm): IL2CPP "faster (smaller) builds" for iOS (less generated C++);
+# ccache on the macOS compile, including IL2CPP's own C++ build (a toolchain mirror whose clang goes through ccache;
+# ~91 % hits on a warm build: xcodebuild 7m50s -> 43s); `xcodebuild build` instead of `archive`, no dSYM / index
+# store; no disk cleanup on the Linux runner.
 
 on:
   workflow_dispatch:
@@ -17,15 +18,10 @@ jobs:
     name: Export Xcode project
     runs-on: ubuntu-latest
     steps:
-      # Unity editor images are large; make room on the hosted runner.
-      - uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: false
-          docker-images: false   # we pull Unity's image right after; deleting the preinstalled ones only costs time
-          swap-storage: false
+      # (No disk cleanup: the hosted runner now has ~88 GB free; the Unity image needs ~15 GB. Deleting the
+      # Android / .NET / Haskell SDKs cost 2-3 minutes per build for nothing.)
+      - name: Disk space
+        run: df -h /
 
       - uses: actions/checkout@v4
         with:
