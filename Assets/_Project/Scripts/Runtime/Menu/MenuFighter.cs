@@ -19,7 +19,8 @@ namespace LightMMORPG.Menu
 
     /// <summary>
     /// The player's procedural fighter on the menu island: heroic idle (planted wide stance, chest up, fists low and
-    /// slightly out, slow breathing and head sway) plus a subtle aura shell and rising sparkles in the hero's aura colour.
+    /// slightly out, slow breathing and head sway) plus a subtle aura shell and rising sparkles in the hero's aura colour;
+    /// on Customize's Body tab the anime flame aura (<see cref="VFX.AnimeAura"/>) replaces the shell to preview the aura colour.
     /// </summary>
     [DefaultExecutionOrder(200)]
     public sealed class MenuFighter : MonoBehaviour
@@ -27,7 +28,8 @@ namespace LightMMORPG.Menu
         private CharacterRig _rig;
         private GameObject _hero;
         private Transform _aura;
-        private Material _auraMat;
+        private Material _auraMat, _sparkleMat;
+        private VFX.AnimeAura _flame;
         private readonly List<(Transform t, float phase, float radius, float angle, float speed)> _sparkles = new();
         private float _height = 2.3f;
         private float _baseYaw;
@@ -50,6 +52,9 @@ namespace LightMMORPG.Menu
         public Vector3 HeadPosition => _rig != null ? _rig[CharacterBone.Head].position : transform.position + Vector3.up * _height * 0.9f;
         /// <summary>True while a face change is still being built.</summary>
         public bool Rebuilding => _job != null;
+
+        /// <summary>Shows the anime flame aura in the chosen aura colour (Customize: while the Body tab with the aura colours is open).</summary>
+        public bool ShowAura { get; set; }
 
         /// <summary>Plays the next face expression (Customize: tap the fighter).</summary>
         public void PlayNextExpression()
@@ -81,10 +86,23 @@ namespace LightMMORPG.Menu
         public void SetFace(FaceCustomization face)
         {
             _face = face.Sanitized();
+            SetAuraColor(PlayerAppearance.AuraColor(_face.auraColor));
             if (_job == null && !Same(_face, _builtFace)) StartJob();
         }
 
-        private static bool Same(FaceCustomization a, FaceCustomization b) => JsonUtility.ToJson(a) == JsonUtility.ToJson(b);
+        // the aura colour needs no new hero: it only recolours the aura, shell and sparkles
+        private static bool Same(FaceCustomization a, FaceCustomization b)
+        {
+            a.auraColor = b.auraColor = 0;
+            return JsonUtility.ToJson(a) == JsonUtility.ToJson(b);
+        }
+
+        private void SetAuraColor(Color aura)
+        {
+            if (_flame != null) _flame.Color = aura;
+            if (_auraMat != null) _auraMat.SetColor("_Color", aura * 0.5f);
+            if (_sparkleMat != null) _sparkleMat.SetColor("_Color", aura * 1.2f);
+        }
 
         private void StartJob()
         {
@@ -146,6 +164,9 @@ namespace LightMMORPG.Menu
             SetupFace(hero);
             if (_rig != null) _height = _rig.Height;
             Color aura = _rig != null ? _rig.AuraColor : recipe.auraColor;
+            _flame = VFX.AnimeAura.Create(transform);
+            _flame.Height = _height;
+            _flame.Color = aura;
 
             if (m.aura != null)
             {
@@ -168,6 +189,7 @@ namespace LightMMORPG.Menu
             }
             if (m.sparkle != null)
             {
+                _sparkleMat = m.sparkle;
                 m.sparkle.SetColor("_Color", aura * 1.2f);
                 m.sparkle.SetFloat("_Intensity", 1.6f);
                 m.sparkle.SetFloat("_CoreStrength", 1.2f);
@@ -194,8 +216,15 @@ namespace LightMMORPG.Menu
             float t = Time.time;
             transform.localRotation = Quaternion.Euler(0f, _baseYaw + Turn, 0f);
             if (_rig != null) Pose(t);
+            if (_flame != null)
+            {
+                _flame.Visible = ShowAura;
+                _flame.Size = 0.85f;
+                _flame.Height = _height;
+            }
             if (_aura != null)
             {
+                _aura.gameObject.SetActive(!ShowAura);   // the flame replaces the soft shell
                 float pulse = 1f + Mathf.Sin(t * 2.2f) * 0.035f + Mathf.Sin(t * 5.3f) * 0.012f;
                 _aura.localScale = new Vector3(0.6f * _height * 0.5f, 0.56f * _height, 0.52f * _height * 0.5f) * pulse;
             }

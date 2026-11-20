@@ -67,6 +67,7 @@ namespace LightMMORPG.Menu
         private readonly List<Image> _browPreviews = new();
         private readonly List<CustButton> _hairTiles = new();
         private readonly List<CustButton> _hairColorTiles = new();
+        private readonly List<CustButton> _auraColorTiles = new();
         private readonly List<Image> _hairPreviews = new();
         private Texture2D[] _hairTex;
         private string _hairPreviewKey;
@@ -266,6 +267,7 @@ namespace LightMMORPG.Menu
                     BuildFaceRow(page, idx, t, y);
                     y -= RowStep;
                 }
+                if (t == BodyTab) y = BuildAuraColours(page, y - 4f);
             }
 
             // footer
@@ -279,6 +281,35 @@ namespace LightMMORPG.Menu
 
             Bind(_ => { RefreshCust(); foreach (var r in _faceRows) ShowSliderValue(r); });
             SetCustTab(0, false);
+        }
+
+        /// <summary>Body tab: the aura colour swatches (the menu fighter shows the aura while the Body tab is open).</summary>
+        private float BuildAuraColours(RectTransform page, float y)
+        {
+            SectionHead(page, "AURA", y);
+            y -= 32f;
+            const float cg = 12f;
+            int nc = PlayerAppearance.AuraColors.Length;
+            float cw = (CustW - cg * (nc - 1)) / nc;
+            for (int i = 0; i < nc; i++)
+            {
+                int ci = i;
+                var b = CustomButton(page, "AuraColour_" + PlayerAppearance.AuraColors[i].name, new Vector2(i * (cw + cg), y), new Vector2(cw, cw), 7,
+                    () => { _face.auraColor = ci; RefreshCust(); FaceChanged(); }, () => _face.auraColor == ci);
+                var sw = MenuUi.Img(b.rt, "Swatch", MenuUi.RoundedRect(3), PlayerAppearance.AuraColors[i].color, true);
+                sw.rectTransform.Fill(9f);
+                var ring = MenuUi.Img(b.rt, "Ring", MenuUi.RoundedRectOutline(3, 1.2f), A(Color.white, 0.35f), true);
+                ring.rectTransform.Fill(9f);
+                var badge = MenuUi.Img(b.rt, "Badge", null, Color.white);
+                badge.rectTransform.Place(new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-4f, -4f), new Vector2(20f, 20f));
+                Bind(p => badge.color = p.accent);
+                var check = MenuUi.Img(badge.transform, "Check", MenuUi.Icon(MenuUi.IconKind.Check), Color.white);
+                check.rectTransform.Fill(3f);
+                Bind(p => { var d = p.dialog; d.a = 1f; check.color = d; });
+                b.extra = _ => badge.gameObject.SetActive(_face.auraColor == ci);
+                _auraColorTiles.Add(b);
+            }
+            return y - cw - 22f;
         }
 
         private void SectionHead(RectTransform page, string text, float y)
@@ -476,7 +507,7 @@ namespace LightMMORPG.Menu
             for (int t = 0; t < _tabDots.Count; t++)
             {
                 bool changed = (t == 0 && _face.eyeStyle != ToonEyeStyle.Drawn) || (t == BrowTab && _face.browStyle != ToonBrowStyle.Classic)
-                    || (t == HairTab && (_face.hair != PlayerHair.Light || _face.hairColor != 0));
+                    || (t == HairTab && (_face.hair != PlayerHair.Light || _face.hairColor != 0)) || (t == BodyTab && _face.auraColor != 0);
                 foreach (int i in CustTabs[t].rows) changed |= _face.sliders[i] != 0f;
                 _tabDots[t].gameObject.SetActive(changed);
             }
@@ -510,7 +541,8 @@ namespace LightMMORPG.Menu
             Selectable hair = _hairTiles[(int)_face.hair].sel;
             Selectable colour = _hairColorTiles[_face.hairColor].sel;
             Selectable first = _custTab == 0 ? eye : _custTab == BrowTab ? brow : _custTab == HairTab ? hair : rows[0].s;
-            Selectable last = rows.Count > 0 ? rows[^1].s : _custTab == HairTab ? colour : tab;
+            Selectable aura = _auraColorTiles[_face.auraColor].sel;
+            Selectable last = _custTab == BodyTab ? aura : rows.Count > 0 ? rows[^1].s : _custTab == HairTab ? colour : tab;
             for (int i = 0; i < _tabButtons.Count; i++)
                 Nav(_tabButtons[i].sel, _custRandom.sel, first, i > 0 ? _tabButtons[i - 1].sel : null, i < _tabButtons.Count - 1 ? _tabButtons[i + 1].sel : null);
             Nav(_custRandom.sel, null, tab, null, null);
@@ -526,10 +558,13 @@ namespace LightMMORPG.Menu
             if (_custTab == HairTab)
                 for (int i = 0; i < _hairColorTiles.Count; i++)
                     Nav(_hairColorTiles[i].sel, hair, _custDone.sel, i > 0 ? _hairColorTiles[i - 1].sel : null, i < _hairColorTiles.Count - 1 ? _hairColorTiles[i + 1].sel : null);
+            if (_custTab == BodyTab)
+                for (int i = 0; i < _auraColorTiles.Count; i++)
+                    Nav(_auraColorTiles[i].sel, rows[^1].s, _custDone.sel, i > 0 ? _auraColorTiles[i - 1].sel : null, i < _auraColorTiles.Count - 1 ? _auraColorTiles[i + 1].sel : null);
             for (int k = 0; k < rows.Count; k++)
             {
                 Selectable up = k > 0 ? rows[k - 1].s : _custTab == 0 ? eye : _custTab == BrowTab ? brow : tab;
-                Selectable down = k < rows.Count - 1 ? rows[k + 1].s : _custDone.sel;
+                Selectable down = k < rows.Count - 1 ? rows[k + 1].s : _custTab == BodyTab ? aura : _custDone.sel;
                 Nav(rows[k].s, up, down, null, null); // left / right move the slider
                 foreach (var b in new[] { rows[k].minus, rows[k].plus, rows[k].undo }) Nav(b.sel, up, down, rows[k].s, rows[k].s);
             }
@@ -545,6 +580,7 @@ namespace LightMMORPG.Menu
             _face.browStyle = (ToonBrowStyle)UnityEngine.Random.Range(0, PlayerAppearance.BrowNames.Length);
             _face.hair = (PlayerHair)UnityEngine.Random.Range(0, PlayerAppearance.HairNames.Length);
             _face.hairColor = UnityEngine.Random.Range(0, PlayerAppearance.HairColors.Length);
+            _face.auraColor = UnityEngine.Random.Range(0, PlayerAppearance.AuraColors.Length);
             for (int i = 0; i < FaceSliders.Count; i++) _face.sliders[i] = Mathf.Round(UnityEngine.Random.Range(-0.7f, 0.7f) * 100f) / 100f;
             SyncFaceControls();
             RebuildCustNav();

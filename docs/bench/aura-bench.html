@@ -1,0 +1,250 @@
+<title>Charge Aura Bench</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600&display=swap">
+<style>
+  :root { --bg: #0c0d12; --panel: #161821; --fg: #eef0f6; --dim: #9aa0b4; --line: #2a2d3a; --accent: #f2d21b; color-scheme: dark; }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg: #f1f1ee; --panel: #ffffff; --fg: #17181d; --dim: #5d6170; --line: #d9d9d3; --accent: #b08d00; color-scheme: light; } }
+  :root[data-theme="light"] { --bg: #f1f1ee; --panel: #ffffff; --fg: #17181d; --dim: #5d6170; --line: #d9d9d3; --accent: #b08d00; color-scheme: light; }
+  body { background: var(--bg); color: var(--fg); font: 15px/1.5 Inter, system-ui, sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding-block: 24px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  h1 { font: 44px/1 "Bebas Neue", Impact, sans-serif; letter-spacing: .04em; margin: 0 0 4px; text-wrap: balance; }
+  p.lede { color: var(--dim); margin: 0 0 18px; max-width: 65ch; }
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 18px; }
+  @media (max-width: 760px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+  canvas { width: 100%; aspect-ratio: 3 / 4; max-width: min(100%, 58vh); display: block; border-radius: 10px; background: #000; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; min-width: 0; }
+  .label { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); margin: 0 0 8px; font-weight: 600; }
+  .swatches { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 16px; }
+  .sw { aspect-ratio: 1; border-radius: 8px; border: 2px solid transparent; cursor: pointer; position: relative; }
+  .sw[aria-pressed="true"] { border-color: var(--fg); }
+  .sw span { position: absolute; left: 0; right: 0; bottom: -18px; font-size: 10px; text-align: center; color: var(--dim); white-space: nowrap; }
+  .swatches { row-gap: 26px; }
+  .seg { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .seg button { flex: 1; padding: 8px 6px; border-radius: 7px; border: 1px solid var(--line); background: transparent; color: var(--fg); font: 600 13px Inter, sans-serif; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #111; border-color: var(--accent); }
+  .note { color: var(--dim); font-size: 13px; }
+</style>
+
+<div class="wrap">
+  <h1>Charge Aura</h1>
+  <p class="lede">The flame aura shown while charging (hold Charge) and, bigger, during Power Surge. It is drawn flat, facing the camera, in two layers: the flame behind the fighter and faint rising streaks in front. The drawing changes 20 times a second, like hand-drawn anime frames. Pick a colour to preview the Customize choices.</p>
+  <div class="stage">
+    <canvas id="c" width="600" height="800"></canvas>
+    <div class="panel">
+      <p class="label">Aura colour</p>
+      <div class="swatches" id="sw"></div>
+      <p class="label">State</p>
+      <div class="seg" id="state">
+        <button data-v="0.85" aria-pressed="true">Charging</button>
+        <button data-v="1">Power Surge</button>
+      </div>
+      <p class="label">Background</p>
+      <div class="seg" id="bg">
+        <button data-v="0" aria-pressed="true">Night</button>
+        <button data-v="1">Day</button>
+      </div>
+      <p class="label">Fighter</p>
+      <div class="seg" id="fig">
+        <button data-v="1" aria-pressed="true">Shown</button>
+        <button data-v="0">Hidden</button>
+      </div>
+      <p class="note">Lightning from the reference clip is left out on purpose.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const COLORS = [   // PlayerAppearance.AuraColors
+  ["Gold", [1.0, 0.85, 0.10]], ["Flame", [1.0, 0.45, 0.08]], ["Crimson", [1.0, 0.12, 0.15]], ["Rose", [1.0, 0.35, 0.75]],
+  ["Violet", [0.62, 0.30, 1.0]], ["Blue", [0.2, 0.42, 1.0]], ["Sky", [0.3, 0.78, 1.0]], ["Emerald", [0.20, 1.0, 0.45]],
+  ["Lime", [0.7, 1.0, 0.2]], ["White", [0.92, 0.95, 1.0]],
+];
+const state = { color: COLORS[0][1], strength: 0.85, bg: 0, fig: 1 };
+const swWrap = document.getElementById("sw");
+COLORS.forEach(([name, c], i) => {
+  const b = document.createElement("button");
+  b.className = "sw"; b.setAttribute("aria-pressed", i === 0); b.setAttribute("aria-label", name);
+  b.style.background = `rgb(${c.map(v => Math.round(v * 255)).join(",")})`;
+  b.innerHTML = `<span>${name}</span>`;
+  b.onclick = () => { state.color = c; swWrap.querySelectorAll(".sw").forEach(x => x.setAttribute("aria-pressed", x === b)); };
+  swWrap.appendChild(b);
+});
+function seg(id, key) {
+  const el = document.getElementById(id);
+  el.querySelectorAll("button").forEach(b => b.onclick = () => {
+    state[key] = parseFloat(b.dataset.v); el.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  });
+}
+seg("state", "strength"); seg("bg", "bg"); seg("fig", "fig");
+
+// ---- the aura shader (ported 1:1 to Assets/_Project/Resources/VFX/AnimeAura.shader) ----
+const FRAG = `#version 300 es
+precision highp float;
+in vec2 vUv;
+out vec4 o;
+uniform float uTime, uStrength, uBg, uFig, uAspect;
+uniform vec3 uColor;
+
+// Aura space: x right, y up, feet at 0, the crown tip near 1. The aura is an egg-shaped body round the fighter with
+// straight sharp flame spikes on it that point out and up (flat out at the feet, straight up at the crown), redrawn
+// 20 times a second like hand-drawn anime frames; thin strokes rise inside.
+float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+
+const vec2 EGG_C = vec2(0.0, 0.28);
+const float EGG_W = 0.21, EGG_TOP = 0.44, EGG_BOT = 0.28, EGG_WB = 0.21;
+
+float sdEgg(vec2 p) {
+  vec2 q = p - EGG_C;
+  vec2 r = q.y > 0.0 ? vec2(EGG_W, EGG_TOP) : vec2(EGG_WB, EGG_BOT);
+  float k0 = length(q / r), k1 = length(q / (r * r));
+  return k0 * (k0 - 1.0) / max(k1, 1e-4);
+}
+
+// isosceles triangle, apex at the origin, base (half width q.x) at y = q.y
+float sdTri(vec2 p, vec2 q) {
+  p.x = abs(p.x);
+  vec2 a = p - q * clamp(dot(p, q) / dot(q, q), 0.0, 1.0);
+  vec2 b = p - q * vec2(clamp(p.x / q.x, 0.0, 1.0), 1.0);
+  float s = -sign(q.y);
+  vec2 d = min(vec2(dot(a, a), s * (p.x * q.y - p.y * q.x)), vec2(dot(b, b), s * (p.y - q.y)));
+  return -sqrt(d.x) * sign(d.y);
+}
+
+// one spike: base centred on the egg at angle th (0 = top, + = right side), pointing at angle phi from straight up
+float sdSpike(vec2 p, float th, float phi, float len, float halfW) {
+  float c = cos(th);
+  vec2 base = EGG_C + vec2(sin(th) * (c > 0.0 ? EGG_W : EGG_WB), c * (c > 0.0 ? EGG_TOP : EGG_BOT)) * 0.86;
+  vec2 dir = vec2(sin(phi), cos(phi));
+  vec2 d = p - (base + dir * len);
+  return sdTri(vec2(dot(d, vec2(dir.y, -dir.x)), -dot(d, dir)), vec2(halfW, len + 0.05));
+}
+
+float smin(float a, float b, float k) { float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0); return mix(b, a, h) - k * h * (1.0 - h); }
+
+const int SIDE_SPIKES = 6;
+
+// distance to the whole silhouette (negative inside) for drawing number n
+float sdAura(vec2 p, float n, float rise) {
+  float d = sdEgg(p);
+  float sp = 1e3;
+  // crown: one or two tall spikes and two shorter ones beside them
+  float twin = step(0.6, h21(vec2(n, 11.0)));
+  float c0 = (h21(vec2(n, 1.0)) - 0.5) * 0.12;
+  sp = min(sp, sdSpike(p, c0 - twin * 0.07, c0 * 0.6 - twin * 0.05, mix(0.25, 0.31, h21(vec2(n, 2.0))), 0.042));
+  if (twin > 0.5) sp = min(sp, sdSpike(p, c0 + 0.08, c0 * 0.6 + 0.06, mix(0.22, 0.29, h21(vec2(n, 3.0))), 0.04));
+  for (int k = 0; k < 2; k++) {
+    float sgn = k == 0 ? -1.0 : 1.0;
+    sp = min(sp, sdSpike(p, sgn * mix(0.42, 0.55, h21(vec2(n, 4.0 + float(k)))), sgn * mix(0.18, 0.3, h21(vec2(n, 6.0 + float(k)))),
+                          mix(0.18, 0.26, h21(vec2(n, 8.0 + float(k)))), 0.036));
+  }
+  // flanks: spikes slide up each side, leaning further out the lower they sit
+  for (int k = 0; k < 2; k++) {
+    float sgn = k == 0 ? -1.0 : 1.0;
+    for (int i = 0; i < SIDE_SPIKES; i++) {
+      float u = (float(i) + 0.5 + float(k) * 0.5) / float(SIDE_SPIKES) - rise;
+      float cyc = floor(u);
+      u -= cyc;
+      float id = float(i) - cyc * float(SIDE_SPIKES) + float(k) * 100.0;
+      u += (h21(vec2(id, n)) - 0.5) * 0.05;                 // each drawing wobbles a little
+      float s = mix(0.22, 0.93, u);                        // 0 top .. 1 feet
+      float th = sgn * s * 3.14159265;
+      float phi = sgn * mix(0.45, 1.45, s);      // ~25 deg from vertical up top, ~80 at the feet
+      float len = mix(0.16, 0.26, h21(vec2(id, 21.0))) * mix(0.85, 1.12, h21(vec2(id, n + 40.0)));
+      len *= smoothstep(0.0, 0.12, u) * smoothstep(1.0, 0.93, u);
+      sp = min(sp, sdSpike(p, th, phi, len, len * 0.2 + 0.012));
+    }
+  }
+  return smin(d, sp, 0.016);
+}
+
+// rising strokes inside the aura: hooks / arcs and thin vertical lines
+float strokes(vec2 p, float t) {
+  vec2 cell = vec2(1.0 / 8.0, 1.0 / 5.0);
+  vec2 g = vec2(p.x, p.y - t * 0.9) / cell;
+  vec2 id = floor(g);
+  float hs = h21(id + 0.37);
+  if (hs < 0.45) return 0.0;
+  vec2 q = (fract(g) - 0.5 - (vec2(h21(id + 7.1), h21(id + 3.3)) - 0.5) * 0.3) * cell;
+  if (hs < 0.8) {
+    float rad = mix(0.016, 0.028, h21(id + 1.9));
+    float a = atan(q.x, q.y) - (h21(id + 5.5) - 0.5) * 2.0;   // arcs open downwards, tilted
+    float d = abs(length(q) - rad);
+    return smoothstep(0.004, 0.0012, d) * step(abs(a), 1.35);
+  }
+  float len = mix(0.025, 0.06, h21(id + 2.7));
+  return smoothstep(0.0032, 0.001, abs(q.x - q.y * 0.15)) * step(abs(q.y), len);
+}
+
+float sdCap(vec2 p, vec2 a, vec2 b, float r) { vec2 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0); return length(pa - ba * h) - r; }
+float figure(vec2 p) {   // stand-in fighter (bench only)
+  float d = length(p - vec2(0.0, 0.58)) - 0.048;
+  d = min(d, sdCap(p, vec2(0.0, 0.35), vec2(0.0, 0.5), 0.065));
+  d = min(d, sdCap(p, vec2(-0.03, 0.32), vec2(-0.075, 0.02), 0.032));
+  d = min(d, sdCap(p, vec2(0.03, 0.32), vec2(0.075, 0.02), 0.032));
+  d = min(d, sdCap(p, vec2(-0.08, 0.49), vec2(-0.125, 0.35), 0.024));
+  d = min(d, sdCap(p, vec2(-0.125, 0.35), vec2(-0.085, 0.28), 0.024));
+  d = min(d, sdCap(p, vec2(0.08, 0.49), vec2(0.125, 0.35), 0.024));
+  d = min(d, sdCap(p, vec2(0.125, 0.35), vec2(0.085, 0.28), 0.024));
+  return d;
+}
+
+// one aura layer, premultiplied (rgb added, a covers). front = 1: only the strokes (drawn over the fighter)
+vec4 aura(vec2 p, float t, float front) {
+  p /= uStrength;                         // smaller while charging, full size in Power Surge
+  float n = floor(t * 20.0);              // drawing number (held 3 frames at 60 fps)
+  float tn = n / 20.0;
+  vec3 c = uColor;
+  float egg = sdEgg(p);
+  float st = strokes(p, tn) * smoothstep(0.0, -0.03, egg) * smoothstep(0.03, 0.14, p.y);
+  if (front > 0.5) return vec4(c * st * 1.1, 0.0) * min(uStrength * 1.25, 1.0);
+  float d = sdAura(p, n, fract(tn * 1.6));
+  float soft = 0.004;
+  float inside = 1.0 - smoothstep(-soft, soft, d);
+  float fill = inside * pow(smoothstep(-0.07, 0.01, egg), 2.0);            // spikes solid, the body fades to dark inside
+  float tipDim = 1.0 - 0.25 * smoothstep(0.02, 0.2, egg);           // tips a touch deeper
+  float halo = exp(-max(d, 0.0) / 0.03) * (1.0 - inside) * 0.2 + (1.0 - inside) * exp(-max(egg, 0.0) / 0.07) * 0.07;
+  float haze = inside * (1.0 - fill) * 0.04;                        // dim haze in the body
+  vec3 rgb = c * (fill * tipDim + halo + haze + st * 1.2);
+  float a = inside * mix(0.3, 0.85, fill);
+  return vec4(rgb, a) * min(uStrength * 1.25, 1.0);
+}
+
+void main() {
+  vec2 p = vec2((vUv.x - 0.5) * uAspect, vUv.y * 1.15 - 0.04);
+  float t = uTime;
+  vec3 bg = uBg > 0.5 ? mix(vec3(0.62, 0.78, 0.95), vec3(0.95, 0.9, 0.8), smoothstep(0.6, 0.0, vUv.y)) : vec3(0.0);
+  if (uBg > 0.5 && vUv.y < 0.05) bg = vec3(0.45, 0.6, 0.35);
+  vec4 back = aura(p, t, 0.0);
+  vec3 col = bg * (1.0 - back.a) + back.rgb;
+  if (uFig > 0.5) {
+    float m = 1.0 - smoothstep(-0.002, 0.002, figure(p));
+    col = mix(col, vec3(0.16, 0.13, 0.12) + vec3(0.06) * smoothstep(0.1, 0.6, p.y), m);
+    vec4 fr = aura(p, t, 1.0);
+    col = col * (1.0 - fr.a) + fr.rgb;
+  }
+  o = vec4(pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2)), 1.0);
+}`;
+const VERT = `#version 300 es
+in vec2 pos; out vec2 vUv; void main() { vUv = pos * 0.5 + 0.5; gl_Position = vec4(pos, 0.0, 1.0); }`;
+
+const cv = document.getElementById("c");
+const gl = cv.getContext("webgl2");
+function sh(type, src) { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s)); return s; }
+const pr = gl.createProgram();
+gl.attachShader(pr, sh(gl.VERTEX_SHADER, VERT)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FRAG)); gl.linkProgram(pr); gl.useProgram(pr);
+const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+const loc = gl.getAttribLocation(pr, "pos"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+const U = n => gl.getUniformLocation(pr, n);
+window.auraTime = null;   // debug hook: set a number to freeze time
+function frame(ms) {
+  const t = window.auraTime ?? ms / 1000;
+  gl.uniform1f(U("uTime"), t); gl.uniform1f(U("uStrength"), state.strength); gl.uniform1f(U("uBg"), state.bg);
+  gl.uniform1f(U("uFig"), state.fig); gl.uniform1f(U("uAspect"), cv.width / cv.height * 1.15);
+  gl.uniform3fv(U("uColor"), state.color.map(v => Math.pow(v, 2.2) * 0.85));
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>

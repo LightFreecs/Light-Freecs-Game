@@ -81,6 +81,7 @@ namespace LightMMORPG.Menu
             bool customize = UI != null && UI.Current == MainMenuUI.State.Customize;
             _closeUp = Mathf.MoveTowards(_closeUp, customize ? 1f : 0f, Time.unscaledDeltaTime / 0.7f);
             _bodyView = Mathf.MoveTowards(_bodyView, customize && UI.BodyTabOpen ? 1f : 0f, Time.unscaledDeltaTime / 0.5f);
+            if (_fighter != null) _fighter.ShowAura = customize && UI.BodyTabOpen;
             UpdateTurn(customize);
             UpdateCamera(t);
             if (_islandRoot != null)

@@ -88,6 +88,8 @@ namespace LightMMORPG.Characters
         public PlayerHair hair;
         /// <summary>Index into <see cref="PlayerAppearance.HairColors"/>; any colour goes with any hairstyle.</summary>
         public int hairColor;
+        /// <summary>Index into <see cref="PlayerAppearance.AuraColors"/> (0 = gold, also what older saves load as).</summary>
+        public int auraColor;
         public FaceSliders sliders;
 
         /// <summary>Copy with every slider clamped to -1..1 and a valid eye style (values can come from other players).</summary>
@@ -103,6 +105,7 @@ namespace LightMMORPG.Characters
             if (!Enum.IsDefined(typeof(ToonBrowStyle), f.browStyle)) f.browStyle = ToonBrowStyle.Classic;
             if (!Enum.IsDefined(typeof(PlayerHair), f.hair)) f.hair = PlayerHair.Light;
             if (f.hairColor < 0 || f.hairColor >= PlayerAppearance.HairColors.Length) f.hairColor = 0;
+            if (f.auraColor < 0 || f.auraColor >= PlayerAppearance.AuraColors.Length) f.auraColor = 0;
             return f;
         }
     }
@@ -186,6 +189,29 @@ namespace LightMMORPG.Characters
             ("Violet", new Color32(0x5b, 0x43, 0x90, 0xff)),
         };
 
+        /// <summary>Aura colours for the Customize screen (Body tab), as shown on the swatches; the aura draws them HDR-bright.</summary>
+        public static readonly (string name, Color color)[] AuraColors =
+        {
+            ("Gold", new Color(1f, 0.85f, 0.1f)),
+            ("Flame", new Color(1f, 0.45f, 0.08f)),
+            ("Crimson", new Color(1f, 0.12f, 0.15f)),
+            ("Rose", new Color(1f, 0.35f, 0.75f)),
+            ("Violet", new Color(0.62f, 0.3f, 1f)),
+            ("Blue", new Color(0.2f, 0.42f, 1f)),
+            ("Sky", new Color(0.3f, 0.78f, 1f)),
+            ("Emerald", new Color(0.2f, 1f, 0.45f)),
+            ("Lime", new Color(0.7f, 1f, 0.2f)),
+            ("White", new Color(0.92f, 0.95f, 1f)),
+        };
+
+        /// <summary>The recipe's (HDR) aura colour for an aura pick.</summary>
+        public static Color AuraColor(int index)
+        {
+            var c = AuraColors[Mathf.Clamp(index, 0, AuraColors.Length - 1)].color * 1.8f;
+            c.a = 1f;
+            return c;
+        }
+
         /// <summary>The recipe hairstyle for a player pick.</summary>
         public static HairStyle ToHairStyle(PlayerHair h) => h == PlayerHair.Messy ? HairStyle.Messy : HairStyle.Light;
 
@@ -260,6 +286,7 @@ namespace LightMMORPG.Characters
             head.browStyle = f.browStyle;
             recipe.hairStyle = ToHairStyle(f.hair);
             recipe.hairColor = recipe.hairTipColor = HairColors[f.hairColor].color;
+            recipe.auraColor = AuraColor(f.auraColor);
             for (int i = 0; i < FaceSliders.HeadCount; i++)
             {
                 var d = Sliders[i];
