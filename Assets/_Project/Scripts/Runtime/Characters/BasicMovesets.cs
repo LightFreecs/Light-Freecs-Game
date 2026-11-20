@@ -150,7 +150,9 @@ namespace LightMMORPG.Characters
 
         /// <summary>
         /// "Rush", from the owner's reference clip (a straight-punch rush): left straight, right straight, left body blow,
-        /// right power straight (finisher). Numbers = the Attack Bench (the owner dropped the kick finisher).
+        /// right power straight (finisher). Numbers = the Attack Bench (the owner dropped the kick finisher). The left straight and
+        /// the power straight go to the face (chin height, owner 2026-11-20: "have some of those hits aim for the head"), the
+        /// right straight to the chest and the body blow to the gut, so the hit reactions differ along the combo.
         /// </summary>
         public static readonly BasicMoveset Rush = BuildRush();
 
@@ -189,17 +191,17 @@ namespace LightMMORPG.Characters
                 Keys = new[]
                 {
                     K(0f, KeyEase.Smooth, P()),
-                    K(0.03f, KeyEase.Smooth, P(p => { p.RootYaw = 14f; p.ArmL = new Vector3(-0.10f, 1.52f, 0.25f); })),
+                    K(0.03f, KeyEase.Smooth, P(p => { p.RootYaw = 14f; p.ArmL = new Vector3(-0.10f, 1.62f, 0.25f); })),
                     K(0.07f, KeyEase.Snap, P(p =>
                     {
-                        p.RootYaw = 26f; p.RootPos = new Vector3(0f, 0f, 0.06f); p.HipsYaw = 6f; p.HipsPitch = 7f; p.TorsoYaw = 6f; p.TorsoPitch = 15f;
-                        p.ArmL = new Vector3(-0.02f, 1.55f, 1.00f); p.TwistL = -60f; p.ArmR = new Vector3(0.14f, 1.46f, 0.12f); p.TwistR = 20f;
+                        p.RootYaw = 26f; p.RootPos = new Vector3(0f, 0f, 0.06f); p.HipsYaw = 6f; p.HipsPitch = 7f; p.TorsoYaw = 6f; p.TorsoPitch = 8f;
+                        p.ArmL = new Vector3(-0.02f, 1.95f, 0.97f); p.TwistL = -60f; p.ArmR = new Vector3(0.14f, 1.46f, 0.12f); p.TwistR = 20f;
                         p.LegL = new Vector3(-0.18f, 0.105f, 0.30f);
                     })),
                     K(0.15f, KeyEase.Smooth, P(p =>
                     {
-                        p.RootYaw = 25f; p.RootPos = new Vector3(0f, 0f, 0.06f); p.HipsYaw = 6f; p.HipsPitch = 7f; p.TorsoYaw = 6f; p.TorsoPitch = 15f;
-                        p.ArmL = new Vector3(-0.03f, 1.55f, 0.94f); p.TwistL = -55f; p.ArmR = new Vector3(0.14f, 1.46f, 0.12f); p.TwistR = 20f;
+                        p.RootYaw = 25f; p.RootPos = new Vector3(0f, 0f, 0.06f); p.HipsYaw = 6f; p.HipsPitch = 7f; p.TorsoYaw = 6f; p.TorsoPitch = 8f;
+                        p.ArmL = new Vector3(-0.03f, 1.94f, 0.91f); p.TwistL = -55f; p.ArmR = new Vector3(0.14f, 1.46f, 0.12f); p.TwistR = 20f;
                         p.LegL = new Vector3(-0.18f, 0.105f, 0.30f);
                     })),
                     K(0.28f, KeyEase.Smooth, P()),
@@ -257,19 +259,19 @@ namespace LightMMORPG.Characters
                 Keys = new[]
                 {
                     K(0f, KeyEase.Smooth, P()),
-                    K(0.05f, KeyEase.Smooth, P(p => { p.RootYaw = 20f; p.HipsPos = new Vector3(0f, -0.09f, 0f); p.ArmR = new Vector3(0.17f, 1.44f, 0.08f); })),
+                    K(0.05f, KeyEase.Smooth, P(p => { p.RootYaw = 20f; p.HipsPos = new Vector3(0f, -0.09f, 0f); p.ArmR = new Vector3(0.17f, 1.52f, 0.08f); })),
                     K(0.10f, KeyEase.Snap, P(p =>
                     {
                         p.RootYaw = -22f; p.RootPos = new Vector3(0f, 0f, 0.16f); p.HipsYaw = -10f; p.HipsPitch = 9f; p.HipsPos = new Vector3(0f, -0.10f, 0f);
-                        p.TorsoYaw = -12f; p.TorsoPitch = 18f;
-                        p.ArmR = new Vector3(0.03f, 1.56f, 1.10f); p.TwistR = 60f; p.ArmL = new Vector3(-0.13f, 1.46f, 0.14f); p.TwistL = -20f;
+                        p.TorsoYaw = -12f; p.TorsoPitch = 10f;
+                        p.ArmR = new Vector3(0.03f, 1.95f, 1.06f); p.TwistR = 60f; p.ArmL = new Vector3(-0.13f, 1.46f, 0.14f); p.TwistL = -20f;
                         p.LegR = new Vector3(0.20f, 0.105f, -0.06f); p.FootYawR = 5f; p.FootPitchR = 25f; p.LegL = new Vector3(-0.18f, 0.105f, 0.40f);
                     })),
                     K(0.24f, KeyEase.Smooth, P(p =>
                     {
                         p.RootYaw = -21f; p.RootPos = new Vector3(0f, 0f, 0.16f); p.HipsYaw = -10f; p.HipsPitch = 9f; p.HipsPos = new Vector3(0f, -0.10f, 0f);
-                        p.TorsoYaw = -12f; p.TorsoPitch = 18f;
-                        p.ArmR = new Vector3(0.04f, 1.56f, 1.04f); p.TwistR = 55f; p.ArmL = new Vector3(-0.13f, 1.46f, 0.14f); p.TwistL = -20f;
+                        p.TorsoYaw = -12f; p.TorsoPitch = 10f;
+                        p.ArmR = new Vector3(0.04f, 1.94f, 1.00f); p.TwistR = 55f; p.ArmL = new Vector3(-0.13f, 1.46f, 0.14f); p.TwistL = -20f;
                         p.LegR = new Vector3(0.20f, 0.105f, -0.06f); p.FootYawR = 5f; p.FootPitchR = 25f; p.LegL = new Vector3(-0.18f, 0.105f, 0.40f);
                     })),
                     K(0.40f, KeyEase.Smooth, P()),

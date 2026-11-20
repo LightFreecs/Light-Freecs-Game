@@ -775,3 +775,4 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     the struck knee, hips drop, lean over. Blocked 0.3, light 1, blast 1.2, finisher / heavy 1.6, beam 1.8; big hits flash
     a Surprised face. `RotateSubtree` keeps the rig's cached model rotations right.
   - Verified: headless compile only (owner tests by hand).
+  - Head shots (2026-11-20; owner: "have some of those hits aim for the head too"): Rush's left straight and right power straight aim at the face (fist target 1.95 of 2.3, torso pitch 15 / 18 -> 8 / 10 so the reach stays the same; the arm angles ~20 deg up because the anime head sits high). Combo zones: head, chest, gut, head. Attack Bench jab updated to match (it has no power straight; the game replaced its kick finisher).

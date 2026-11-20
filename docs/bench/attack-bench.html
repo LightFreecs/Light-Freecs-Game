@@ -289,15 +289,15 @@ const merge = (base, over) => {
 const EASE = { snap: u => 1 - Math.pow(1 - u, 5), smooth: u => 0.5 - 0.5 * Math.cos(Math.PI * u), in: u => u * u };
 
 const MOVES = [
-  { id: "left", name: "Left straight", note: "The lead fist shoots straight out from the chest and holds there, the right fist tucked at the ribs. The shoulders turn in; the body stays square and solid.",
+  { id: "left", name: "Left straight", note: "The lead fist shoots straight out at the face and holds there, the right fist tucked at the ribs. The shoulders turn in; the body stays square and solid.",
     limb: "handL", hit: 0.07, stop: 0.06, streak: [0.025, 0.11], length: 0.28,
     keys: [
       { t: 0, pose: {} },
-      { t: 0.03, ease: "smooth", pose: { root: { yaw: 14 }, armL: { t: [-0.10, 1.52, 0.25] } } },
-      { t: 0.07, ease: "snap", pose: { root: { yaw: 26, p: [0, 0, 0.06] }, hips: { yaw: 6, pitch: 7 }, torso: { yaw: 6, pitch: 15 },
-        armL: { t: [-0.02, 1.55, 1.00], twist: -60 }, armR: { t: [0.14, 1.46, 0.12], twist: 20 }, legL: { t: [-0.18, 0.105, 0.30] } } },
-      { t: 0.15, ease: "smooth", pose: { root: { yaw: 25, p: [0, 0, 0.06] }, hips: { yaw: 6, pitch: 7 }, torso: { yaw: 6, pitch: 15 },
-        armL: { t: [-0.03, 1.55, 0.94], twist: -55 }, armR: { t: [0.14, 1.46, 0.12], twist: 20 }, legL: { t: [-0.18, 0.105, 0.30] } } },
+      { t: 0.03, ease: "smooth", pose: { root: { yaw: 14 }, armL: { t: [-0.10, 1.62, 0.25] } } },
+      { t: 0.07, ease: "snap", pose: { root: { yaw: 26, p: [0, 0, 0.06] }, hips: { yaw: 6, pitch: 7 }, torso: { yaw: 6, pitch: 8 },
+        armL: { t: [-0.02, 1.95, 0.97], twist: -60 }, armR: { t: [0.14, 1.46, 0.12], twist: 20 }, legL: { t: [-0.18, 0.105, 0.30] } } },
+      { t: 0.15, ease: "smooth", pose: { root: { yaw: 25, p: [0, 0, 0.06] }, hips: { yaw: 6, pitch: 7 }, torso: { yaw: 6, pitch: 8 },
+        armL: { t: [-0.03, 1.94, 0.91], twist: -55 }, armR: { t: [0.14, 1.46, 0.12], twist: 20 }, legL: { t: [-0.18, 0.105, 0.30] } } },
       { t: 0.28, ease: "smooth", pose: {} },
     ] },
   { id: "right", name: "Right straight", note: "The other hand, same snap. The right shoulder drives through and the back heel lifts as the hips turn in.",
