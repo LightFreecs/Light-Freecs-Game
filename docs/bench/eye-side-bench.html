@@ -123,7 +123,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
   <header>
     <span class="eyebrow">Toon Head · eyes from the side</span>
     <h1>Profile Eye Bench</h1>
-    <p class="lead">Your saved head, with its Tall eyes and Sharp brows. From the side the painted eyes used to lean forward and sit right on the edge of the face. Now each eye sits on an upright plate turned outward, under the brow and behind the nose bridge. Turn the head to compare.</p>
+    <p class="lead">Your saved head, with its Tall eyes and Sharp brows. From the side the painted eyes used to lean forward and sit right on the edge of the face. Now each eye stands upright, under the brow and behind the nose bridge, and the face keeps its own smooth curve across the eye so the lid lines stay smooth. Turn the head to compare.</p>
   </header>
 
   <div class="stage" id="stage" data-show="both" aria-label="Before and after views of the head, drag to turn">
@@ -165,9 +165,10 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
     <section class="card">
       <h2>What changed</h2>
       <ul>
-        <li>Around each eye the face is an upright plane turned <span class="num">24°</span> outward and set <span class="num">0.012</span> head units (about 3 mm) back, so the eye no longer leans and is squeezed evenly from the side.</li>
+        <li>Around each eye the forehead's forward lean is taken out, so the eye stands upright, and the eye is set <span class="num">0.012</span> head units (about 3 mm) back.</li>
+        <li>Version 2: across the eye the face keeps its own smooth curve. Version 1 laid a flat plate there, and its edge made the outer top lid line wobble.</li>
         <li>The nose bridge between the eyes is raised up to <span class="num">0.010</span> head units (about 3 mm), so the eye sits behind the profile line.</li>
-        <li>The most it moves is <span class="num">0.062</span> head units (about 18 mm), under the middle of the brow where the forehead leaned out. <span class="num">569</span> of the <span class="num">5,080</span> head points move more than 1 mm.</li>
+        <li>The most it moves is <span class="num">0.063</span> head units (about 18 mm), under the inner end of the brow. <span class="num">489</span> of the <span class="num">5,080</span> head points move more than 1 mm, and the cheek under the eye never comes forward.</li>
       </ul>
     </section>
     <section class="card">
@@ -176,12 +177,12 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
         <li>The front view: only depth changes, and the face is painted straight from the front.</li>
         <li>The painted eyes, brows, mouth, blinking and look-at, and the face shadow.</li>
         <li>The hair: it is still built on the old head surface, so bangs hang the same way.</li>
-        <li>Every face slider and eye style. The plate follows the eye's size, height and spacing, and the middle of the face never sinks.</li>
+        <li>Every face slider and eye style. The change follows the eye's size, height and spacing, and the middle of the face never sinks.</li>
       </ul>
     </section>
     <section class="card">
       <h2>How it was checked</h2>
-      <p>The head was rebuilt in Blender from the game's own <code>ToonHead</code> and <code>ToonFacePainter</code> code, compared at 0°, 40°, 70° and 90°, and also tried on the Round + Wide, Square-Jaw + Drawn and Young + Sharp faces. Unity compiles with no errors; it has not been played in the game yet.</p>
+      <p>The head was rebuilt in Blender from the game's own <code>ToonHead</code> and <code>ToonFacePainter</code> code, compared at 0°, 40°, 65°, 70° and 90°, and also tried on the Round + Wide, Square-Jaw + Drawn and Young + Sharp faces. The surface was also checked for creases and dents around the eye. Unity compiles with no errors; it has not been played in the game yet.</p>
     </section>
   </div>
 

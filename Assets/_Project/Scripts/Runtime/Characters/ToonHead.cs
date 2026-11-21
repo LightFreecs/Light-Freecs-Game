@@ -103,7 +103,7 @@ namespace LightMMORPG.Characters
         public float CheekY, CheekH, CheekA, CheekSpread, CheekAmount;
         public float NoseY, NoseH, NoseW, NoseLen;
         public float EyeX, EyeY, EyeSize;
-        /// <summary>Front depth of the unshaped head at the eye centre (the eye plate is set back from here).</summary>
+        /// <summary>Front depth of the unshaped head at the eye centre (the forehead's lean over the eye is measured from here).</summary>
         public float EyeZ;
         public float BrowY, BrowW, BrowH;
         /// <summary>Brow line at brow height 0 (the measured brows are fitted to the eye here, then the slider moves them).</summary>
@@ -236,7 +236,7 @@ namespace LightMMORPG.Characters
             return new Vector3(H.NeckW * s, y, H.NeckZ + (c >= 0f ? H.NeckF * c : H.NeckB * c));
         }
 
-        /// <summary>Point on the head; <paramref name="eyePlates"/> false = the head without the eye plates (what the hair is built on).</summary>
+        /// <summary>Point on the head; <paramref name="eyePlates"/> false = the head without the upright eye areas (what the hair is built on).</summary>
         public static Vector3 Surface(ToonHeadShape H, float theta, float y, bool eyePlates = true)
         {
             FaceAt(H, y, out float w, out float f, out float b, out float k);
@@ -252,37 +252,37 @@ namespace LightMMORPG.Characters
             return new Vector3(x, y, z);
         }
 
-        // Eye plates (side view). The eyes are painted by a front projection, so on the round face they used to lean forward
-        // from the side and sit on the profile line (flat and crooked). Around each eye the face becomes an upright plane turned
-        // EyePlateYaw outward and set EyePlateDepth back, under the brow and behind a slightly raised nose bridge, so from the
-        // side the eye stands upright and sits in the face. Only depth changes: the front view and the painted face stay the same.
-        public const float EyePlateYaw = 24f, EyePlateDepth = 0.012f, NoseBridge = 0.010f;
-        private static readonly float EyePlateSlope = Mathf.Tan(EyePlateYaw * Mathf.Deg2Rad);
+        // Upright eyes (side view). The eyes are painted by a front projection, so on the round face they used to lean forward
+        // with the forehead and sit on the profile line (flat and crooked). Around each eye the forehead's lean (measured down
+        // the eye centre) is taken out and the eye is set EyeSetBack back, under the brow and behind a slightly raised nose
+        // bridge. Across the eye the face keeps its own smooth curve, so painted lines stay smooth from the side (a flat plate
+        // here made a crease the outer lid line bent over), and the change fades out with a long smootherstep past the outer
+        // corner. Only depth changes: the front view and the painted face stay the same.
+        public const float EyeSetBack = 0.012f, NoseBridge = 0.010f;
+        private const float EyeHalfWidth = 0.09f;   // half the painted eye's width at eye size 1 (the styles are 0.165-0.19 wide)
 
         private static float EyeSocket(ToonHeadShape H, float x, float y, float z)
         {
-            float ax = Mathf.Abs(x), s = H.EyeSize, hw = 0.09f * s;
+            float ax = Mathf.Abs(x), s = H.EyeSize, hw = EyeHalfWidth * s;
             // the middle of the face (nose bridge) never sinks, even with big eyes set close together
             float in0 = Mathf.Max(0.008f, H.EyeX - hw - 0.045f), in1 = Mathf.Max(in0 + 0.025f, H.EyeX - hw - 0.005f);
-            float r = Smooth((ax - in0) / (in1 - in0)) * (1f - Smooth((ax - (H.EyeX + hw + 0.03f)) / 0.09f))
-                    * Smooth((y - (H.EyeY - 0.155f * s)) / (0.06f * s)) * (1f - Smooth((y - (H.EyeY + 0.075f * s)) / (0.08f * s)));
+            float r = Smooth((ax - in0) / (in1 - in0)) * (1f - Smoother((ax - (H.EyeX + 0.8f * hw)) / 0.2f))
+                    * Smooth((y - (H.EyeY - 0.155f * s)) / (0.06f * s)) * (1f - Smooth((y - (H.EyeY + 0.075f * s)) / (0.08f * s)))
+                    * Smooth(z / 0.08f);
             if (r > 0f)
             {
-                float plate = H.EyeZ - (ax - H.EyeX) * EyePlateSlope - EyePlateDepth;
-                // the plate only sinks the face (at most a hair forward where the cheek turns away at the outer corner)
-                z += r * (SMin(plate, z + 0.008f, 0.03f) - z);
+                float lean = BaseFrontZ(H, H.EyeX, y) - H.EyeZ;
+                // below the eye centre the cheek turns back: never pull it forward past where it was (soft cap, smooth at 0)
+                if (lean < 0f) lean = -EyeSetBack * (float)Math.Tanh(-lean / EyeSetBack);
+                z -= r * (lean + EyeSetBack);
             }
             float bridge = Smooth((y - (H.NoseY - 0.02f)) / 0.05f) * (1f - Smooth((y - (H.EyeY + 0.02f)) / 0.08f));
             return z + NoseBridge * Mathf.Exp(-Sq(x / 0.03f)) * bridge;
         }
 
-        private static float SMin(float a, float b, float k)
-        {
-            float h = Mathf.Max(k - Mathf.Abs(a - b), 0f) / k;
-            return Mathf.Min(a, b) - h * h * k * 0.25f;
-        }
+        private static float Smoother(float t) { t = Clamp01(t); return t * t * t * (t * (6f * t - 15f) + 10f); }
 
-        /// <summary>Front depth of the unshaped head (superellipse section, no cheek, nose or eye plate) at (x, y).</summary>
+        /// <summary>Front depth of the unshaped head (superellipse section, no cheek, nose or eye shaping) at (x, y).</summary>
         private static float BaseFrontZ(ToonHeadShape H, float x, float y)
         {
             FaceAt(H, y, out float w, out float f, out _, out float k);
@@ -291,7 +291,7 @@ namespace LightMMORPG.Characters
             return f * Mathf.Pow(Mathf.Sqrt(Mathf.Max(0f, 1f - sn * sn)), e);
         }
 
-        /// <summary>Front depth of the face at (x, y) with the eye plates (where the painted eye sits).</summary>
+        /// <summary>Front depth of the face at (x, y) with the upright eye areas (where the painted eye sits).</summary>
         public static float FrontZ(ToonHeadShape H, float x, float y) => EyeSocket(H, x, y, BaseFrontZ(H, x, y));
 
         // ------------------------------------------------------------------ mesh
