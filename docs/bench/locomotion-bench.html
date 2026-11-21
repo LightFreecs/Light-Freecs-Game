@@ -55,6 +55,12 @@ p{margin:0;max-width:65ch}
 .gait button:last-child{border-right:0}
 .gait button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
 .attack{border:1px solid var(--accent);background:transparent;color:var(--accent);border-radius:16px;padding:12px 20px;font-family:var(--f-display);font-weight:800;font-size:16px;letter-spacing:.04em}
+.lock{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.pad{display:grid;grid-template-columns:repeat(3,46px);grid-template-rows:repeat(3,46px);gap:4px;flex:none}
+.pad button{border:1px solid var(--line);background:var(--panel);border-radius:12px;font-size:19px;font-weight:700;line-height:1;padding:0}
+.pad button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.pad .you{display:grid;place-items:center;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:10.5px;font-weight:800;letter-spacing:.08em}
+.lock .status{max-width:46ch}
 .styles{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
 .style{border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:12px 14px;text-align:left;display:flex;flex-direction:column;gap:4px}
 .style[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
@@ -96,7 +102,7 @@ kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);border
 <main class="panel">
   <div style="display:flex;flex-direction:column;gap:6px">
     <h1>Locomotion Bench</h1>
-    <p class="lede">The run from your clip and a walk to go with it, on the game's own body and skeleton. The run copies the clip: the body leans about 50° forward and stays low, the back leg kicks up level with the hips, one fist is tucked under the chin while the other arm is thrown straight back with the hand open, at the clip's six steps a second. Walking is the default; hold <kbd>Shift</kbd> to run, like in the game. The floor moves at the fighter's real speed, so a planted foot should stay on its tile.</p>
+    <p class="lede">The run from your clip and a walk to go with it, on the game's own body and skeleton. The run copies the clip: the body leans about 50° forward and stays low, the back leg kicks up level with the hips, one fist is tucked under the chin while the other arm is thrown straight back with the hand open, at the clip's six steps a second. Walking is the default; hold <kbd>Shift</kbd> to run, like in the game. Locked on, it sidesteps, backpedals and runs backwards while facing the opponent. The floor moves at the fighter's real speed, so a planted foot should stay on its tile.</p>
   </div>
 
   <section style="display:flex;flex-direction:column;gap:12px">
@@ -109,6 +115,14 @@ kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);border
       <button class="attack" id="attack">Punch</button>
     </div>
     <span class="status">Hold <kbd>Shift</kbd> while walking to run, let go to walk again. <kbd>J</kbd> or Punch throws the basic combo, standing or on the move (the legs keep going).</span>
+  </section>
+
+  <section>
+    <h2>Locked on</h2>
+    <div class="lock">
+      <div class="pad" role="group" aria-label="Direction of travel while locked on" id="pad"></div>
+      <span class="status">The fighter faces the opponent (the faint figure ahead) and moves the way you pick, like holding <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> while locked on with <kbd>Tab</kbd>. Walking sidesteps and backpedals; running turns the legs into the run with the eyes kept on the opponent, and backs away with a backwards run. Best in the Game camera and ¾ views.</span>
+    </div>
   </section>
 
   <section>
@@ -136,7 +150,7 @@ kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);border
     <p class="status" style="margin-top:8px">The clip's run is drawn on ones: four drawings per step, a step every 0.17 s. In the drawings a foot stays down for most of the step, which only works because the background slides; at the game's 8 m/s the foot would skate. So the run keeps the clip's poses and rhythm but the foot is down for 45 % of the step and the rest is a short leap, which makes the planted foot travel exactly as fast as the ground.</p>
   </section>
 
-  <section class="card">
+  <section class="card" id="shoulders-card">
     <h2>Shoulders</h2>
     <p>The skin on top of the shoulder used to follow the upper arm almost completely, and the collarbone never moved, so any raised arm (a punch, the guard) dragged the top of the shoulder backwards and the arm looked like it came out of the chest. Now the shoulder top and trapezius belong to the collarbone, and the collarbone lifts and rolls forward a little with the arm. Switch <b>New shoulders</b> off to compare, best in the Shoulders view while punching.</p>
   </section>
@@ -146,7 +160,8 @@ kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);border
     <ul>
       <li>Walking is the default; hold Shift to run. On a gamepad, click the left stick and it runs until you let go of the stick; on touch, push the stick to its edge or hold RUN. Walk 2.2 m/s, run 8 m/s, as on this page.</li>
       <li>Every fighter uses the Shonen Sprint style. Styles live in one list, so more can be added later and picked per fighter, like the basic-attack movesets.</li>
-      <li>Walking and running blend with the speed. Strafing while locked on turns the steps, backing off plays them backwards, and in a jump or a dash the stride holds.</li>
+      <li>Walking and running blend with the speed; in a jump or a dash the stride holds.</li>
+      <li>Locked on (<kbd>Tab</kbd>) the fighter keeps facing the opponent. Walking sidesteps (a low shuffle, the feet never cross) and backpedals; a diagonal blends its two neighbours, each turned to the exact direction, so a planted foot never skates. Running turns the legs and hips into the run while the chest and eyes stay on the opponent; past 120° it backs away with a backwards run instead, with a quick hip flip between the two.</li>
       <li>Running sets the gritted-teeth Determined face from the clip; it goes back to neutral when you stop.</li>
       <li>The new shoulders in every pose: idle, guard, punches, the run.</li>
     </ul>
@@ -398,21 +413,118 @@ const STYLES = [
           legR: { t: [0.10, 0.64, -0.72], pitch: 0 }, legL: { t: [-0.10, 0.30, 0.31], pitch: -4 } } },
       ],
     },
+    // ---- locked on: the body keeps facing the opponent ----
+    // sidestep to the right (to the left = the mirror): a low boxer's shuffle, the feet never cross. The right foot reaches
+    // out wide and lands, the left foot closes in next to it as the right one lifts; a tiny float between the steps. The keys
+    // cover the whole cycle (both steps differ); the planted foot slides along x.
+    walkSide: {
+      speed: 2.2, step: 0.40, stance: 0.75, travel: "x", cycle: true, touchR: 0.38, touchL: -0.08,
+      base: { hips: { p: [0, -0.13, 0], pitch: 9 }, torso: { pitch: 5, roll: -2 }, head: { pitch: -7 } },
+      keys: [
+        // the right foot lands wide, the left has just pushed off
+        { u: 0, pose: { hips: { p: [0, -0.138, 0], roll: -1 }, torso: { roll: -1.5 },
+          armL: { t: [-0.26, 1.18, 0.22], twist: -8, open: 0.2 }, armR: { t: [0.27, 1.17, 0.21], twist: 8, open: 0.2 },
+          legR: { t: [0.38, 0.105, 0.03], yaw: 8, pitch: 2 }, legL: { t: [-0.35, 0.15, 0.01], yaw: -6, pitch: 12 } } },
+        { u: 0.25, pose: { hips: { p: [0, -0.142, 0], roll: -1.5 }, torso: { roll: -1.2 },
+          armL: { t: [-0.26, 1.175, 0.22], twist: -8, open: 0.2 }, armR: { t: [0.27, 1.165, 0.21], twist: 8, open: 0.2 },
+          legR: { t: [0.28, 0.105, 0.03], yaw: 8, pitch: 0 }, legL: { t: [-0.26, 0.20, 0.02], yaw: -6, pitch: 8 } } },
+        { u: 0.5, pose: { hips: { p: [0, -0.13, 0], roll: -1 }, torso: { roll: -1.5 },
+          armL: { t: [-0.255, 1.18, 0.22], twist: -8, open: 0.2 }, armR: { t: [0.265, 1.175, 0.21], twist: 8, open: 0.2 },
+          legR: { t: [0.18, 0.105, 0.03], yaw: 8, pitch: 0 }, legL: { t: [-0.15, 0.18, 0.03], yaw: -6, pitch: 4 } } },
+        // the right foot lifts as the left one comes down next to it (a touch past its spot, so it lands with the floor)
+        { u: 0.75, pose: { hips: { p: [0, -0.12, 0], roll: 0 }, torso: { roll: -2 },
+          armL: { t: [-0.255, 1.185, 0.22], twist: -8, open: 0.2 }, armR: { t: [0.26, 1.18, 0.21], twist: 8, open: 0.2 },
+          legR: { t: [0.08, 0.12, 0.03], yaw: 8, pitch: 10 }, legL: { t: [-0.06, 0.13, 0.03], yaw: -6, pitch: 1 } } },
+        { u: 1.0, pose: { hips: { p: [0, -0.13, 0], roll: 0.5 }, torso: { roll: -2.3 },
+          armL: { t: [-0.255, 1.18, 0.22], twist: -8, open: 0.2 }, armR: { t: [0.265, 1.175, 0.21], twist: 8, open: 0.2 },
+          legR: { t: [0.12, 0.19, 0.04], yaw: 8, pitch: 8 }, legL: { t: [-0.08, 0.105, 0.03], yaw: -6, pitch: 0 } } },
+        // the right foot reaches out, the weight on the left
+        { u: 1.25, pose: { hips: { p: [0, -0.138, 0], roll: 1.5 }, torso: { roll: -2.8 },
+          armL: { t: [-0.255, 1.175, 0.22], twist: -8, open: 0.2 }, armR: { t: [0.275, 1.17, 0.21], twist: 8, open: 0.2 },
+          legR: { t: [0.22, 0.22, 0.05], yaw: 8, pitch: 6 }, legL: { t: [-0.18, 0.105, 0.03], yaw: -6, pitch: 0 } } },
+        { u: 1.5, pose: { hips: { p: [0, -0.13, 0], roll: 1.5 }, torso: { roll: -2.8 },
+          armL: { t: [-0.26, 1.18, 0.22], twist: -8, open: 0.2 }, armR: { t: [0.28, 1.175, 0.21], twist: 8, open: 0.2 },
+          legR: { t: [0.33, 0.19, 0.05], yaw: 8, pitch: 3 }, legL: { t: [-0.28, 0.105, 0.03], yaw: -6, pitch: 0 } } },
+        // the left foot pushes off (heel up) as the right one comes down, a touch past its spot
+        { u: 1.75, pose: { hips: { p: [0, -0.118, 0], roll: 0.5 }, torso: { roll: -2.3 },
+          armL: { t: [-0.26, 1.185, 0.22], twist: -8, open: 0.2 }, armR: { t: [0.28, 1.18, 0.21], twist: 8, open: 0.2 },
+          legR: { t: [0.40, 0.13, 0.04], yaw: 8, pitch: 2 }, legL: { t: [-0.38, 0.125, 0.02], yaw: -6, pitch: 14 } } },
+      ],
+    },
+    // backpedal: quick shorter steps, knees bent, a slight lean towards the opponent; the foot lands behind on its toes, the
+    // heel comes down, and it leaves the floor in front heel last (a forward walk run backwards in time, re-posed)
+    walkBack: {
+      speed: 2.2, step: 0.52, stance: 1.12, travel: "-z", touch: 0.29,
+      base: { hips: { p: [0, -0.09, 0], pitch: 6 }, torso: { pitch: 3 }, head: { pitch: -5 } },
+      keys: [
+        // the right foot lands behind on its toes, the left one is about to leave the floor in front, heel last
+        { u: 0, pose: { hips: { p: [0, -0.10, 0], yaw: 5 }, torso: { yaw: -7 },
+          armL: { t: [-0.29, 1.11, -0.09], twist: 4, open: 0.35 }, armR: { t: [0.28, 1.10, 0.20], twist: 6, open: 0.35 },
+          legR: { t: [0.10, 0.125, -0.29], pitch: 16 }, legL: { t: [-0.10, 0.105, 0.23], pitch: -6 } } },
+        { u: 0.12, pose: { hips: { p: [0.004, -0.105, 0], yaw: 4.5, roll: 1 }, torso: { yaw: -6.5, roll: -0.5 },
+          armL: { t: [-0.29, 1.11, -0.08], twist: 4, open: 0.35 }, armR: { t: [0.28, 1.10, 0.19], twist: 6, open: 0.35 },
+          legR: { t: [0.10, 0.108, -0.228], pitch: 3 }, legL: { t: [-0.10, 0.11, 0.292], pitch: -12 } } },
+        // the left foot swings back under the hips, knee bent
+        { u: 0.4, pose: { hips: { p: [0.014, -0.08, 0], yaw: 1.5, roll: 3 }, torso: { yaw: -2, roll: -1.4 },
+          armL: { t: [-0.30, 1.09, 0.0], twist: 2, open: 0.35 }, armR: { t: [0.29, 1.09, 0.11], twist: 3, open: 0.35 },
+          legR: { t: [0.10, 0.105, -0.082], pitch: 0 }, legL: { t: [-0.10, 0.20, 0.12], pitch: 0 } } },
+        { u: 0.7, pose: { hips: { p: [0.016, -0.074, 0], yaw: -2, roll: 3 }, torso: { yaw: 3, roll: -1.4 },
+          armL: { t: [-0.30, 1.09, 0.09], twist: -2, open: 0.35 }, armR: { t: [0.30, 1.09, 0.02], twist: 0, open: 0.35 },
+          legR: { t: [0.10, 0.105, 0.074], pitch: 0 }, legL: { t: [-0.10, 0.19, -0.10], pitch: 10 } } },
+        // the left foot reaches back on its toes
+        { u: 0.9, pose: { hips: { p: [0.008, -0.09, 0], yaw: -4, roll: 1.5 }, torso: { yaw: 6, roll: -0.8 },
+          armL: { t: [-0.29, 1.10, 0.16], twist: -5, open: 0.35 }, armR: { t: [0.29, 1.10, -0.05], twist: -3, open: 0.35 },
+          legR: { t: [0.10, 0.105, 0.178], pitch: -2 }, legL: { t: [-0.10, 0.145, -0.25], pitch: 16 } } },
+      ],
+    },
+    // running backwards: low quick bounds on the balls of the feet; the foot leaves the floor in front, swings back under the
+    // hips with the knee bent and reaches back on its toes to land; fists up and pumping, a slight lean towards the opponent
+    runBack: {
+      speed: 8.0, step: 8 / 7, stance: 0.42, travel: "-z", touch: 0.24,
+      base: { hips: { p: [0, -0.12, 0], pitch: 10 }, torso: { pitch: 8 }, head: { pitch: -11 } },
+      keys: [
+        // the right foot lands behind on its toes, the left one swings back under the hips
+        { u: 0, pose: { hips: { p: [0, -0.12, 0], yaw: 7 }, torso: { yaw: -9 },
+          armL: { t: [-0.25, 1.13, -0.14], twist: 0, open: 0 }, armR: { t: [0.20, 1.32, 0.30], twist: 10, open: 0 },
+          legR: { t: [0.10, 0.135, -0.24], pitch: 24 }, legL: { t: [-0.10, 0.30, -0.08], pitch: 30 } } },
+        // soaking up the landing
+        { u: 0.2, pose: { hips: { p: [0, -0.15, 0], yaw: 4 }, torso: { yaw: -5 },
+          armL: { t: [-0.25, 1.17, -0.06], twist: 0, open: 0 }, armR: { t: [0.22, 1.28, 0.22], twist: 8, open: 0 },
+          legR: { t: [0.10, 0.11, -0.011], pitch: 8 }, legL: { t: [-0.10, 0.28, -0.20], pitch: 30 } } },
+        // pushing off from in front, the left foot reaching back
+        { u: 0.42, pose: { hips: { p: [0, -0.11, 0], yaw: 0 }, torso: { yaw: 0 },
+          armL: { t: [-0.24, 1.22, 0.06], twist: 0, open: 0 }, armR: { t: [0.25, 1.21, 0.08], twist: 3, open: 0 },
+          legR: { t: [0.10, 0.12, 0.24], pitch: 6 }, legL: { t: [-0.10, 0.22, -0.28], pitch: 28 } } },
+        // the short leap back
+        { u: 0.7, pose: { hips: { p: [0, -0.095, 0], yaw: -4 }, torso: { yaw: 5 },
+          armL: { t: [-0.21, 1.28, 0.22], twist: -8, open: 0 }, armR: { t: [0.26, 1.15, -0.08], twist: 0, open: 0 },
+          legR: { t: [0.10, 0.25, 0.10], pitch: 25 }, legL: { t: [-0.10, 0.16, -0.29], pitch: 26 } } },
+      ],
+    },
   },
 ];
+const GAITS = ["walk", "run", "walkSide", "walkBack", "runBack"];
 function buildGaits() {
-  for (const s of STYLES) for (const g of [s.walk, s.run]) {
+  for (const s of STYLES) for (const name of GAITS) {
+    const g = s[name]; if (!g) continue;
     const base = merge(ZERO, g.base);
     g.full = g.keys.map(k => ({ u: k.u, pose: merge(base, k.pose) }));
     g.mirror = g.full.map(k => ({ u: k.u, pose: mirrorPose(k.pose) }));
+    // stride scaling about the middle of each foot's slide (sidestep: the feet keep their width); forward gaits about the root
+    if (g.cycle) { g.centreR = g.touchR - g.step * g.stance / 2; g.centreL = g.touchL - g.step * g.stance / 2; }
   }
 }
 buildGaits();
 
+// the axis a gait travels along: [component of the foot target, sign] (planted feet slide back along it)
+const axisOf = g => g.travel === "x" ? [0, 1] : g.travel === "-z" ? [2, -1] : [2, 1];
 // the gait's pose at phase p (0..2, one cycle = two steps), stride scale k
 function sampleGait(g, p, k) {
-  const n = g.full.length, N = 2 * n;
-  const key = i => { const m = ((i % N) + N) % N, c = Math.floor(i / N); const kk = m < n ? g.full[m] : g.mirror[m - n]; return { t: (m < n ? kk.u : 1 + kk.u) + 2 * c, pose: kk.pose }; };
+  const n = g.full.length, N = g.cycle ? n : 2 * n;
+  // one-step gaits: the right step's keys, then their mirror; whole-cycle gaits (sidestep): keys over 0..2
+  const key = g.cycle
+    ? i => { const m = ((i % n) + n) % n, c = Math.floor(i / n); return { t: g.full[m].u + 2 * c, pose: g.full[m].pose }; }
+    : i => { const m = ((i % N) + N) % N, c = Math.floor(i / N); const kk = m < n ? g.full[m] : g.mirror[m - n]; return { t: (m < n ? kk.u : 1 + kk.u) + 2 * c, pose: kk.pose }; };
   p = ((p % 2) + 2) % 2;
   let i = N - 1;
   for (let j = 0; j < N; j++) if (key(j).t <= p && p < key(j + 1).t) { i = j; break; }
@@ -421,14 +533,46 @@ function sampleGait(g, p, k) {
   const h00 = 2 * s3 - 3 * s2 + 1, h10 = s3 - 2 * s2 + s, h01 = -2 * s3 + 3 * s2, h11 = s3 - s2;
   const a = d / (k2.t - k0.t), b = d / (k3.t - k1.t);
   const P = comb4([k0.pose, k1.pose, k2.pose, k3.pose], [-h10 * a, h00 - h11 * b, h01 + h10 * a, h11 * b]);
-  // planted feet slide back with the ground (right foot down at phase 0, left at 1)
-  for (const [leg, td] of [["legR", 0], ["legL", 1]]) {
+  // planted feet slide back with the ground along the travel axis (right foot down at phase 0, left at 1)
+  const [ax, sg] = axisOf(g);
+  for (const [leg, td, touch, centre] of [["legR", 0, g.touchR ?? g.touch, g.centreR ?? 0], ["legL", 1, g.touchL ?? g.touch, g.centreL ?? 0]]) {
     const since = ((p - td) % 2 + 2) % 2;
-    if (since <= g.stance) P[leg].t[2] = g.touch - g.step * since;
-    P[leg].t[2] *= k;
+    let u = sg * P[leg].t[ax];
+    if (since <= g.stance) u = touch - g.step * since;
+    P[leg].t[ax] = sg * (centre + (u - centre) * k);
   }
   return P;
 }
+
+// ================================================================== locked on: direction of travel vs facing
+const D2R = Math.PI / 180;
+const rotY = (t, a) => { const c = Math.cos(a * D2R), s = Math.sin(a * D2R); return [t[0] * c + t[2] * s, t[1], -t[0] * s + t[2] * c]; };
+// turns a gait pose to a travel direction a° off its own: feet (and their slide) turned all the way, so they never skate; the
+// hips follow kh of the turn and the chest kc (the rest is a twist of the spine back towards the opponent). The head keeps
+// looking at the opponent (head.yaw is in the facing's frame; the solver keeps it within 55° of the chest).
+function warp(P, a, kh, kc) {
+  if (Math.abs(a) < 0.01) return P;
+  const o = structuredClone(P);
+  o.legL.t = rotY(P.legL.t, a); o.legR.t = rotY(P.legR.t, a);
+  o.legL.yaw += a; o.legR.yaw += a;
+  o.hips.p = rotY(P.hips.p, a * kh);
+  o.hips.yaw += a * kh; o.torso.yaw -= a * (kh - kc);
+  o.armL.t = rotY(P.armL.t, a * kc); o.armR.t = rotY(P.armR.t, a * kc);
+  return o;
+}
+// walking: forward / sidestep right / backpedal / sidestep left, each turned the rest of the way to the travel direction;
+// 15° either side of each diagonal the two neighbours cross-fade (both turned to the same direction, so the blend can't skate)
+function walkParts(theta) {
+  const c = Math.round(theta / 90) * 90, off = theta - c, t = smoothstep(30, 60, Math.abs(off));
+  const parts = [{ c, off, w: 1 - t }];
+  if (t > 0) { const n = c + (off > 0 ? 90 : -90); parts.push({ c: n, off: theta - n, w: t }); }
+  for (const e of parts) {
+    const cn = ((e.c % 360) + 540) % 360 - 180;
+    Object.assign(e, cn === 0 ? { g: "walk", mirror: false } : cn === 90 ? { g: "walkSide", mirror: false } : cn === -90 ? { g: "walkSide", mirror: true } : { g: "walkBack", mirror: false });
+  }
+  return parts;
+}
+const WALK_TURN = [0.5, 0.1], RUN_TURN = [1, 0.6], BACK_TURN = [0.5, 0.1];
 
 // ================================================================== basic attacks (BasicMovesets.Rush), to see the shoulders punch
 const GUARD = {
@@ -661,6 +805,13 @@ floorTex.repeat.set(FLOOR_R * 2 / (TILE * 2), FLOOR_R * 2 / (TILE * 2));
 const floor = new THREE.Mesh(new THREE.CircleGeometry(FLOOR_R, 72), new THREE.MeshToonMaterial({ map: floorTex, gradientMap: grad }));
 floor.rotation.x = -Math.PI / 2; world.add(floor);
 let floorZ = 0;
+// the opponent you're locked on to: a faint figure straight ahead (the fighter always faces it)
+{
+  const foeMat = new THREE.MeshBasicMaterial({ color: 0xf26b1d, transparent: true, opacity: 0.2, depthWrite: false });
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 1.55, 6, 16), foeMat); body.position.set(0, 1.12, 5.6); world.add(body);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.52, 0.6, 48), new THREE.MeshBasicMaterial({ color: 0xf26b1d, transparent: true, opacity: 0.55 }));
+  ring.rotation.x = -Math.PI / 2; ring.position.set(0, 0.012, 5.6); world.add(ring);
+}
 
 // ================================================================== the fighter (the game's baked body)
 const fighter = new THREE.Group(); world.add(fighter);
@@ -734,13 +885,14 @@ function setBody(body) {
 function syncBones() { for (let i = 0; i < NB; i++) { bones[i].quaternion.copy(rig.local[i]); bones[i].position.copy(rig.localPos[i]); } }
 
 // ================================================================== the game's animator, per frame (PlayerProceduralAnimator)
-const state = { speed: 1, floor: true, shoulders: true, style: "shonen", view: "v-side", gait: "stand" };
+const state = { speed: 1, floor: true, shoulders: true, style: "shonen", view: "v-side", gait: "stand", dir: 0 };
 try { Object.assign(state, JSON.parse(localStorage.getItem("loco-bench-1") || "{}")); } catch (e) {}
 const save = () => { try { localStorage.setItem("loco-bench-1", JSON.stringify(state)); } catch (e) {} };
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const styleNow = () => STYLES.find(s => s.id === state.style) || STYLES[0];
 
 let shiftHeld = false;
+let velX = 0, velZ = 0, travel = 0, backRun = false, backW = 0, floorX = 0, warpHips = 0;
 let speedSm = 0, locoW = 0, runBlend = 0, phase = 0, freezePhase = null;
 let move = null, moveT = 0, fromMove = null, fromT = 0, moveBlend = 1, moveW = 0, guardHold = 0;
 let comboIdx = 0, lastPress = -9, nextAllowed = 0, clock = 0;
@@ -753,24 +905,58 @@ function wantedSpeed() {
   return 0;
 }
 function strideScale(g, v) { return clamp(Math.sqrt(Math.max(v, 0.01) / g.speed), 0.55, 1.25); }
+const lerpAngle = (a, b, t) => a + ((((b - a) % 360) + 540) % 360 - 180) * t;
+const wrap180 = a => (((a + 180) % 360) + 360) % 360 - 180;
+
+// the gait pose for the current travel direction (the game's PlayerProceduralAnimator.UpdateLocomotion / PoseLocomotion)
+function gaitPlan(s, v) {
+  const walk = walkParts(travel).map(e => ({ ...e, k: strideScale(s[e.g], v) }));
+  const runF = clamp(travel, -130, 130), runB = clamp(travel - (travel >= 0 ? 180 : -180), -75, 75);
+  const kR = strideScale(s.run, v), kB = strideScale(s.runBack, v);
+  const walkStep = walk.reduce((a, e) => a + e.w * s[e.g].step * e.k, 0);
+  const runStep = lerp(s.run.step * kR, s.runBack.step * kB, backW);
+  return { walk, runF, runB, kR, kB, stepLen: lerp(walkStep, runStep, runBlend) };
+}
+function gaitPose(s, plan) {
+  let walkP = null, runP = null;
+  if (runBlend < 1) {
+    const one = e => { let P = sampleGait(s[e.g], e.mirror ? phase + 1 : phase, e.k); if (e.mirror) P = mirrorPose(P); return warp(P, e.off, ...WALK_TURN); };
+    walkP = one(plan.walk[0]);
+    if (plan.walk.length > 1) walkP = lerpPose(walkP, one(plan.walk[1]), plan.walk[1].w);
+  }
+  if (runBlend > 0) {
+    const F = backW < 1 ? warp(sampleGait(s.run, phase, plan.kR), plan.runF, ...RUN_TURN) : null;
+    const Bk = backW > 0 ? warp(sampleGait(s.runBack, phase, plan.kB), plan.runB, ...BACK_TURN) : null;
+    runP = F && Bk ? lerpPose(F, Bk, smooth(backW)) : (F || Bk);
+  }
+  return !runP ? walkP : !walkP ? runP : lerpPose(walkP, runP, runBlend);
+}
 
 function step(dt) {
   if (!rig) return;
   const adt = dt * state.speed;
   clock += adt;
   const s = styleNow();
-  // speed: the game smooths the Graphics movement with exp(-10 t); the motor itself switches speed in one tick
-  speedSm = lerp(speedSm, wantedSpeed(), 1 - Math.exp(-10 * adt));
+  // velocity: the game smooths the Graphics movement with exp(-10 t); the motor itself switches speed in one tick. While
+  // locked on the fighter keeps facing the opponent (+z) and moves in state.dir (degrees, + = to the right).
+  const want = wantedSpeed(), da = state.dir * D2R, kv = 1 - Math.exp(-10 * adt);
+  velX = lerp(velX, Math.sin(da) * want, kv); velZ = lerp(velZ, Math.cos(da) * want, kv);
+  speedSm = Math.hypot(velX, velZ);
   const v = speedSm;
+  if (v > 0.3) travel = wrap180(lerpAngle(travel, Math.atan2(velX, velZ) / D2R, 1 - Math.exp(-12 * adt)));
+  // running: turned towards the travel direction up to the sides; behind that a backwards run, with a quick hip flip between
+  if (backRun ? Math.abs(travel) < 105 : Math.abs(travel) > 120) backRun = !backRun;
+  backW = clamp(backW + (backRun ? 1 : -1) * adt / 0.2, 0, 1);
   const wTarget = smoothstep(0.25, 1.0, v);
   locoW = lerp(locoW, wTarget, 1 - Math.exp(-14 * adt));
   if (locoW < 0.002 && wTarget === 0) locoW = 0;
   runBlend = smoothstep(s.walk.speed * 1.15, s.run.speed * 0.85, v);
-  const kW = strideScale(s.walk, v), kR = strideScale(s.run, v);
-  const stepLen = lerp(s.walk.step * kW, s.run.step * kR, runBlend);
+  const plan = gaitPlan(s, v);
+  const stepLen = plan.stepLen;
   if (freezePhase === null) phase = (phase + adt * v / stepLen) % 2; else phase = freezePhase;
-  floorZ += adt * v;
+  floorZ += adt * velZ; floorX += adt * velX;
   floorTex.offset.y = -(floorZ / (TILE * 2)) % 1;   // the floor (world) moves back = the fighter moves forward
+  floorTex.offset.x = (floorX / (TILE * 2)) % 1;
 
   // base: the rest pose, then the gait blended in pose space from it
   rig.applyRestPose();
@@ -781,10 +967,14 @@ function step(dt) {
     idle[side < 0 ? "legL" : "legR"].t = [a.x, a.y, a.z];
   }
   basePose = idle;
+  warpHips = 0;
   if (locoW > 0) {
     const rest = rig.model.map(q => q.clone()), restHips = rig.localPos[0].clone();
-    const pw = sampleGait(s.walk, phase, kW), pr = sampleGait(s.run, phase, kR);
-    const gp = lerpPose(pw, pr, runBlend);
+    const gp = gaitPose(s, plan);
+    // how far the hips are turned towards the travel direction (the attack layer keeps half of it)
+    const walkHips = plan.walk.reduce((a, e) => a + e.off * WALK_TURN[0] * e.w, 0);
+    const runHips = lerp(plan.runF * RUN_TURN[0], plan.runB * BACK_TURN[0], smooth(backW));
+    warpHips = lerp(walkHips, runHips, runBlend) * locoW;
     const P = lerpPose(idle, gp, locoW);
     solvePose(rig, P);
     // tiny weights: per bone from the rest pose, so the IK's own elbow never pops the arms at the start / stop
@@ -797,9 +987,20 @@ function step(dt) {
   if (window.__fixed) solvePose(rig, window.__fixed);
   syncBones();
   fighter.updateMatrixWorld(true);
-  const label = locoW < 0.05 ? (move ? move.name : "Standing") : (runBlend > 0.5 ? "Running" : "Walking");
-  document.getElementById("now").textContent = move ? move.name : label;
+  document.getElementById("now").textContent = move ? move.name : moveLabel();
   document.getElementById("rate").textContent = `${v.toFixed(1)} m/s · ${(v / stepLen).toFixed(1)} steps/s`;
+}
+function moveLabel() {
+  if (locoW < 0.05) return "Standing";
+  const a = Math.abs(travel), side = travel > 0 ? "right" : "left";
+  if (runBlend > 0.5) {
+    if (backW > 0.5) return a > 160 ? "Running backwards" : `Running backwards, ${side}`;
+    return a < 12 ? "Running" : `Running ${side}, turned ${Math.round(a)}°`;
+  }
+  if (a < 22) return "Walking";
+  if (a > 158) return "Backpedal";
+  if (a > 68 && a < 112) return `Sidestep ${side}`;
+  return a < 90 ? `Walking forward ${side}` : `Backpedal ${side}`;
 }
 
 // basic attack layer (PlayerProceduralAnimator.ApplyMove): pose space from the base pose; legs keep the gait while moving
@@ -828,6 +1029,9 @@ function applyAttack(adt) {
   if (move && fromMove && moveBlend < 1) A = lerpPose(sampleMove(fromMove, fromT), A, smooth(moveBlend));
   const legW = w * (1 - locoW);
   const b = lerpPose(basePose, A, w);
+  // locked on, the legs keep stepping towards the travel direction under the attack: the hips keep half of their turn that
+  // way (the chest still strikes square), so the legs don't twist round under a pelvis facing the opponent
+  const keep = 0.5 * warpHips * w; b.hips.yaw += keep; b.torso.yaw -= keep;
   b.root = { p: A.root.p.map(x => x * w), yaw: A.root.yaw * w, pitch: A.root.pitch * w, roll: A.root.roll * w };
   const rq = rootQ(b), rp = V(...b.root.p);
   const toAtk = m => rot(rq, V(...m)).add(rp);
@@ -904,15 +1108,37 @@ function syncToggles() {
   floor.material.map = state.floor ? floorTex : null; floor.material.needsUpdate = true;
 }
 document.getElementById("attack").addEventListener("click", pressAttack);
+// direction pad (locked on): the opponent is straight ahead
+const PAD = [[-45, "↖", "Forward left"], [0, "↑", "Forward"], [45, "↗", "Forward right"], [-90, "←", "Left"], null, [90, "→", "Right"],
+  [-135, "↙", "Back left"], [180, "↓", "Back"], [135, "↘", "Back right"]];
+const padEl = document.getElementById("pad");
+function setDir(d) { state.dir = d; save(); syncPad(); if (state.gait === "stand") { state.gait = "walk"; save(); syncGait(); } }
+for (const cell of PAD) {
+  if (!cell) { const y = document.createElement("span"); y.className = "you"; y.textContent = "YOU"; padEl.appendChild(y); continue; }
+  const b = document.createElement("button"); b.textContent = cell[1]; b.dataset.d = cell[0]; b.setAttribute("aria-label", cell[2]);
+  b.addEventListener("click", () => setDir(cell[0]));
+  padEl.appendChild(b);
+}
+function syncPad() { for (const b of padEl.querySelectorAll("button")) b.setAttribute("aria-pressed", String(+b.dataset.d === state.dir)); }
+const KEYDIR = { w: [0, 1], arrowup: [0, 1], s: [0, -1], arrowdown: [0, -1], a: [-1, 0], arrowleft: [-1, 0], d: [1, 0], arrowright: [1, 0] };
+const held = new Set();
+function keyDir() {
+  let x = 0, z = 0;
+  for (const k of held) { x += KEYDIR[k][0]; z += KEYDIR[k][1]; }
+  if (x || z) setDir(Math.round(Math.atan2(x, z) / D2R));
+}
 addEventListener("keydown", e => {
   if (e.key === "Shift") shiftHeld = true;
   if (e.key === "j" || e.key === "J") pressAttack();
+  const k = e.key.toLowerCase();
+  if (KEYDIR[k] && !e.metaKey && !e.ctrlKey) { held.add(k); keyDir(); if (k.startsWith("arrow")) e.preventDefault(); }
 });
-addEventListener("keyup", e => { if (e.key === "Shift") shiftHeld = false; });
-addEventListener("blur", () => { shiftHeld = false; });
+addEventListener("keyup", e => { if (e.key === "Shift") shiftHeld = false; held.delete(e.key.toLowerCase()); });
+addEventListener("blur", () => { shiftHeld = false; held.clear(); });
 { // numbers
   const rows = [];
-  for (const s of STYLES) for (const [n, g] of [["Walk", s.walk], ["Run", s.run]]) {
+  const NAMES = { walk: "Walk", run: "Run", walkSide: "Sidestep (locked on)", walkBack: "Backpedal (locked on)", runBack: "Run backwards (locked on)" };
+  for (const s of STYLES) for (const [n, g] of GAITS.map(k => [NAMES[k], s[k]])) {
     const flight = Math.max(0, 1 - g.stance);
     rows.push(`<tr><td>${s.name}: ${n}</td><td class="num">${g.speed.toFixed(1)}</td><td class="num">${g.step.toFixed(2)}</td><td class="num">${(g.speed / g.step).toFixed(2)}</td><td class="num">${Math.round(Math.min(1, g.stance) * 100)} %</td><td class="num">${flight > 0 ? Math.round(flight * 100) + " %" : "none (both feet down " + Math.round((g.stance - 1) * 100) + " %)"}</td><td class="num">${Math.round(g.base.hips.pitch + g.base.torso.pitch * 0.54)}°</td></tr>`);
   }
@@ -920,7 +1146,7 @@ addEventListener("blur", () => { shiftHeld = false; });
 }
 
 // ================================================================== go
-renderStyles(); syncGait(); syncToggles(); resize();
+renderStyles(); syncGait(); syncToggles(); syncPad(); resize();
 setView(state.view in VIEWS ? state.view : "v-side", true);
 let last = performance.now();
 function frame(now) {
@@ -937,6 +1163,8 @@ function frame(now) {
 }
 Promise.all([fetchBody("BaseBody.bytes"), fetchBody("BaseBody_OldShoulders.bytes").catch(() => null)]).then(([nb, ob]) => {
   bodies.new = nb; bodies.old = ob || nb;
+  // the old / new shoulder comparison needs the old body beside the page; without it there is nothing to switch
+  if (!ob) { state.shoulders = true; syncToggles(); document.getElementById("t-shoulders").hidden = true; document.getElementById("shoulders-card").hidden = true; }
   buildFighter(state.shoulders ? bodies.new : bodies.old);
   document.getElementById("loading").hidden = true;
 }).catch(e => { document.getElementById("loading").textContent = "Couldn't load the fighter's body (" + e.message + ")."; });
@@ -948,6 +1176,46 @@ window.__bench = {
   // hold a hand-made pose (debug): edit(pose) changes a copy of the rest stance; stays until poseOff()
   poseOn(edit) { const p = structuredClone(ZERO); edit(p); window.__fixed = p; }, poseOff() { window.__fixed = null; },
   set(gait, shift) { state.gait = gait; shiftHeld = !!shift; syncGait(); },
+  dir(d) { state.dir = d; syncPad(); },
+  // contact sheet for checking: renders the held phases from one camera into one image over the page (unsheet() hides it)
+  async sheet(phases, cam, opts = {}) {
+    const cw = canvas.width, ch = canvas.height, cropW = Math.round(cw * (opts.crop || 0.5)), sc = opts.scale || 0.5;
+    const cols = opts.cols || phases.length, rows = Math.ceil(phases.length / cols);
+    const out = document.createElement("canvas"); out.width = Math.round(cols * cropW * sc); out.height = Math.round(rows * ch * sc);
+    const g = out.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, out.width, out.height);
+    const frames = phases.map(p => { this.hold(p); this.settle(0.02); this.cam(...cam); const im = new Image(); im.src = canvas.toDataURL(); return [im, p]; });
+    await Promise.all(frames.map(([im]) => new Promise(r => { im.onload = r; })));
+    frames.forEach(([im, p], i) => {
+      const x = (i % cols) * cropW * sc, y = Math.floor(i / cols) * ch * sc;
+      g.drawImage(im, (cw - cropW) / 2, 0, cropW, ch, x, y, cropW * sc, ch * sc);
+      g.fillStyle = "#000"; g.font = "bold 20px sans-serif"; g.fillText(String(p), x + 8, y + 24);
+    });
+    let ov = document.getElementById("sheet");
+    if (!ov) { ov = document.createElement("img"); ov.id = "sheet"; ov.style.cssText = "position:fixed;left:0;top:0;z-index:99;max-width:100vw;max-height:100vh;background:#fff;border:2px solid #333"; document.body.appendChild(ov); }
+    ov.src = out.toDataURL(); ov.hidden = false;
+    return [out.width, out.height];
+  },
+  unsheet() { const ov = document.getElementById("sheet"); if (ov) ov.hidden = true; },
+  // planted feet against the moving floor: worst slip while an ankle is down (mm), closest / widest feet while both are low
+  check(gait, shift, dir, frames = 150) {
+    this.set(gait, shift); this.dir(dir); this.hold(null); this.settle(2.5);
+    const dt = 1 / 60, a = dir * D2R, runs = {};
+    let slip = 0, minGap = 9, maxGap = 0;
+    for (let f = 0; f < frames; f++) {
+      this.settle(dt * 0.999);
+      const v = speedSm, t = f * dt, j = this.joints();
+      for (const n of ["LeftFoot", "RightFoot"]) {
+        const p = j[n], gx = p[0] + Math.sin(a) * v * t, gz = p[2] + Math.cos(a) * v * t;
+        if (p[1] < 0.112) { if (!runs[n]) runs[n] = [gx, gz]; else slip = Math.max(slip, Math.hypot(gx - runs[n][0], gz - runs[n][1])); }
+        else runs[n] = null;
+      }
+      const l = j.LeftFoot, r = j.RightFoot;
+      if (l[1] < 0.2 && r[1] < 0.2) { const g = Math.hypot(l[0] - r[0], l[2] - r[2]); minGap = Math.min(minGap, g); maxGap = Math.max(maxGap, g); }
+    }
+    return { gait: gait + (shift ? "+shift" : ""), dir, slipMm: Math.round(slip * 1000), gap: minGap > 8 ? "-" : `${minGap.toFixed(3)}..${maxGap.toFixed(3)}` };
+  },
+  get loco() { return { travel, backW, runBlend, locoW, phase, v: speedSm }; },
+  warp, walkParts, gaitPlan, gaitPose, mirrorPose, lerpPose, solvePose, B,
   hold(p) { freezePhase = p; },
   settle(seconds = 1.5) { for (let t = 0; t < seconds; t += 1 / 60) step(1 / 60); if (camAnim) { camera.position.copy(camAnim.to); controls.target.copy(camAnim.tTo); camAnim = null; } controls.update(); renderer.render(scene, camera); return { v: speedSm, locoW, runBlend, phase }; },
   cam(px, py, pz, tx, ty, tz) { camAnim = null; camera.position.copy(world.localToWorld(V(px, py, pz))); controls.target.copy(world.localToWorld(V(tx, ty, tz))); controls.update(); renderer.render(scene, camera); },

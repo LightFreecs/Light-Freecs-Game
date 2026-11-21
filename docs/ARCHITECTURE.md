@@ -665,8 +665,8 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     `Mirrored()`. Solver: planted feet up on their toes keep the toes flat.
   - `PlayerProceduralAnimator`: `Locomotion` / `SetLocomotionStyle(id)` (set on every client when styles become a choice).
     `UpdateLocomotion` (from the smoothed Graphics movement, same on every client): gait weight by speed, walk ↔ run by speed,
-    step phase advances with distance covered, direction of travel vs facing (lock-on strafing turns the steps, backing off
-    plays the cycle backwards), stride holds in the air (> 0.12 s off the ground) and during a dash; flying / stunned / down =
+    step phase advances with distance covered, direction of travel vs facing (lock-on strafing turned the steps, backing off
+    played the cycle backwards; replaced by "Locked-on locomotion" below), stride holds in the air (> 0.12 s off the ground) and during a dash; flying / stunned / down =
     no steps. `PoseLocomotion` lays the gait over the rest (+ flight) pose in pose space (first quarter of the blend per bone
     from the rest pose). `ApplyMove` now blends attacks in pose space from that base pose (turns, wrists, feet), so a punch
     while walking or running keeps the legs going. The whole-model lean and step bob are gone for rigged fighters on the
@@ -813,3 +813,34 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
 - Skin tone (2026-11-20; owner: "give the players the option to change skin color"): `FaceCustomization.skinTone` -> `PlayerAppearance.SkinTones` (Peach = the default hero, also older saves; Porcelain, Rosy, Golden, Tan, Olive, Bronze, Brown, Deep, Ebony) -> `recipe.skinTone` (body skin slot + painted face), synced with the face JSON. Customize: a ninth tab `Skin` (drop icon, `MenuUi.IconKind.Skin`), two rows of named swatches, the camera pulls back to the whole fighter (`WholeFighterView`); Random picks one too. `-menuCapture` adds `Customize_Skin`. Verified: Windows build + PC / iPhone captures.
 - Faster iOS builds (2026-11-20; owner: "update the ipa without waiting so long"): `build-ios.yml` was ~17 min (disk cleanup 2-3 min, Unity export ~5 min, xcodebuild 7m50s). Now: IL2CPP code generation "faster (smaller) builds" for iPhone (`il2cppCodeGeneration: iPhone: 1`); ccache on the macOS job, including IL2CPP's own C++ build (its script phase gets a toolchain mirror whose clang / clang++ go through ccache, via `IL2CPP_CCACHE_TOOLCHAIN` patched into the exported pbxproj); `xcodebuild build` (not archive), no dSYM / index store; no disk cleanup (runner has ~88 GB free). Measured: warm ccache 538 / 592 hits, xcodebuild 43 s, macOS job 1m45s; whole run ~8 min expected without the cleanup (10m53s with it). The first build after a big code change is slower (fewer hits). In-game updates (HybridCLR) are on hold: HybridCLR v9 dropped Unity 6000.5 (non-LTS).
 - Eyes from the side (2026-11-21; owner: "the eyes look flat and crooked from the side"): the eyes are painted by a front planar projection onto the round face, so in profile the inner half was squeezed onto the profile line and the eye leaned forward with the forehead. `ToonHead.Surface` now applies `EyeSocket` (front only, depth only, so the front view and the painted face are unchanged): around each eye it subtracts the forehead's lean measured down the eye centre (`BaseFrontZ(EyeX, y) - ToonHeadShape.EyeZ`; below the eye centre the negative lean is soft-capped with tanh so the cheek never comes forward) plus `EyeSetBack` 0.012, so the eye stands upright and sits back. Across the eye the face keeps its own smooth curve (version 1 used a flat plane turned 24° outward; its crease beside the outer corner made the outer top lid line wobble in profile, owner: "the outer top line of the eye looks a bit squiggly"), and the change fades with a smootherstep from 0.8 half-widths past the eye centre over 0.2 head units (and to nothing as the surface turns to the side, z < 0.08). The region follows eye size / height / spacing and its inner edge stops 0.008 short of the middle, so the nose bridge never sinks; `NoseBridge` raises the bridge 0.010 from the nose up to the eyes. Owner's head: deepest change 0.063 under the inner end of the brow, at most 0.010 forward (the bridge), 489 / 5,080 vertices move > 1 mm. `ToonHead.FrontZ` (with the upright eye areas) replaces the painter's private copy (`ToonFaceRig.EyeCentre`). The hair is still built on the plain surface (`Surface(..., eyePlates: false)` in `ToonHair`), so bangs hang as before. Checked in Blender (MCP) on the owner's saved face and Round + Wide, Square-Jaw + Drawn, Young + Sharp via a dotnet harness exporting `BuildMesh` + `Paint`; bench `docs/bench/eye-side-bench.html` (https://claude.ai/artifact/K8P8NK95dq5Uw8BvCpaLig, before / after with one camera; data in `docs/bench/eye-side-bench/`). Owner approved version 2 on the bench ("Looks good"). Verified: headless compile only (owner tests by hand).
+- Locked-on locomotion (2026-11-21; owner: "when the player is locked into a opponent with tab the running is very weird because the
+  animation plays as if im running forward but with different direction"). Before, lock-on only turned the forward walk / run's steps up to
+  75° and played them backwards past 115°, so the body kept doing the forward sprint (50° lean, arm thrown back) sideways and backwards.
+  Now the fighter keeps facing the opponent and each direction has its own gait. Built on the Locomotion Bench ("Locked on" pad).
+  - `Characters/LocomotionStyles.cs`: `GaitCycle.Axis` (`GaitAxis` Forward / Back / Right: the planted feet slide back along it),
+    `WholeCycle` (keys over both steps, u 0..2, for gaits whose two steps differ) + `TouchL` (the left foot's touchdown); the
+    sidestep's stride scales about each foot's slide centre so the stance keeps its width. `LocomotionStyle.WalkSide / WalkBack /
+    RunBack` (null = the walk turned all the way instead). Shonen: **Sidestep** (right; left = its mirror a step later): a low
+    boxer's shuffle, the feet never cross, 0.40 m steps at 5.5 / s, a foot down 0.75 steps (a short float), fists loosely in front of
+    the belly; **Backpedal**: 0.52 m at 4.2 / s, lands behind on the toes, leaves the floor in front heel last, slight lean towards
+    the opponent; **Run backwards**: 8/7 m at 7 / s, a foot down 0.42 steps, on the balls of the feet, the foot swings back under
+    the hips and reaches back to land, fists pumping.
+  - `AttackPose.Mirror(a, o)` (no allocation; `Mirrored()` uses it).
+  - `PlayerProceduralAnimator`: `_travelYaw` covers the full circle (0 ahead, +90 right, ±180 back). Walk (`WalkParts`): the nearest
+    of forward / sidestep right / backpedal / sidestep left, turned the rest of the way to the travel direction (`Warp`: the feet and
+    their slide all the way, so planted feet never skate; hips 0.5 of the turn, chest 0.1, arms with the chest, the head stays on
+    the opponent); within 15° of a diagonal it cross-fades with its neighbour turned to the same direction (50 / 50 on keyboard
+    diagonals). Run: the run turned towards the travel direction (hips all the way, chest 0.6, so at 90° the head can still look at
+    the opponent) up to 120°; past 120° (back below 105°) the backwards run (turned ≤ 75°), with a 0.2 s hip-flip cross-fade. The
+    step length is the blend's. Attacks on the move: the hips keep half of that turn (the torso takes it back, the chest strikes
+    square), so the stepping legs don't twist under a pelvis facing the opponent. The dummy's back-off (Sprint + back) now runs
+    backwards facing the player.
+  - Bench (`docs/bench/locomotion-bench.html`, now https://claude.ai/artifact/Ph9yxzQGpmUr8nfDrpfwBY; the old link no longer opens from
+    the owner's account; the published page carries `BaseBody.b64.txt`): Locked on pad (8 directions, WASD / arrows), a faint opponent ahead, the
+    floor scrolls in 2D; `__bench.check(gait, shift, dir)` (worst planted-foot slip against the moving floor, closest / widest
+    feet), `__bench.sheet(phases, cam)` (contact sheet of held phases). Measured: slip ≤ 6 mm in every direction at walk and run,
+    except the sidestep's last frame before touchdown (a ~2 cm skim 3-7 mm above the floor); feet never closer than 10 cm while
+    both are low (diagonals, the swinging foot lifted). The game's `GaitCycle.Sample` matches the bench's sampler to 1e-5 for all
+    five gaits (dotnet harness against the built `LightMMORPG.dll`).
+  - Verified: headless compile only (owner tests by hand). Not seen in a rendered match: lock-on at network-smoothed speeds, the
+    remote view of another player strafing.

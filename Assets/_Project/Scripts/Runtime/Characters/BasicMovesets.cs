@@ -66,16 +66,21 @@ namespace LightMMORPG.Characters
         /// <summary>Left ↔ right: the same pose done by the other side (the second step of a walk or run cycle).</summary>
         public AttackPose Mirrored()
         {
+            var o = new AttackPose();
+            Mirror(this, o);
+            return o;
+        }
+
+        /// <summary>o = <paramref name="a"/> done by the other side (left ↔ right), without allocating. o may not be a.</summary>
+        public static void Mirror(AttackPose a, AttackPose o)
+        {
             static Vector3 M(Vector3 v) => new(-v.x, v.y, v.z);
-            return new AttackPose
-            {
-                RootPos = M(RootPos), RootYaw = -RootYaw, RootPitch = RootPitch, RootRoll = -RootRoll,
-                HipsPos = M(HipsPos), HipsYaw = -HipsYaw, HipsPitch = HipsPitch, HipsRoll = -HipsRoll,
-                TorsoYaw = -TorsoYaw, TorsoPitch = TorsoPitch, TorsoRoll = -TorsoRoll,
-                HeadYaw = -HeadYaw, HeadPitch = HeadPitch,
-                ArmL = M(ArmR), ArmR = M(ArmL), TwistL = -TwistR, TwistR = -TwistL, OpenL = OpenR, OpenR = OpenL,
-                LegL = M(LegR), LegR = M(LegL), FootYawL = -FootYawR, FootYawR = -FootYawL, FootPitchL = FootPitchR, FootPitchR = FootPitchL,
-            };
+            o.RootPos = M(a.RootPos); o.RootYaw = -a.RootYaw; o.RootPitch = a.RootPitch; o.RootRoll = -a.RootRoll;
+            o.HipsPos = M(a.HipsPos); o.HipsYaw = -a.HipsYaw; o.HipsPitch = a.HipsPitch; o.HipsRoll = -a.HipsRoll;
+            o.TorsoYaw = -a.TorsoYaw; o.TorsoPitch = a.TorsoPitch; o.TorsoRoll = -a.TorsoRoll;
+            o.HeadYaw = -a.HeadYaw; o.HeadPitch = a.HeadPitch;
+            o.ArmL = M(a.ArmR); o.ArmR = M(a.ArmL); o.TwistL = -a.TwistR; o.TwistR = -a.TwistL; o.OpenL = a.OpenR; o.OpenR = a.OpenL;
+            o.LegL = M(a.LegR); o.LegR = M(a.LegL); o.FootYawL = -a.FootYawR; o.FootYawR = -a.FootYawL; o.FootPitchL = a.FootPitchR; o.FootPitchR = a.FootPitchL;
         }
     }
 

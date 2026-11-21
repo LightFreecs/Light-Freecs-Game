@@ -55,11 +55,14 @@ namespace LightMMORPG.Player
         private Quaternion _rootTurn = Quaternion.identity;
         private LimbSpeedLines _speedLines;
 
-        // walking / running from a locomotion style (Locomotion Bench): walk by default, run with Shift, blended by speed
+        // walking / running from a locomotion style (Locomotion Bench): walk by default, run with Shift, blended by speed.
+        // Locked on (facing the opponent) the walk sidesteps / backpedals and the run turns towards the travel direction or,
+        // behind 120°, runs backwards (UpdateLocomotion).
         private string _locomotionId = LocomotionStyles.DefaultId;
-        private float _gaitPhase, _locoW, _runBlend, _strideW = 1f, _strideR = 1f, _travelYaw, _airTime;
-        private bool _gaitBackwards, _gaitHold, _runFace;
-        private readonly AttackPose _gaitWalk = new(), _gaitRun = new(), _gaitPose = new(), _basePose = new();
+        private float _gaitPhase, _locoW, _runBlend, _strideRun = 1f, _strideBack = 1f, _travelYaw, _airTime, _backW, _warpHips;
+        private bool _gaitHold, _runFace, _backRun;
+        private GaitPart _walkA, _walkB;
+        private readonly AttackPose _gaitWalk = new(), _gaitRun = new(), _gaitPose = new(), _basePose = new(), _gaitTmp = new(), _gaitMirror = new();
         private readonly Quaternion[] _restRot = new Quaternion[CharacterBones.Count];
         private ToonFaceAnimator _face;
         private float _faceLookup;
@@ -305,6 +308,10 @@ namespace LightMMORPG.Player
             var bp = _basePose;
             var b = _blend;
             AttackPose.Lerp(bp, _pose, w, b);
+            // locked on, the legs keep stepping towards the travel direction under the attack: the hips keep half of their turn
+            // that way (the chest still strikes square), so the legs don't twist round under a pelvis facing the opponent
+            float keep = 0.5f * _warpHips * w;
+            b.HipsYaw += keep; b.TorsoYaw -= keep;
             b.RootPos = _pose.RootPos * w; b.RootYaw = _pose.RootYaw * w; b.RootPitch = _pose.RootPitch * w; b.RootRoll = _pose.RootRoll * w;
             Quaternion rq = b.RootRotation;
             Vector3 rp = b.RootPos * hs;
@@ -334,8 +341,11 @@ namespace LightMMORPG.Player
         /// <summary>
         /// Gait state from the smoothed movement (so it looks the same on every client): how much the fighter walks / runs
         /// (<see cref="_locoW"/>), walk ↔ run by speed, the step phase (advances with the distance covered, so planted feet stay
-        /// put), the direction of travel relative to the facing (strafing, backing off while locked on). Mid-air and during a
-        /// dash the stride holds; flying, stunned or down = no steps.
+        /// put), and the direction of travel relative to the facing (<see cref="_travelYaw"/>: 0 ahead, +90 right, ±180 back).
+        /// The facing only differs from the travel while locked on (or aiming after an attack): then the walk sidesteps or
+        /// backpedals (<see cref="WalkParts"/>), and the run turns towards the travel direction or, past 120° (back below 105°),
+        /// runs backwards, with a quick hip flip between the two (<see cref="_backW"/>). Mid-air and during a dash the stride
+        /// holds; flying, stunned or down = no steps.
         /// </summary>
         private void UpdateLocomotion(float dt, Vector3 local, float planar, bool flying, bool dashing, bool stunned)
         {
@@ -354,18 +364,59 @@ namespace LightMMORPG.Player
             if (_locoW < 0.002f && target <= 0f) _locoW = 0f;
             _runBlend = Smooth01(style.Walk.Speed * 1.15f, style.Run.Speed * 0.85f, v);
             if (v > 0.3f)
-            {
-                float yaw = Mathf.Atan2(local.x, local.z) * Mathf.Rad2Deg;
-                _gaitBackwards = Mathf.Abs(yaw) > (_gaitBackwards ? 100f : 115f);
-                if (_gaitBackwards) yaw = Mathf.DeltaAngle(180f, yaw);
-                _travelYaw = Mathf.LerpAngle(_travelYaw, Mathf.Clamp(yaw, -75f, 75f), 1f - Mathf.Exp(-12f * dt));
-            }
-            _strideW = style.Walk.StrideScale(v);
-            _strideR = style.Run.StrideScale(v);
-            float step = Mathf.Lerp(style.Walk.StepLength * _strideW, style.Run.StepLength * _strideR, _runBlend);
+                _travelYaw = Mathf.DeltaAngle(0f, Mathf.LerpAngle(_travelYaw, Mathf.Atan2(local.x, local.z) * Mathf.Rad2Deg, 1f - Mathf.Exp(-12f * dt)));
+            float away = Mathf.Abs(_travelYaw);
+            if (_backRun ? away < 105f : away > 120f) _backRun = !_backRun;
+            if (style.RunBack == null) _backRun = false;
+            _backW = Mathf.MoveTowards(_backW, _backRun ? 1f : 0f, dt / 0.2f);
+            WalkParts(style, v);
+            _strideRun = style.Run.StrideScale(v);
+            _strideBack = style.RunBack != null ? style.RunBack.StrideScale(v) : 1f;
+            float walkStep = _walkA.Weight * _walkA.Gait.StepLength * _walkA.Stride;
+            if (_walkB.Weight > 0f) walkStep += _walkB.Weight * _walkB.Gait.StepLength * _walkB.Stride;
+            float runStep = style.Run.StepLength * _strideRun;
+            if (style.RunBack != null) runStep = Mathf.Lerp(runStep, style.RunBack.StepLength * _strideBack, _backW);
+            float step = Mathf.Lerp(walkStep, runStep, _runBlend);
             _gaitHold = !canStep || airborne;
-            if (!_gaitHold) _gaitPhase = Mathf.Repeat(_gaitPhase + dt * v / step * (_gaitBackwards ? -1f : 1f), 2f);
+            if (!_gaitHold) _gaitPhase = Mathf.Repeat(_gaitPhase + dt * v / step, 2f);
             UpdateRunFace();
+        }
+
+        /// <summary>One of the walk's directions in the current blend: which gait (mirrored = the sidestep to the left), how far it is turned, its weight and stride.</summary>
+        private struct GaitPart
+        {
+            public GaitCycle Gait;
+            public bool Mirror;
+            public float Turn, Weight, Stride;
+        }
+
+        /// <summary>
+        /// The walk for the travel direction: forward, sidestep right, backpedal or sidestep left (the right one mirrored), the
+        /// nearest one turned the rest of the way to the exact direction. Within 15° of a diagonal it cross-fades with its
+        /// neighbour, turned to the same direction, so the blend can't skate (50 / 50 on the diagonal itself).
+        /// </summary>
+        private void WalkParts(LocomotionStyle style, float v)
+        {
+            float c = Mathf.Round(_travelYaw / 90f) * 90f, off = _travelYaw - c;
+            float t = Smooth01(30f, 60f, Mathf.Abs(off));
+            _walkA = Part(style, c, off, 1f - t, v);
+            if (t > 0f)
+            {
+                float n = c + (off > 0f ? 90f : -90f);
+                _walkB = Part(style, n, _travelYaw - n, t, v);
+            }
+            else _walkB.Weight = 0f;
+        }
+
+        private static GaitPart Part(LocomotionStyle style, float cardinal, float turn, float weight, float v)
+        {
+            int dir = Mathf.RoundToInt(Mathf.DeltaAngle(0f, cardinal) / 90f);   // 0 ahead, 1 right, -1 left, ±2 back
+            var p = new GaitPart { Gait = style.Walk, Turn = turn, Weight = weight };
+            var g = dir == 0 ? style.Walk : dir == 1 || dir == -1 ? style.WalkSide : style.WalkBack;
+            if (g != null) { p.Gait = g; p.Mirror = dir == -1; }
+            else p.Turn = cardinal + turn;   // a style without the locked-on gaits turns its walk all the way instead
+            p.Stride = p.Gait.StrideScale(v);
+            return p;
         }
 
         /// <summary>Gritted-teeth "Determined" face while running, like the clip; back to neutral when the run ends.</summary>
@@ -394,14 +445,49 @@ namespace LightMMORPG.Player
             AttackPose.Lerp(ZeroPose, ZeroPose, 0f, bp);
             bp.ArmL = rig.ModelPosition(CharacterBone.LeftHand) / hs; bp.ArmR = rig.ModelPosition(CharacterBone.RightHand) / hs;
             bp.LegL = rig.ModelPosition(CharacterBone.LeftFoot) / hs; bp.LegR = rig.ModelPosition(CharacterBone.RightFoot) / hs;
+            _warpHips = 0f;
             if (_locoW <= 0f) return;
             for (int i = 0; i < CharacterBones.Count; i++) _restRot[i] = rig.GetModelRotation((CharacterBone)i);
             Vector3 restHips = rig[CharacterBone.Hips].localPosition;
             var style = Locomotion;
-            style.Walk.Sample(_gaitPhase, _strideW, _gaitWalk);
-            style.Run.Sample(_gaitPhase, _strideR, _gaitRun);
-            AttackPose.Lerp(_gaitWalk, _gaitRun, _runBlend, _gaitPose);
-            TurnSteps(_gaitPose, _travelYaw);
+            float walkHips = 0f, runHips = 0f;
+            // the walk: its direction(s) for the travel direction, each turned to it exactly
+            if (_runBlend < 1f)
+            {
+                SampleWalkPart(_walkA, _gaitWalk);
+                walkHips = _walkA.Turn * WalkHips * _walkA.Weight;
+                if (_walkB.Weight > 0f)
+                {
+                    SampleWalkPart(_walkB, _gaitTmp);
+                    AttackPose.Lerp(_gaitWalk, _gaitTmp, _walkB.Weight, _gaitWalk);
+                    walkHips += _walkB.Turn * WalkHips * _walkB.Weight;
+                }
+            }
+            // the run: turned towards the travel direction (the hips all the way, the chest part of the way, the eyes on the
+            // opponent), or the backwards run behind 120°, with a quick hip flip between them
+            if (_runBlend > 0f)
+            {
+                float back = style.RunBack != null ? AttackMove.Ease(KeyEase.Smooth, _backW) : 0f;
+                float turnRun = Mathf.Clamp(_travelYaw, -130f, 130f);
+                float turnBack = Mathf.Clamp(_travelYaw - (_travelYaw >= 0f ? 180f : -180f), -75f, 75f);
+                if (back < 1f)
+                {
+                    style.Run.Sample(_gaitPhase, _strideRun, _gaitRun);
+                    Warp(_gaitRun, turnRun, RunHips, RunChest);
+                }
+                if (back > 0f)
+                {
+                    var o = back < 1f ? _gaitTmp : _gaitRun;
+                    style.RunBack.Sample(_gaitPhase, _strideBack, o);
+                    Warp(o, turnBack, WalkHips, WalkChest);
+                    if (back < 1f) AttackPose.Lerp(_gaitRun, _gaitTmp, back, _gaitRun);
+                }
+                runHips = Mathf.Lerp(turnRun * RunHips, turnBack * WalkHips, back);
+            }
+            if (_runBlend <= 0f) AttackPose.Lerp(_gaitWalk, _gaitWalk, 0f, _gaitPose);
+            else if (_runBlend >= 1f) AttackPose.Lerp(_gaitRun, _gaitRun, 0f, _gaitPose);
+            else AttackPose.Lerp(_gaitWalk, _gaitRun, _runBlend, _gaitPose);
+            _warpHips = Mathf.Lerp(walkHips, runHips, _runBlend) * _locoW;
             AttackPose.Lerp(bp, _gaitPose, _locoW, bp);
             AttackPoseSolver.Apply(rig, bp, hs);
             // the first quarter of the blend goes per bone from the rest pose, so the IK's own elbows never pop the arms
@@ -415,15 +501,37 @@ namespace LightMMORPG.Player
             bp.ArmL = rig.ModelPosition(CharacterBone.LeftHand) / hs; bp.ArmR = rig.ModelPosition(CharacterBone.RightHand) / hs;
         }
 
-        /// <summary>Points the stride along the direction of travel (strafing while locked on); the body keeps facing ahead.</summary>
-        private static void TurnSteps(AttackPose p, float yaw)
+        /// <summary>One walk direction at the current phase (the sidestep to the left = the right one mirrored, a step later), turned to the travel direction.</summary>
+        private void SampleWalkPart(GaitPart part, AttackPose o)
         {
-            if (Mathf.Abs(yaw) < 0.5f) return;
-            float s = Mathf.Sin(yaw * Mathf.Deg2Rad), c = Mathf.Cos(yaw * Mathf.Deg2Rad);
-            p.LegL = new Vector3(p.LegL.x + s * p.LegL.z, p.LegL.y, c * p.LegL.z);
-            p.LegR = new Vector3(p.LegR.x + s * p.LegR.z, p.LegR.y, c * p.LegR.z);
-            p.FootYawL += yaw; p.FootYawR += yaw;
-            p.HipsYaw += yaw * 0.35f; p.TorsoYaw -= yaw * 0.35f;
+            if (part.Mirror)
+            {
+                part.Gait.Sample(_gaitPhase + 1f, part.Stride, _gaitMirror);
+                AttackPose.Mirror(_gaitMirror, o);
+            }
+            else part.Gait.Sample(_gaitPhase, part.Stride, o);
+            Warp(o, part.Turn, WalkHips, WalkChest);
+        }
+
+        // how much of a turn towards the travel direction the hips and the chest take (the feet always take all of it): walking
+        // stays square to the opponent, running turns the hips all the way and the chest just over half
+        private const float WalkHips = 0.5f, WalkChest = 0.1f, RunHips = 1f, RunChest = 0.6f;
+
+        /// <summary>
+        /// Turns a gait pose to travel <paramref name="turn"/>° off its own direction (about the root): the feet and their slide
+        /// all the way, so planted feet never skate; the hips <paramref name="hips"/> of it and the chest <paramref name="chest"/>
+        /// (the rest is a twist of the spine back towards the opponent), the arms with the chest. The head keeps looking ahead at
+        /// the opponent (the solver keeps it within 55° of the chest).
+        /// </summary>
+        private static void Warp(AttackPose p, float turn, float hips, float chest)
+        {
+            if (Mathf.Abs(turn) < 0.01f) return;
+            Quaternion all = Quaternion.AngleAxis(turn, Vector3.up), h = Quaternion.AngleAxis(turn * hips, Vector3.up), c = Quaternion.AngleAxis(turn * chest, Vector3.up);
+            p.LegL = all * p.LegL; p.LegR = all * p.LegR;
+            p.FootYawL += turn; p.FootYawR += turn;
+            p.HipsPos = h * p.HipsPos;
+            p.HipsYaw += turn * hips; p.TorsoYaw -= turn * (hips - chest);
+            p.ArmL = c * p.ArmL; p.ArmR = c * p.ArmR;
         }
 
         /// <summary>Forward lunge/punch pose (0..1 strength), decays quickly.</summary>
