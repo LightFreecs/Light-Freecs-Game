@@ -1,0 +1,425 @@
+<meta charset="utf-8">
+<title>Profile Eye Bench</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@600;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: one column. The dusk stage (before | after, same camera) leads; turn controls sit right under it; change notes follow. */
+:root {
+  --bg: #f2eff7;
+  --surface: #ffffff;
+  --ink: #231e33;
+  --muted: #615a75;
+  --line: #dcd5e8;
+  --chip: #ebe6f3;
+  --accent: #b8541a;
+  --accent-ink: #ffffff;
+  --sky-top: #b9a8e4;
+  --sky-bottom: #f2c4cf;
+  --stage-ink: #2a2140;
+  --font-display: "Exo 2", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14111d; --surface: #1d1929; --ink: #ece8f5; --muted: #a8a1bb; --line: #302a43; --chip: #262036;
+    --accent: #f08c4b; --accent-ink: #1b1209; --sky-top: #3c3268; --sky-bottom: #7c4b70; --stage-ink: #f3eefc;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14111d; --surface: #1d1929; --ink: #ece8f5; --muted: #a8a1bb; --line: #302a43; --chip: #262036;
+  --accent: #f08c4b; --accent-ink: #1b1209; --sky-top: #3c3268; --sky-bottom: #7c4b70; --stage-ink: #f3eefc;
+  color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 48px;
+}
+[hidden] { display: none !important; }
+.wrap { max-width: 1080px; margin: 0 auto; display: grid; gap: 20px; }
+
+header { display: grid; gap: 6px; }
+.eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(26px, 4.4vw, 38px); line-height: 1.1; margin: 0; text-wrap: balance; }
+.lead { margin: 0; max-width: 68ch; color: var(--ink); }
+
+.stage {
+  position: relative;
+  aspect-ratio: 16 / 8.6;
+  max-width: 100%;
+  border-radius: 14px;
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--sky-top), var(--sky-bottom));
+  touch-action: pan-y;
+  cursor: grab;
+  user-select: none;
+}
+.stage.dragging { cursor: grabbing; }
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.halves { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; pointer-events: none; }
+.halves > div { position: relative; }
+.halves > div + div { border-left: 1px solid color-mix(in srgb, var(--stage-ink) 22%, transparent); }
+.tag {
+  position: absolute; top: 12px; left: 12px;
+  font-family: var(--font-display); font-weight: 600; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--stage-ink);
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  padding: 3px 9px; border-radius: 999px;
+}
+.tag.after { background: var(--accent); color: var(--accent-ink); }
+.stage[data-show="before"] .halves, .stage[data-show="after"] .halves { grid-template-columns: 1fr; }
+.stage[data-show="before"] .h-after, .stage[data-show="after"] .h-before { display: none; }
+.stage[data-show="after"] .h-after { border-left: 0; }
+.status {
+  position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center;
+  color: var(--stage-ink); font-weight: 500;
+}
+.hint {
+  position: absolute; right: 12px; bottom: 10px; font-size: 12px; color: var(--stage-ink); opacity: 0.75; pointer-events: none;
+}
+
+.controls { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+.group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.group-label { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-right: 2px; }
+.seg { display: inline-flex; background: var(--chip); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button {
+  font: inherit; font-size: 14px; font-weight: 500; color: var(--ink);
+  background: transparent; border: 0; border-radius: 8px; padding: 6px 12px; cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--surface); box-shadow: 0 1px 2px rgba(20, 10, 40, 0.18); font-weight: 600; }
+.seg button:focus-visible, input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.turn { display: flex; align-items: center; gap: 10px; flex: 1 1 260px; min-width: 0; }
+.turn input { flex: 1; min-width: 0; accent-color: var(--accent); }
+.deg { font-variant-numeric: tabular-nums; min-width: 4.5ch; text-align: right; font-weight: 600; }
+
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; min-width: 0; }
+.card h2 { font-family: var(--font-display); font-size: 17px; font-weight: 600; margin: 0 0 8px; }
+.card ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.card p { margin: 0; }
+.num { font-variant-numeric: tabular-nums; font-weight: 600; }
+code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 0.9em; background: var(--chip); padding: 1px 5px; border-radius: 5px; }
+.foot { color: var(--muted); font-size: 13px; margin: 0; max-width: 80ch; }
+
+@media (max-width: 640px) {
+  .stage { aspect-ratio: 4 / 5.6; }
+  .halves { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+  .halves > div + div { border-left: 0; border-top: 1px solid color-mix(in srgb, var(--stage-ink) 22%, transparent); }
+  .stage[data-show="before"] .halves, .stage[data-show="after"] .halves { grid-template-rows: 1fr; }
+  .stage[data-show="after"] .h-after { border-top: 0; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Toon Head · eyes from the side</span>
+    <h1>Profile Eye Bench</h1>
+    <p class="lead">Your saved head, with its Tall eyes and Sharp brows. From the side the painted eyes used to lean forward and sit right on the edge of the face. Now each eye sits on an upright plate turned outward, under the brow and behind the nose bridge. Turn the head to compare.</p>
+  </header>
+
+  <div class="stage" id="stage" data-show="both" aria-label="Before and after views of the head, drag to turn">
+    <canvas id="view"></canvas>
+    <div class="halves" aria-hidden="true">
+      <div class="h-before"><span class="tag">Before</span></div>
+      <div class="h-after"><span class="tag after">After</span></div>
+    </div>
+    <div class="status" id="status">Loading the head…</div>
+    <span class="hint">Drag to turn</span>
+  </div>
+
+  <div class="controls">
+    <div class="group" role="group" aria-labelledby="angle-label">
+      <span class="group-label" id="angle-label">Angle</span>
+      <div class="seg" id="presets">
+        <button type="button" id="p-front" data-yaw="0" data-pitch="4" aria-pressed="false">Front</button>
+        <button type="button" id="p-three" data-yaw="40" data-pitch="6" aria-pressed="false">¾</button>
+        <button type="button" id="p-side" data-yaw="90" data-pitch="3" aria-pressed="true">Side</button>
+        <button type="button" id="p-back" data-yaw="120" data-pitch="5" aria-pressed="false">Side, behind</button>
+      </div>
+    </div>
+    <div class="group" role="group" aria-labelledby="show-label">
+      <span class="group-label" id="show-label">Show</span>
+      <div class="seg" id="shows">
+        <button type="button" id="s-both" data-show="both" aria-pressed="true">Both</button>
+        <button type="button" id="s-before" data-show="before" aria-pressed="false">Before</button>
+        <button type="button" id="s-after" data-show="after" aria-pressed="false">After</button>
+      </div>
+    </div>
+    <label class="turn" for="turn">
+      <span class="group-label">Turn</span>
+      <input type="range" id="turn" min="-180" max="180" step="1" value="90">
+      <span class="deg" id="deg">90°</span>
+    </label>
+  </div>
+
+  <div class="notes">
+    <section class="card">
+      <h2>What changed</h2>
+      <ul>
+        <li>Around each eye the face is an upright plane turned <span class="num">24°</span> outward and set <span class="num">0.012</span> head units (about 3 mm) back, so the eye no longer leans and is squeezed evenly from the side.</li>
+        <li>The nose bridge between the eyes is raised up to <span class="num">0.010</span> head units (about 3 mm), so the eye sits behind the profile line.</li>
+        <li>The most it moves is <span class="num">0.062</span> head units (about 18 mm), under the middle of the brow where the forehead leaned out. <span class="num">569</span> of the <span class="num">5,080</span> head points move more than 1 mm.</li>
+      </ul>
+    </section>
+    <section class="card">
+      <h2>Unchanged</h2>
+      <ul>
+        <li>The front view: only depth changes, and the face is painted straight from the front.</li>
+        <li>The painted eyes, brows, mouth, blinking and look-at, and the face shadow.</li>
+        <li>The hair: it is still built on the old head surface, so bangs hang the same way.</li>
+        <li>Every face slider and eye style. The plate follows the eye's size, height and spacing, and the middle of the face never sinks.</li>
+      </ul>
+    </section>
+    <section class="card">
+      <h2>How it was checked</h2>
+      <p>The head was rebuilt in Blender from the game's own <code>ToonHead</code> and <code>ToonFacePainter</code> code, compared at 0°, 40°, 70° and 90°, and also tried on the Round + Wide, Square-Jaw + Drawn and Young + Sharp faces. Unity compiles with no errors; it has not been played in the game yet.</p>
+    </section>
+  </div>
+
+  <p class="foot">This viewer uses a simple two-tone light and outline. In the game the face is lit by its painted shadow map, so the new eye area adds no shading of its own. Mesh: <code>ToonHead.BuildMesh</code> on your saved face. Face: <code>ToonFacePainter.Paint</code>.</p>
+</div>
+
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+
+const stage = document.getElementById("stage");
+const canvas = document.getElementById("view");
+const statusEl = document.getElementById("status");
+const turn = document.getElementById("turn");
+const degEl = document.getElementById("deg");
+const presetButtons = [...document.querySelectorAll("#presets button")];
+const showButtons = [...document.querySelectorAll("#shows button")];
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const view = { yaw: 90, pitch: 3 };
+let show = "both";
+let scenes = null;
+let renderer = null;
+let faceMat = null;
+const camera = new THREE.PerspectiveCamera(24, 1, 0.05, 50);
+const target = new THREE.Vector3(0, 0.43, 0.02);
+
+function decode(b64, Type) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Type(bytes.buffer);
+}
+
+// Unity head units go in as they are (x right, y up from the chin, z forward); the bench meshes render this way.
+function headGeometry(pos, tris) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  g.setIndex(new THREE.BufferAttribute(tris, 1));
+  g.computeVertexNormals();
+  // make sure the normals point out of the head (flip the winding once if not)
+  const n = g.attributes.normal.array;
+  let out = 0;
+  for (let i = 0; i < pos.length; i += 3) out += n[i] * pos[i] + n[i + 1] * (pos[i + 1] - 0.45) + n[i + 2] * pos[i + 2];
+  if (out < 0) {
+    const idx = g.index.array;
+    for (let i = 0; i < idx.length; i += 3) { const t = idx[i + 1]; idx[i + 1] = idx[i + 2]; idx[i + 2] = t; }
+    g.index.needsUpdate = true;
+    g.computeVertexNormals();
+  }
+  const count = pos.length / 3, nn = g.attributes.normal.array;
+  const uv = new Float32Array(count * 2), front = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
+    // ToonFacePainter.Uv: the face texture spans x -0.5..0.5, y -0.1..0.9 head units
+    uv[2 * i] = pos[3 * i] + 0.5;
+    uv[2 * i + 1] = pos[3 * i + 1] + 0.1;
+    // same front weight as the game: features only on the front of the face
+    const nz = nn[3 * i + 2];
+    const t = Math.min(1, Math.max(0, (nz - 0.05) / 0.25));
+    front[i] = pos[3 * i + 2] > 0 && nz > 0.05 ? t * t * (3 - 2 * t) : 0;
+  }
+  g.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+  g.setAttribute("front", new THREE.BufferAttribute(front, 1));
+  return g;
+}
+
+const faceVert = `
+attribute float front;
+varying vec3 vN; varying vec2 vUv; varying float vFront; varying vec3 vV;
+void main() {
+  vUv = uv; vFront = front;
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vN = normalize(mat3(modelMatrix) * normal);
+  vV = normalize(cameraPosition - wp.xyz);
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}`;
+const faceFrag = `
+uniform sampler2D map; uniform vec3 lit; uniform vec3 shade; uniform vec3 rim; uniform vec3 lightDir;
+varying vec3 vN; varying vec2 vUv; varying float vFront; varying vec3 vV;
+void main() {
+  vec3 n = normalize(vN);
+  float b = smoothstep(-0.03, 0.05, dot(n, normalize(lightDir)));
+  vec3 c = mix(shade, lit, b);
+  float fres = pow(1.0 - clamp(dot(n, normalize(vV)), 0.0, 1.0), 4.0);
+  c = mix(c, rim, fres * 0.22 * b);
+  vec4 f = texture2D(map, vUv);
+  c = mix(c, f.rgb, f.a * vFront);
+  gl_FragColor = vec4(c, 1.0);
+}`;
+const lineVert = `
+uniform float width;
+void main() { gl_Position = projectionMatrix * modelViewMatrix * vec4(position + normal * width, 1.0); }`;
+const lineFrag = `
+uniform vec3 color;
+void main() { gl_FragColor = vec4(color, 1.0); }`;
+
+function buildScenes(data, tex) {
+  const tris = decode(data.tris, Uint16Array);
+  // your skin tone (Olive), lit and shaded like the toon body
+  const lit = new THREE.Color(0.80, 0.66, 0.47);
+  const shade = new THREE.Color(0.80 * 0.80, 0.66 * 0.68, 0.47 * 0.74);
+  faceMat = new THREE.ShaderMaterial({
+    vertexShader: faceVert, fragmentShader: faceFrag,
+    uniforms: {
+      map: { value: tex }, lit: { value: lit }, shade: { value: shade },
+      rim: { value: new THREE.Color(1.0, 0.86, 0.80) }, lightDir: { value: new THREE.Vector3(0.35, 0.55, 0.78) },
+    },
+  });
+  const lineMat = new THREE.ShaderMaterial({
+    vertexShader: lineVert, fragmentShader: lineFrag, side: THREE.BackSide,
+    uniforms: { width: { value: 0.0055 }, color: { value: new THREE.Color(0x9c5446) } },
+  });
+  const make = (key) => {
+    const s = new THREE.Scene();
+    const g = headGeometry(decode(data[key], Float32Array), tris.slice());
+    s.add(new THREE.Mesh(g, faceMat));
+    s.add(new THREE.Mesh(g, lineMat));
+    return s;
+  };
+  return { before: make("before"), after: make("after") };
+}
+
+function placeCamera(aspect) {
+  const t = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  const dist = Math.max(1.3 / (2 * t), 1.0 / (2 * t * aspect));
+  const y = THREE.MathUtils.degToRad(view.yaw), p = THREE.MathUtils.degToRad(view.pitch);
+  camera.aspect = aspect;
+  camera.position.set(target.x + dist * Math.sin(y) * Math.cos(p), target.y + dist * Math.sin(p), target.z + dist * Math.cos(y) * Math.cos(p));
+  camera.lookAt(target);
+  camera.updateProjectionMatrix();
+  // the light comes from above the viewer's shoulder, so the side you look at is lit (in the game the face is lit by its painted shadow map)
+  if (faceMat) {
+    const toEye = camera.position.clone().sub(target).normalize();
+    const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), toEye).normalize();
+    faceMat.uniforms.lightDir.value.copy(toEye.multiplyScalar(0.8)).add(new THREE.Vector3(0, 0.6, 0)).addScaledVector(right, -0.3).normalize();
+  }
+}
+
+let queued = false;
+function requestDraw() {
+  if (queued || !scenes) return;
+  queued = true;
+  requestAnimationFrame(() => { queued = false; draw(); });
+}
+
+function draw() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  if (!w || !h) return;
+  renderer.setSize(w, h, false);
+  renderer.setScissorTest(true);
+  renderer.clear();
+  const stacked = w <= 640;
+  let panes;
+  if (show === "both") {
+    // WebGL viewports start at the bottom left: the top pane of a stacked layout sits at y = h / 2
+    panes = stacked
+      ? [["before", 0, Math.floor(h / 2), w, h - Math.floor(h / 2)], ["after", 0, 0, w, Math.floor(h / 2)]]
+      : [["before", 0, 0, Math.floor(w / 2), h], ["after", Math.floor(w / 2), 0, w - Math.floor(w / 2), h]];
+  } else {
+    panes = [[show, 0, 0, w, h]];
+  }
+  for (const [key, x, y, pw, ph] of panes) {
+    renderer.setViewport(x, y, pw, ph);
+    renderer.setScissor(x, y, pw, ph);
+    placeCamera(pw / ph);
+    renderer.render(scenes[key], camera);
+  }
+}
+
+function syncControls() {
+  const yaw = Math.round(view.yaw);
+  turn.value = String(yaw);
+  degEl.textContent = yaw + "°";
+  for (const b of presetButtons) b.setAttribute("aria-pressed", String(Math.round(Number(b.dataset.yaw)) === yaw));
+}
+
+let anim = 0;
+function goTo(yaw, pitch) {
+  cancelAnimationFrame(anim);
+  if (reduceMotion) { view.yaw = yaw; view.pitch = pitch; syncControls(); requestDraw(); return; }
+  const y0 = view.yaw, p0 = view.pitch, t0 = performance.now(), dur = 380;
+  const step = (now) => {
+    const k = Math.min(1, (now - t0) / dur), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+    view.yaw = y0 + (yaw - y0) * e;
+    view.pitch = p0 + (pitch - p0) * e;
+    syncControls(); draw();
+    if (k < 1) anim = requestAnimationFrame(step);
+  };
+  anim = requestAnimationFrame(step);
+}
+
+presetButtons.forEach((b) => b.addEventListener("click", () => goTo(Number(b.dataset.yaw), Number(b.dataset.pitch))));
+showButtons.forEach((b) => b.addEventListener("click", () => {
+  show = b.dataset.show;
+  stage.dataset.show = show;
+  for (const o of showButtons) o.setAttribute("aria-pressed", String(o === b));
+  requestDraw();
+}));
+turn.addEventListener("input", () => { cancelAnimationFrame(anim); view.yaw = Number(turn.value); syncControls(); requestDraw(); });
+
+let drag = null;
+stage.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0) return;
+  cancelAnimationFrame(anim);
+  drag = { x: e.clientX, y: e.clientY, yaw: view.yaw, pitch: view.pitch, id: e.pointerId };
+  stage.setPointerCapture(e.pointerId);
+  stage.classList.add("dragging");
+});
+stage.addEventListener("pointermove", (e) => {
+  if (!drag || e.pointerId !== drag.id) return;
+  let yaw = drag.yaw - (e.clientX - drag.x) * 0.45;
+  yaw = ((yaw + 180) % 360 + 360) % 360 - 180;
+  view.yaw = yaw;
+  if (e.pointerType === "mouse") view.pitch = Math.max(-20, Math.min(30, drag.pitch + (e.clientY - drag.y) * 0.3));
+  syncControls();
+  requestDraw();
+});
+const endDrag = (e) => { if (drag && e.pointerId === drag.id) { drag = null; stage.classList.remove("dragging"); } };
+stage.addEventListener("pointerup", endDrag);
+stage.addEventListener("pointercancel", endDrag);
+
+new ResizeObserver(requestDraw).observe(stage);
+
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+  renderer.setClearColor(0x000000, 0);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  const [data, tex] = await Promise.all([
+    fetch("eye-side-bench/heads.json").then((r) => { if (!r.ok) throw new Error("heads.json " + r.status); return r.json(); }),
+    new THREE.TextureLoader().loadAsync("eye-side-bench/face.png"),
+  ]);
+  tex.colorSpace = THREE.NoColorSpace;
+  tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  scenes = buildScenes(data, tex);
+  statusEl.hidden = true;
+  syncControls();
+  requestDraw();
+} catch (err) {
+  statusEl.textContent = "The head could not be loaded (" + (err && err.message ? err.message : err) + "). Reload the page to try again.";
+}
+</script>

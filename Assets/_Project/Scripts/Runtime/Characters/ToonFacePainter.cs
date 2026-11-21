@@ -386,21 +386,12 @@ namespace LightMMORPG.Characters
                 float uI = Mathf.Clamp(es.IrisU, wr.x, wr.y);
                 rig.Travel = new Vector2(0.36f * 0.5f * (wr.y - wr.x), Mathf.Max(0.04f, 0.35f * 0.5f * Mathf.Max(0f, whiteTop(uI) - whiteBot(uI))));
                 float ex = H.EyeX + (es.IrisU - 0.5f) * W, ey = H.EyeY + (es.IrisV + es.Shift) * W;
-                rig.EyeCentre = new Vector3(ex, ey, FrontZ(H, ex, ey));
+                rig.EyeCentre = new Vector3(ex, ey, ToonHead.FrontZ(H, ex, ey));
                 rig.BrowColor = browCol;
                 rig.BrowSize = s.browSize; rig.BrowAngle = s.browAngle; rig.BrowSpacing = s.browSpacing;
                 BuildBrowMap(brow, rig);
             }
             return cv.Px;
-        }
-
-        // the front surface depth of the head at (x, y): inverse of ToonHead's superellipse section
-        private static float FrontZ(ToonHeadShape H, float x, float y)
-        {
-            ToonHead.FaceAt(H, y, out float w, out float f, out _, out float k);
-            float e = 2f / Mathf.Max(1e-3f, k);
-            float sn = Mathf.Pow(Mathf.Clamp01(Mathf.Abs(x) / Mathf.Max(1e-4f, w)), 1f / e);
-            return f * Mathf.Pow(Mathf.Sqrt(Mathf.Max(0f, 1f - sn * sn)), e);
         }
 
         /// <summary>A brow outline placed for one side with the player's size, angle (degrees) and spacing (port of <c>paintBrows</c> at rest).</summary>

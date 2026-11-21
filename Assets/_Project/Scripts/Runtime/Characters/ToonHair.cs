@@ -96,7 +96,7 @@ namespace LightMMORPG.Characters
             /// <summary>Point on the head: th = degrees around (0 front, + toward +x), y = bench height, off = pushed out.</summary>
             private Vector3 S(float th, float y, float off = 0f)
             {
-                var p = ToonHead.Surface(H, Rad(th), Fit(th, Mathf.Min(y, 1f)));
+                var p = ToonHead.Surface(H, Rad(th), Fit(th, Mathf.Min(y, 1f)), eyePlates: false);
                 return p + Outward(p) * off;
             }
 
@@ -127,7 +127,7 @@ namespace LightMMORPG.Characters
                     float y = Mathf.Min(H.Top - 0.001f, iy / (float)(NY - 1) * H.Top);
                     for (int k = 0; k < K; k++)
                     {
-                        var p = ToonHead.Surface(H, -Mathf.PI + 2f * Mathf.PI * k / K, y);
+                        var p = ToonHead.Surface(H, -Mathf.PI + 2f * Mathf.PI * k / K, y, eyePlates: false);
                         ang[k] = Mathf.Atan2(p.x, p.z);
                         rad[k] = Mathf.Sqrt(p.x * p.x + p.z * p.z);
                         order[k] = k;
@@ -193,7 +193,7 @@ namespace LightMMORPG.Characters
                         float phiEnd = h >= 0.5f ? Mathf.Acos(Mathf.Min(1f, (h - 0.5f) / 0.5f)) : Mathf.PI / 2f, dome = 0.5f * phiEnd;
                         float L = dome + Mathf.Max(0f, 0.5f - h), d = s * L;
                         float y = d <= dome ? 0.5f + 0.5f * Mathf.Cos(d / 0.5f) : 0.5f - (d - dome);
-                        var p = ToonHead.Surface(H, th, Fit(deg, y));
+                        var p = ToonHead.Surface(H, th, Fit(deg, y), eyePlates: false);
                         float tk = tuck > 0f ? Lerp(tuck, 1f, Smooth((y - 0.3f) / 0.3f)) : 1f;
                         float off = (capOff * (1f - 0.6f * Smooth((s - 0.75f) / 0.25f)) + capTop * (1f - s) * (1f - s)) * tk;
                         row[j] = G.Push(p + Outward(p) * off, 0.04f + 0.08f * s);
