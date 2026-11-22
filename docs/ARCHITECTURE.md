@@ -736,6 +736,7 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     (`Hollow`: half-width 0.173·(1-(y/0.7)²)^0.65, top at 0.70 hgt) tops out just over the head (0.62). Band: opaque-ish
     (a 0.78) with vertical streaks flowing up and a brighter rim; hollow: faint tint + flame flicks rising (`Flicks`).
     Premultiplied (HDR rgb for Bloom). `_Front = 1` draws only the flicks (over the fighter).
+    **Owner approved in game (2026-11-21, acb5c04): "Looks great".** Keep the traced outline; tune motion, not shape.
   - `VFX.AnimeAura`: two camera-facing (about the vertical) quads at the feet, flame 0.18 h behind the fighter, flicks
     0.16 h in front; the quad spans aura space x ±0.55, y -0.04..1.21 (`SpanX`/`SpanY`, fighter = 0.62); flares up when it appears, shrinks away when it stops; per-fighter
     time offset. `PlayerAura` uses it (charging: size 0.85, Power Surge: 1) in the rig's aura colour; the old capsule shell
