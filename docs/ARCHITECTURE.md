@@ -726,14 +726,17 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
 - Charge aura + aura colour (2026-11-19; owner: the classic anime flame aura from a reference clip, "1:1", lightning left out;
   players pick their aura colour).
   - `Resources/VFX/AnimeAura.shader` (bench `docs/bench/aura-bench.html`, same code in GLSL; keep the two in step).
-    Flowing-flame rewrite 2026-11-21 (owner: the old spiky egg was "not dynamic enough"; goal = the classic power-up clip
-    with the hero in it): polar fan from the feet (`FAN_O`); the edge is rows of needle tongues (5.5 and ~12.6 per radian)
-    whose lengths come from value noise scrolling outward, so tongues pump, sway (fbm warp) and tear off (fbm licks) as
-    they flow up / out; streak texture along the fan; outer sheet (dim see-through body, bright rim) + a paler inner
-    sheet; redrawn 24×/s (held 2-3 frames at 60 fps); tips fade at the quad edges. Premultiplied (HDR rgb for Bloom, a
-    little alpha so it reads on bright skies). `_Front = 1` draws only bright dashes flying up the fan.
+    Rewritten 2026-11-21 (owner: the spiky egg was "not dynamic enough"; a wide radial fan was then rejected as uneven
+    and too wide: "should end on a peak at the top, above the head, run along the body"). Now: a smooth teardrop
+    envelope (`Envelope`: narrow rounded base, fullest round the shoulders, concave taper to ONE peak at `ytop` 0.86-1.08
+    by power, head top = 0.62) plus side spikes (`Spikes`: sawtooth swell-and-snap, 5.5 per side, racing up at 2.2/s,
+    per-drawing size jitter) evaluated in sheared space (`y - lean·d`, lean 1.3 low → 3 high) so every tip leans up and
+    out; spikes fade out before the peak; the peak sways and flickers; small fbm licks; streaks / dashes in envelope-
+    normalised x so they converge on the peak; outer sheet (dim see-through body, bright rim) + a paler inner sheet
+    (mostly rim); redrawn 24×/s; rises from 60 % height as `_Fade` comes in. Premultiplied (HDR rgb for Bloom, a little
+    alpha so it reads on bright skies). `_Front = 1` draws only the rising dashes.
   - `VFX.AnimeAura`: two camera-facing (about the vertical) quads at the feet, flame 0.18 h behind the fighter, dashes
-    0.16 h in front; quad 1.855 × the fighter's height, `Aspect` 1.4 (wide for the fan); flares up when it appears, shrinks away when it stops; per-fighter
+    0.16 h in front; the quad spans aura space x ±0.42, y -0.04..1.21 (`SpanX`/`SpanY`, fighter = 0.62); flares up when it appears, shrinks away when it stops; per-fighter
     time offset. `PlayerAura` uses it (charging: size 0.85, Power Surge: 1) in the rig's aura colour; the old capsule shell
     is gone from the game (the menu keeps its soft shell outside the Body tab).
   - Aura colour: `FaceCustomization.auraColor` → `PlayerAppearance.AuraColors` (Gold, Flame, Crimson, Rose, Violet, Blue,

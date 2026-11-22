@@ -7,12 +7,12 @@
   @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg: #f1f1ee; --panel: #ffffff; --fg: #17181d; --dim: #5d6170; --line: #d9d9d3; --accent: #b08d00; color-scheme: light; } }
   :root[data-theme="light"] { --bg: #f1f1ee; --panel: #ffffff; --fg: #17181d; --dim: #5d6170; --line: #d9d9d3; --accent: #b08d00; color-scheme: light; }
   body { background: var(--bg); color: var(--fg); font: 15px/1.5 Inter, system-ui, sans-serif; }
-  .wrap { max-width: 1180px; margin: 0 auto; padding-block: 24px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .wrap { max-width: 980px; margin: 0 auto; padding-block: 24px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   h1 { font: 44px/1 "Bebas Neue", Impact, sans-serif; letter-spacing: .04em; margin: 0 0 4px; text-wrap: balance; }
   p.lede { color: var(--dim); margin: 0 0 18px; max-width: 65ch; }
-  .stage { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 18px; }
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 18px; }
   @media (max-width: 760px) { .stage { grid-template-columns: minmax(0, 1fr); } }
-  canvas { width: 100%; aspect-ratio: 980 / 805; max-width: 100%; display: block; border-radius: 10px; background: #000; }
+  canvas { width: 100%; aspect-ratio: 538 / 800; max-width: min(100%, 62vh); display: block; border-radius: 10px; background: #000; }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; min-width: 0; }
   .label { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); margin: 0 0 8px; font-weight: 600; }
   .swatches { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 16px; }
@@ -28,9 +28,9 @@
 
 <div class="wrap">
   <h1>Charge Aura</h1>
-  <p class="lede">The flame aura shown while charging (hold Charge) and, bigger, during Power Surge. A fan of long streaky tongues bursts out of the ground round the feet, out and up at the sides and straight up over the head, and keeps flowing outward: tongues pump, sway and tear off. It is drawn flat, facing the camera: the flame behind the fighter and bright dashes flying up in front. The drawing changes 24 times a second, like hand-drawn anime frames. Pick a colour to preview the Customize choices.</p>
+  <p class="lede">The flame aura shown while charging (hold Charge) and, bigger, during Power Surge. The flame hugs the body like a tall teardrop and ends in one sharp peak well over the head. Flame spikes race up both sides and melt into the peak, the peak sways and flickers, and streaks rise inside. It is drawn flat, facing the camera: the flame behind the fighter and bright dashes flying up in front. The drawing changes 24 times a second, like hand-drawn anime frames. Pick a colour to preview the Customize choices.</p>
   <div class="stage">
-    <canvas id="c" width="980" height="805"></canvas>
+    <canvas id="c" width="538" height="800"></canvas>
     <div class="panel">
       <p class="label">Aura colour</p>
       <div class="swatches" id="sw"></div>
@@ -83,13 +83,14 @@ const FRAG = `#version 300 es
 precision highp float;
 in vec2 vUv;
 out vec4 o;
-uniform float uTime, uStrength, uBg, uFig, uAspect;
+uniform float uTime, uStrength, uFade, uBg, uFig, uSpanX;
 uniform vec3 uColor;
 
-// Aura space: x right, y up, feet at 0, the fighter's head top near 0.62. The flame is a fan of long streaky tongues
-// that shoot out of the ground round the feet: out and up at the sides, straight up over the head. Everything flows
-// outward along the fan all the time (tongues pump, sway, tear off), redrawn 24 times a second like anime frames.
-// Two nested sheets: the big outer flame and a hotter, paler inner one; bright rims, a dim see-through body.
+// Aura space: x right, y up, feet at 0, the fighter's head top at 0.62. The flame hugs the body: a tall teardrop,
+// narrow at the feet, fullest round the shoulders, narrowing to one sharp peak well over the head. Flame spikes (slow
+// rise, sharp drop, so every tip points up) race up both sides and melt into the peak; the peak sways and flickers;
+// streaks and dashes rise inside; redrawn 24 times a second like anime frames. Two nested sheets: the outer flame
+// (dim see-through body, bright rim) and a hotter, paler inner one.
 float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 float vnoise(vec2 p) {
   vec2 i = floor(p), f = fract(p);
@@ -98,48 +99,40 @@ float vnoise(vec2 p) {
 }
 float fbm(vec2 p) { return vnoise(p) * 0.57 + vnoise(p * 2.03 + 17.1) * 0.29 + vnoise(p * 4.1 + 31.7) * 0.14; }
 
-const vec2 FAN_O = vec2(0.0, -0.01);   // the fan's origin, at the feet
-
-// one row of tongues across the fan: k = fan angle * count; each tongue is a needle whose length flows outward over time
-float tongues(float k, float r, float t, float seed) {
-  float id = floor(k), f = fract(k);
-  float tri = 1.0 - abs(2.0 * f - 1.0);
-  float h = vnoise(vec2(id * 1.73 + seed, r * 1.4 - t * 2.4));
-  h = smoothstep(0.1, 0.9, h);
-  return pow(tri, 1.35) * h;
+// the smooth envelope: half width at height y for a flame whose peak is at ytop
+float envelope(float y, float ytop, float wmax) {
+  float u = clamp(y / ytop, 0.0, 1.0);
+  float body = mix(0.58, 1.0, smoothstep(0.0, 0.4, u)) * sqrt(clamp((y + 0.035) / 0.09, 0.0, 1.0));   // rounded base
+  float taper = pow(clamp((1.0 - u) / 0.52, 0.0, 1.0), 1.3);                                         // concave sides to the peak
+  return wmax * body * taper;
 }
 
-// flame shape: < 1 inside, 1 on the edge. q = point in aura space, t = drawing time
-float flame(vec2 q, float t, float seed, float spread) {
-  vec2 d = q - FAN_O;
-  float r = length(d);
-  float a = atan(d.x, d.y);                                   // 0 straight up, +-1.57 flat out
-  float base = mix(0.34, 1.0, pow(max(cos(a * spread), 0.0), 1.3)) * 0.98;
-  float warp = (fbm(vec2(a * 2.2 + seed, r * 1.8 - t * 2.8)) - 0.5) * 1.1;      // tongues sway and lean as they rise
-  float k = a * 5.5 + warp;
-  float tg = max(tongues(k, r, t, seed), tongues(k * 2.3 + 0.37, r * 1.2, t * 1.25, seed + 31.0) * 0.75);
-  float R = base * (0.68 + 0.5 * tg);
-  float s = r / max(R, 1e-3);
-  // licks that tear off the edge and rise away
-  s += (fbm(vec2(a * 8.0 + seed, r * 3.2 - t * 4.2)) - 0.5) * 0.32 * smoothstep(0.55, 1.0, s);
-  return s;
+// flame spikes up one side (side 0 left, 1 right), v counting spikes up the side: each one swells slowly and snaps
+// back; the shear in flame() leans it up, so every tip points up and out. They race up the side and every drawing
+// redraws them a little differently.
+float spikes(float u, float side, float t, float n, float seed) {
+  float v = u * 5.5 - t * 2.2 + side * 0.5 + seed;
+  float id = floor(v), f = fract(v);
+  float amp = mix(0.55, 1.0, h21(vec2(id, side * 7.0 + 3.0 + seed)));
+  amp *= mix(0.82, 1.15, h21(vec2(id + side * 50.0, n + seed)));
+  return amp * pow(f, 1.8) * smoothstep(1.0, 0.93, f);
 }
 
-// the streak texture running along the fan (motion-blurred brush strokes)
-float streaks(vec2 q, float t, float seed) {
-  vec2 d = q - FAN_O;
-  float r = length(d), a = atan(d.x, d.y);
-  return vnoise(vec2(a * 24.0 + seed, r * 1.3 - t * 3.2)) * 0.7 + vnoise(vec2(a * 60.0 + seed * 2.0, r * 2.2 - t * 4.0)) * 0.3;
+// flame shape: < 1 inside, 1 on the edge. t = drawing time, n = drawing number
+float flame(vec2 p, float t, float n, float ytop, float wmax, float amp, float sway, float seed) {
+  float u = p.y / ytop;
+  float x = p.x - sway * u * u * wmax / 0.2;                            // the upper part sways
+  float W = envelope(p.y, ytop, wmax);
+  float A = amp * mix(1.0, 0.6, clamp(u, 0.0, 1.0)) * smoothstep(0.0, 0.08, u) * smoothstep(0.98, 0.7, u);
+  float d = max(abs(x) - W, 0.0);                                       // how far out past the smooth envelope
+  float lean = mix(1.3, 3.0, clamp(u, 0.0, 1.0));                       // spikes lean out low down, point up high up
+  float g = spikes((p.y - lean * d) / ytop, x < 0.0 ? 0.0 : 1.0, t, n, seed);
+  float s = abs(x) / max(W + A * g, 0.002);
+  s += (fbm(vec2(x / max(W, 0.02) * 3.0 + seed, p.y * 4.0 - t * 4.5)) - 0.5) * 0.14 * smoothstep(0.7, 1.0, s);   // licks tear off
+  return u > 0.995 ? max(s, 1.0 + (u - 0.995) * 40.0) : s;
 }
 
-float coverOf(float s) { float w = max(fwidth(s), 1e-4) * 0.8; return 1.0 - smoothstep(1.0 - w, 1.0 + w, s); }
-
-// rising strokes inside the aura (front layer): short bright dashes flying up the fan
-float strokes(vec2 q, float t) {
-  vec2 d = q - FAN_O;
-  float r = length(d), a = atan(d.x, d.y);
-  return smoothstep(0.86, 0.93, vnoise(vec2(a * 34.0, r * 5.0 - t * 7.0)));
-}
+float coverOf(float s) { float w = clamp(fwidth(s), 1e-4, 0.5) * 0.8; return 1.0 - smoothstep(1.0 - w, 1.0 + w, s); }
 
 float sdCap(vec2 p, vec2 a, vec2 b, float r) { vec2 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0); return length(pa - ba * h) - r; }
 float figure(vec2 p) {   // stand-in fighter (bench only)
@@ -154,41 +147,47 @@ float figure(vec2 p) {   // stand-in fighter (bench only)
   return d;
 }
 
-// one aura layer, premultiplied (rgb added, a covers). front = 1: only the rising strokes (drawn over the fighter)
+// one aura layer, premultiplied (rgb added, a covers). front = 1: only the rising dashes (drawn over the fighter)
 vec4 aura(vec2 p, vec2 uv, float t, float front) {
-  p /= uStrength;                         // smaller while charging, full size in Power Surge
-  float tn = floor(t * 24.0) / 24.0;      // drawing time (held 2-3 frames at 60 fps)
+  float k = clamp((uStrength - 0.55) / 0.45, 0.0, 1.0);    // 0 a weak charge .. 1 Power Surge
+  float n = floor(t * 24.0);                               // drawing number (held 2-3 frames at 60 fps)
+  float tn = n / 24.0;
+  float ytop = mix(0.86, 1.08, k) * mix(0.6, 1.0, uFade) * (1.0 + (h21(vec2(n, 9.0)) - 0.5) * 0.05);   // rises as it appears, flickers
+  float wmax = mix(0.17, 0.2, k), amp = mix(0.1, 0.13, k);
+  float sway = 0.03 * sin(tn * 2.6);
   vec3 c = uColor;
-  float ground = smoothstep(-0.03, 0.02, p.y);
-  float sA = flame(p, tn, 0.0, 1.0);
+  // tips that reach the quad's edge thin out instead of being cut off
+  float edge = smoothstep(1.0, 0.95, uv.y) * smoothstep(0.0, 0.04, uv.x) * smoothstep(1.0, 0.96, uv.x);
+  float fade = uFade * min(uStrength * 1.25, 1.0) * edge;
+  float ground = smoothstep(-0.04, -0.01, p.y);
+  float sA = flame(p, tn, n, ytop, wmax, amp, sway, 0.0);
   float inA = coverOf(sA) * ground;
-  // tongue tips that reach the quad's edge thin out instead of being cut off
-  float edge = smoothstep(1.0, 0.9, uv.y) * smoothstep(0.0, 0.05, uv.x) * smoothstep(1.0, 0.95, uv.x);
-  float fade = min(uStrength * 1.25, 1.0) * edge;
+  float xn = p.x / max(envelope(p.y, ytop, wmax), 0.015);   // across the flame, -1 .. 1: streaks converge on the peak
   if (front > 0.5) {
-    float st = strokes(p, tn) * inA * smoothstep(0.04, 0.16, p.y) * smoothstep(0.98, 0.6, sA);
+    float st = smoothstep(0.86, 0.93, vnoise(vec2(xn * 6.0, p.y * 6.0 - tn * 7.0))) * inA * smoothstep(0.04, 0.16, p.y) * smoothstep(0.98, 0.6, sA);
     return vec4(c * st * 0.9, 0.0) * fade;
   }
-  float sB = flame(p / 0.74 + vec2(0.0, 0.03), tn * 1.15 + 3.7, 57.0, 1.08);
+  float sB = flame(p, tn * 1.2 + 3.7, n + 77.0, ytop * 0.8, wmax * 0.62, amp * 0.7, sway, 13.0);
   float inB = coverOf(sB) * ground;
-  float str = streaks(p, tn, 0.0);
+  float str = vnoise(vec2(xn * 7.0, p.y * 2.2 - tn * 3.2)) * 0.7 + vnoise(vec2(xn * 17.0 + 5.0, p.y * 3.6 - tn * 4.2)) * 0.3;
   float eA = smoothstep(0.5, 1.0, sA);                  // 0 deep inside .. 1 at the rim
   float eB = smoothstep(0.45, 1.0, sB);
-  float rimA = smoothstep(0.86, 0.985, sA) * inA;        // bright outline round every tongue
-  float bodyA = inA * mix(0.08, 0.85, eA * eA) * mix(0.45, 1.35, str);   // dim see-through body, brighter to the rim
-  float bodyB = inB * mix(0.04, 0.95, eB * eB * eB) * mix(0.55, 1.25, str);   // inner sheet: hotter, paler
-  vec3 hot = mix(c, vec3(1.0), 0.5);
-  vec3 rgb = c * bodyA + hot * (bodyB * 0.6 + rimA * 0.55);
+  float rimA = smoothstep(0.86, 0.985, sA) * inA;        // bright outline round every spike
+  float rimB = smoothstep(0.86, 0.985, sB) * inB;
+  float bodyA = inA * mix(0.08, 0.85, eA * eA) * mix(0.45, 1.35, str);          // dim see-through body, brighter to the rim
+  float bodyB = inB * 0.8 * eB * eB * eB * eB * mix(0.55, 1.25, str);           // inner sheet: hotter, paler, mostly rim
+  vec3 hot = mix(c, vec3(1.0), 0.35);
+  vec3 rgb = c * bodyA + hot * (bodyB * 0.5 + rimB * 0.45 + rimA * 0.55);
   rgb += c * exp(-max(sA - 1.0, 0.0) * 16.0) * (1.0 - inA) * 0.08 * ground;   // soft glow just outside the edge
   float a = inA * mix(0.18, 0.7, eA) + inB * 0.1 * eB;
   return vec4(rgb, min(a, 0.9)) * fade;
 }
 
 void main() {
-  vec2 p = vec2((vUv.x - 0.5) * uAspect, vUv.y * 1.15 - 0.04);
+  vec2 p = vec2((vUv.x - 0.5) * uSpanX, vUv.y * 1.25 - 0.04);
   float t = uTime;
   vec3 bg = uBg > 0.5 ? mix(vec3(0.62, 0.78, 0.95), vec3(0.95, 0.9, 0.8), smoothstep(0.6, 0.0, vUv.y)) : vec3(0.0);
-  if (uBg > 0.5 && vUv.y < 0.035) bg = vec3(0.45, 0.6, 0.35);
+  if (uBg > 0.5 && vUv.y < 0.032) bg = vec3(0.45, 0.6, 0.35);
   vec4 back = aura(p, vUv, t, 0.0);
   vec3 col = bg * (1.0 - back.a) + back.rgb;
   if (uFig > 0.5) {
@@ -215,7 +214,7 @@ window.auraTime = null;   // debug hook: set a number to freeze time
 function frame(ms) {
   const t = window.auraTime ?? ms / 1000;
   gl.uniform1f(U("uTime"), t); gl.uniform1f(U("uStrength"), state.strength); gl.uniform1f(U("uBg"), state.bg);
-  gl.uniform1f(U("uFig"), state.fig); gl.uniform1f(U("uAspect"), cv.width / cv.height * 1.15);
+  gl.uniform1f(U("uFig"), state.fig); gl.uniform1f(U("uSpanX"), cv.width / cv.height * 1.25); gl.uniform1f(U("uFade"), 1.0);
   gl.uniform3fv(U("uColor"), state.color.map(v => Math.pow(v, 2.2) * 0.85));
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   requestAnimationFrame(frame);
