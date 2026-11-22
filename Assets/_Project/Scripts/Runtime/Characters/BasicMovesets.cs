@@ -19,6 +19,12 @@ namespace LightMMORPG.Characters
         public Vector3 ArmL, ArmR; public float TwistL, TwistR;
         /// <summary>Hands: 0 = fist (every attack), 1 = open flat hand (the run's arm thrown back).</summary>
         public float OpenL, OpenR;
+        /// <summary>
+        /// Where the elbow points, in the chest's frame (+x right, +y up, +z forward); the length (0..1) is how much it overrides
+        /// the solver's own elbow (<see cref="AttackPoseSolver.ElbowPole"/>). Zero = the solver's. The heavy's cocked haymaker
+        /// (the elbow up and back, the fist at the shoulder) needs it; the solver alone always drops a raised elbow.
+        /// </summary>
+        public Vector3 ElbowL, ElbowR;
         public Vector3 LegL, LegR; public float FootYawL, FootYawR, FootPitchL, FootPitchR;
 
         public AttackPose Clone() => (AttackPose)MemberwiseClone();
@@ -36,6 +42,7 @@ namespace LightMMORPG.Characters
             o.ArmL = Vector3.LerpUnclamped(a.ArmL, b.ArmL, t); o.ArmR = Vector3.LerpUnclamped(a.ArmR, b.ArmR, t);
             o.TwistL = L(a.TwistL, b.TwistL); o.TwistR = L(a.TwistR, b.TwistR);
             o.OpenL = L(a.OpenL, b.OpenL); o.OpenR = L(a.OpenR, b.OpenR);
+            o.ElbowL = Vector3.LerpUnclamped(a.ElbowL, b.ElbowL, t); o.ElbowR = Vector3.LerpUnclamped(a.ElbowR, b.ElbowR, t);
             o.LegL = Vector3.LerpUnclamped(a.LegL, b.LegL, t); o.LegR = Vector3.LerpUnclamped(a.LegR, b.LegR, t);
             o.FootYawL = L(a.FootYawL, b.FootYawL); o.FootYawR = L(a.FootYawR, b.FootYawR);
             o.FootPitchL = L(a.FootPitchL, b.FootPitchL); o.FootPitchR = L(a.FootPitchR, b.FootPitchR);
@@ -57,6 +64,7 @@ namespace LightMMORPG.Characters
             o.ArmL = a.ArmL * wa + b.ArmL * wb + c.ArmL * wc + d.ArmL * wd; o.ArmR = a.ArmR * wa + b.ArmR * wb + c.ArmR * wc + d.ArmR * wd;
             o.TwistL = S(a.TwistL, b.TwistL, c.TwistL, d.TwistL); o.TwistR = S(a.TwistR, b.TwistR, c.TwistR, d.TwistR);
             o.OpenL = S(a.OpenL, b.OpenL, c.OpenL, d.OpenL); o.OpenR = S(a.OpenR, b.OpenR, c.OpenR, d.OpenR);
+            o.ElbowL = a.ElbowL * wa + b.ElbowL * wb + c.ElbowL * wc + d.ElbowL * wd; o.ElbowR = a.ElbowR * wa + b.ElbowR * wb + c.ElbowR * wc + d.ElbowR * wd;
             o.LegL = a.LegL * wa + b.LegL * wb + c.LegL * wc + d.LegL * wd; o.LegR = a.LegR * wa + b.LegR * wb + c.LegR * wc + d.LegR * wd;
             o.FootYawL = S(a.FootYawL, b.FootYawL, c.FootYawL, d.FootYawL); o.FootYawR = S(a.FootYawR, b.FootYawR, c.FootYawR, d.FootYawR);
             o.FootPitchL = S(a.FootPitchL, b.FootPitchL, c.FootPitchL, d.FootPitchL); o.FootPitchR = S(a.FootPitchR, b.FootPitchR, c.FootPitchR, d.FootPitchR);
@@ -80,6 +88,7 @@ namespace LightMMORPG.Characters
             o.TorsoYaw = -a.TorsoYaw; o.TorsoPitch = a.TorsoPitch; o.TorsoRoll = -a.TorsoRoll;
             o.HeadYaw = -a.HeadYaw; o.HeadPitch = a.HeadPitch;
             o.ArmL = M(a.ArmR); o.ArmR = M(a.ArmL); o.TwistL = -a.TwistR; o.TwistR = -a.TwistL; o.OpenL = a.OpenR; o.OpenR = a.OpenL;
+            o.ElbowL = M(a.ElbowR); o.ElbowR = M(a.ElbowL);
             o.LegL = M(a.LegR); o.LegR = M(a.LegL); o.FootYawL = -a.FootYawR; o.FootYawR = -a.FootYawL; o.FootPitchL = a.FootPitchR; o.FootPitchR = a.FootPitchL;
         }
     }
@@ -330,97 +339,154 @@ namespace LightMMORPG.Characters
                     K(0.40f, KeyEase.Smooth, P()),
                 },
             };
-            // the charged heavy (owner 2026-11-21: "pull back the fist and swing forward with extreme strength", the longer the hold
-            // the harder it hits and the further the opponent flies). Made on a copy of the Locomotion Bench with the game's solver.
-            // Wind-up: the body turns away (chest ~48°, the head still on the target), the right fist cocked back beside the head,
-            // the left arm reaching for the target with the hand half open, weight sinking onto the back leg. Full charge coils
-            // deeper (fist further back, lower, leaning back). Swing: the hips and shoulders whip round (chest -54°), the left foot
-            // drives forward into a lunge, the right fist shoots out at the opponent's solar plexus and holds, then a step back.
-            var pull = P(p =>
+            // the charged heavy, from the owner's reference clip (2026-11-22: "base it on this video 1:1", the face close-ups
+            // left out): a cocked haymaker to the face that launches the opponent, a long follow-through, then a slump. Traced on a
+            // copy of the Locomotion Bench with the game's solver, each key rendered beside its frame from a matching camera.
+            // The clip's wind-up shot is mirrored (the punch itself is a right), so it is done here with the right hand.
+            // Hold: the fist comes up beside the cheek and clenches, then the elbow swings up and back, the fist at the shoulder,
+            // the chest turned 48° away and leaning in, the head on the target, the left arm hanging loose. Full charge coils
+            // deeper (elbow higher, lower, more lean). Release: the elbow leads round at shoulder height, the fist lands on the
+            // opponent's face with the head thrown back, sweeps on up and across the face to the left (the clip's long held
+            // follow-through: arm straight over the head, left arm out low, chest arched and leaning left), then the fighter slumps
+            // forward, arms hanging, and steps back into the guard.
+            var raise = P(p =>
             {
-                p.RootPos = new Vector3(0f, 0f, -0.07f); p.RootYaw = 26f; p.RootPitch = -2f;
-                p.HipsPos = new Vector3(0f, -0.15f, -0.02f); p.HipsYaw = 10f; p.HipsPitch = 2f;
-                p.TorsoYaw = 12f; p.TorsoPitch = 0f; p.TorsoRoll = -3f;
-                p.HeadPitch = -4f;
-                p.ArmR = new Vector3(0.38f, 1.58f, -0.46f); p.TwistR = 20f;
-                p.ArmL = new Vector3(-0.08f, 1.52f, 0.52f); p.TwistL = -40f; p.OpenL = 0.5f;
-                p.LegL = new Vector3(-0.22f, 0.105f, 0.38f); p.FootYawL = 20f;
-                p.LegR = new Vector3(0.26f, 0.105f, -0.34f); p.FootYawR = 50f;
+                p.RootPos = new Vector3(0f, 0f, -0.02f); p.RootYaw = 18f; p.RootPitch = 2f; p.RootRoll = 0f;
+                p.HipsPos = new Vector3(0f, -0.10f, -0.01f); p.HipsYaw = 6f; p.HipsPitch = 5f; p.HipsRoll = 0f;
+                p.TorsoYaw = 8f; p.TorsoPitch = 12f; p.TorsoRoll = -2f; p.HeadYaw = 0f; p.HeadPitch = 0f;
+                p.ArmR = new Vector3(0.224f, 1.725f, 0.051f); p.TwistR = 20f; p.OpenR = 0f; p.ElbowR = new Vector3(0.984f, 0.165f, -0.018f);
+                p.ArmL = new Vector3(-0.12f, 1.28f, 0.32f); p.TwistL = -15f; p.OpenL = 0.1f;
+                // the lead foot steps out a little (lifted mid-step); the back foot stays where the guard has it
+                p.LegL = new Vector3(-0.19f, 0.15f, 0.30f); p.FootYawL = 16f; p.FootPitchL = 0f;
+                p.LegR = new Vector3(0.22f, 0.105f, -0.22f); p.FootYawR = 34f; p.FootPitchR = 0f;
+            });
+            var cock = P(p =>
+            {
+                p.RootPos = new Vector3(0f, 0f, -0.06f); p.RootYaw = 28f; p.RootPitch = 8f; p.RootRoll = 0f;
+                p.HipsPos = new Vector3(0f, -0.15f, -0.04f); p.HipsYaw = 8f; p.HipsPitch = 12f; p.HipsRoll = 0f;
+                p.TorsoYaw = 12f; p.TorsoPitch = 32f; p.TorsoRoll = -4f; p.HeadYaw = 0f; p.HeadPitch = 0f;
+                p.ArmR = new Vector3(0.326f, 1.568f, 0.089f); p.TwistR = 20f; p.OpenR = 0f; p.ElbowR = new Vector3(0.909f, 0.075f, -0.40f);
+                p.ArmL = new Vector3(-0.06f, 1.02f, 0.36f); p.TwistL = -10f; p.OpenL = 0.15f;
+                p.LegL = new Vector3(-0.20f, 0.105f, 0.36f); p.FootYawL = 18f; p.FootPitchL = 0f;
+                p.LegR = new Vector3(0.22f, 0.105f, -0.22f); p.FootYawR = 40f; p.FootPitchR = 0f;
             });
             var coiled = P(p =>
             {
-                p.RootPos = new Vector3(0f, 0f, -0.12f); p.RootYaw = 30f; p.RootPitch = -4f;
-                p.HipsPos = new Vector3(0f, -0.22f, -0.03f); p.HipsYaw = 12f; p.HipsPitch = 0f;
-                p.TorsoYaw = 14f; p.TorsoPitch = -4f; p.TorsoRoll = -5f;
-                p.HeadPitch = -2f;
-                p.ArmR = new Vector3(0.42f, 1.62f, -0.56f); p.TwistR = 20f;
-                p.ArmL = new Vector3(-0.09f, 1.50f, 0.55f); p.TwistL = -45f; p.OpenL = 0.6f;
-                p.LegL = new Vector3(-0.24f, 0.105f, 0.42f); p.FootYawL = 22f;
-                p.LegR = new Vector3(0.28f, 0.105f, -0.38f); p.FootYawR = 52f;
+                p.RootPos = new Vector3(0f, 0f, -0.10f); p.RootYaw = 33f; p.RootPitch = 10f; p.RootRoll = 0f;
+                p.HipsPos = new Vector3(0f, -0.22f, -0.06f); p.HipsYaw = 10f; p.HipsPitch = 14f; p.HipsRoll = 0f;
+                p.TorsoYaw = 13f; p.TorsoPitch = 36f; p.TorsoRoll = -5f; p.HeadYaw = 0f; p.HeadPitch = -2f;
+                p.ArmR = new Vector3(0.366f, 1.495f, 0.007f); p.TwistR = 20f; p.OpenR = 0f; p.ElbowR = new Vector3(0.873f, 0.246f, -0.419f);
+                p.ArmL = new Vector3(-0.05f, 0.98f, 0.38f); p.TwistL = -10f; p.OpenL = 0.15f;
+                p.LegL = new Vector3(-0.22f, 0.105f, 0.42f); p.FootYawL = 20f; p.FootPitchL = 0f;
+                p.LegR = new Vector3(0.24f, 0.105f, -0.26f); p.FootYawR = 44f; p.FootPitchR = 0f;
+            });
+            // the follow-through, struck and then held (the head comes down a touch, the arm sinks)
+            AttackPose Follow(float torsoPitch, float torsoRoll, float headYaw, float headPitch, Vector3 armR) => P(p =>
+            {
+                p.RootPos = new Vector3(0f, 0f, 0.44f); p.RootYaw = -26f; p.RootPitch = -3f; p.RootRoll = 0f;
+                p.HipsPos = new Vector3(-0.06f, -0.16f, 0f); p.HipsYaw = -8f; p.HipsPitch = 0f; p.HipsRoll = 0f;
+                p.TorsoYaw = -10f; p.TorsoPitch = torsoPitch; p.TorsoRoll = torsoRoll; p.HeadYaw = headYaw; p.HeadPitch = headPitch;
+                p.ArmR = armR; p.TwistR = 50f; p.OpenR = 0f;
+                p.ArmL = new Vector3(-0.589f, 1.171f, -0.047f); p.TwistL = -20f; p.OpenL = 0.1f;
+                p.LegL = new Vector3(-0.24f, 0.105f, 0.80f); p.FootYawL = -10f; p.FootPitchL = 0f;
+                p.LegR = new Vector3(0.30f, 0.105f, -0.02f); p.FootYawR = 0f; p.FootPitchR = 35f;
+            });
+            // the slump after it: bent over the front knee, head hanging, both arms loose
+            AttackPose Slump(float hipsY, float hipsPitch, float torsoPitch, float headPitch, Vector3 armR, Vector3 armL) => P(p =>
+            {
+                p.RootPos = new Vector3(0f, 0f, 0.36f); p.RootYaw = -10f; p.RootPitch = 8f; p.RootRoll = 0f;
+                p.HipsPos = new Vector3(0f, hipsY, 0f); p.HipsYaw = -4f; p.HipsPitch = hipsPitch; p.HipsRoll = 0f;
+                p.TorsoYaw = -4f; p.TorsoPitch = torsoPitch; p.TorsoRoll = 0f; p.HeadYaw = 0f; p.HeadPitch = headPitch;
+                p.ArmR = armR; p.TwistR = 20f; p.OpenR = 0.35f;
+                p.ArmL = armL; p.TwistL = -20f; p.OpenL = 0.35f;
+                // the feet stay where the follow-through planted them (the back heel comes down)
+                p.LegL = new Vector3(-0.24f, 0.105f, 0.80f); p.FootYawL = 0f; p.FootPitchL = 0f;
+                p.LegR = new Vector3(0.30f, 0.105f, -0.02f); p.FootYawR = 14f; p.FootPitchR = 10f;
             });
             var heavy = new HeavyAttack
             {
                 Name = "Charged punch", Limb = StrikeLimb.HandR, Coiled = coiled,
                 WindUp = new AttackMove
                 {
-                    Name = "Charged punch wind-up", Limb = StrikeLimb.HandR, Hit = 0.22f, Streak = new Vector2(-1f, -1f), Length = 0.22f,
+                    Name = "Charged punch wind-up", Limb = StrikeLimb.HandR, Hit = 0.30f, Streak = new Vector2(-1f, -1f), Length = 0.30f,
                     Keys = new[]
                     {
                         K(0f, KeyEase.Smooth, P()),
-                        K(0.07f, KeyEase.Smooth, P(p =>
-                        {
-                            p.RootYaw = 18f; p.HipsPos = new Vector3(0f, -0.10f, 0f);
-                            p.ArmR = new Vector3(0.18f, 1.46f, 0.02f); p.TwistR = 20f; p.ArmL = new Vector3(-0.07f, 1.58f, 0.38f);
-                        })),
-                        K(0.22f, KeyEase.Smooth, pull),
+                        // the fist comes up beside the cheek and clenches, the elbow out to the side
+                        K(0.10f, KeyEase.Smooth, raise),
+                        // cocked: the elbow up and back, the fist at the shoulder, leaning in
+                        K(0.30f, KeyEase.Smooth, cock),
                     },
                 },
                 Swing = new AttackMove
                 {
-                    Name = "Charged punch", Limb = StrikeLimb.HandR, Hit = 0.09f, Streak = new Vector2(0.03f, 0.15f), Length = 0.62f, Big = true,
+                    Name = "Charged punch", Limb = StrikeLimb.HandR, Hit = 0.10f, Streak = new Vector2(0.03f, 0.20f), Length = 1.02f, Big = true,
                     Keys = new[]
                     {
-                        K(0f, KeyEase.Smooth, pull),
-                        // the hips lead: the body starts turning and driving forward, the fist passing beside the right shoulder
-                        K(0.04f, KeyEase.In, P(p =>
+                        K(0f, KeyEase.Smooth, cock),
+                        // the elbow leads round at shoulder height, the fist beside the face, the lead foot driving in
+                        K(0.05f, KeyEase.In, P(p =>
                         {
-                            p.RootPos = new Vector3(0f, 0f, 0.10f); p.RootYaw = 8f; p.RootPitch = 3f;
-                            p.HipsPos = new Vector3(0f, -0.21f, 0f); p.HipsYaw = 0f; p.HipsPitch = 6f;
-                            p.TorsoYaw = 4f; p.TorsoPitch = 8f; p.HeadPitch = -10f;
-                            p.ArmR = new Vector3(0.34f, 1.52f, 0.02f); p.TwistR = 40f; p.ArmL = new Vector3(-0.16f, 1.46f, 0.30f); p.TwistL = -35f;
-                            p.LegL = new Vector3(-0.21f, 0.16f, 0.58f); p.FootYawL = 10f;
-                            p.LegR = new Vector3(0.27f, 0.105f, -0.34f); p.FootYawR = 40f; p.FootPitchR = 15f;
+                            p.RootPos = new Vector3(0f, 0f, 0.12f); p.RootYaw = 8f; p.RootPitch = 4f; p.RootRoll = 0f;
+                            p.HipsPos = new Vector3(0f, -0.19f, 0f); p.HipsYaw = -2f; p.HipsPitch = 8f; p.HipsRoll = 0f;
+                            p.TorsoYaw = 2f; p.TorsoPitch = 14f; p.TorsoRoll = 0f; p.HeadYaw = 0f; p.HeadPitch = -8f;
+                            p.ArmR = new Vector3(0.225f, 1.644f, 0.431f); p.TwistR = 35f; p.OpenR = 0f; p.ElbowR = new Vector3(0.871f, 0.407f, 0.274f);
+                            p.ArmL = new Vector3(-0.36f, 1.22f, -0.02f); p.TwistL = -25f; p.OpenL = 0.1f;
+                            p.LegL = new Vector3(-0.21f, 0.16f, 0.60f); p.FootYawL = 8f; p.FootPitchL = 0f;
+                            p.LegR = new Vector3(0.22f, 0.105f, -0.22f); p.FootYawR = 36f; p.FootPitchR = 15f;
                         })),
-                        // impact: lunge, the whole body behind the fist (it overreaches, so the arm is straight), back heel up
-                        K(0.09f, KeyEase.Snap, P(p =>
+                        // impact: the fist on the opponent's face (it overreaches, so the arm is straight), the head thrown back,
+                        // the left arm hanging out to the side, lunging onto the front foot with the back heel up
+                        K(0.10f, KeyEase.Snap, P(p =>
                         {
-                            p.RootPos = new Vector3(0f, 0f, 0.42f); p.RootYaw = -26f; p.RootPitch = 8f; p.RootRoll = -4f;
-                            p.HipsPos = new Vector3(0f, -0.22f, 0f); p.HipsYaw = -14f; p.HipsPitch = 12f;
-                            p.TorsoYaw = -14f; p.TorsoPitch = 18f; p.HeadPitch = -22f;
-                            p.ArmR = new Vector3(0.02f, 1.32f, 1.30f); p.TwistR = 70f; p.ArmL = new Vector3(-0.22f, 1.36f, 0.08f); p.TwistL = -30f;
-                            p.LegL = new Vector3(-0.20f, 0.105f, 0.78f); p.FootYawL = 0f;
-                            p.LegR = new Vector3(0.22f, 0.105f, -0.10f); p.FootYawR = 10f; p.FootPitchR = 35f;
+                            p.RootPos = new Vector3(0f, 0f, 0.40f); p.RootYaw = -22f; p.RootPitch = 3f; p.RootRoll = 0f;
+                            p.HipsPos = new Vector3(0f, -0.17f, 0f); p.HipsYaw = -8f; p.HipsPitch = 4f; p.HipsRoll = 0f;
+                            p.TorsoYaw = -10f; p.TorsoPitch = -2f; p.TorsoRoll = 4f; p.HeadYaw = 0f; p.HeadPitch = -32f;
+                            p.ArmR = new Vector3(0f, 1.92f, 1.20f); p.TwistR = 60f; p.OpenR = 0f;
+                            p.ArmL = new Vector3(-0.461f, 1.033f, 0.293f); p.TwistL = -20f; p.OpenL = 0.3f;
+                            p.LegL = new Vector3(-0.22f, 0.105f, 0.80f); p.FootYawL = -4f; p.FootPitchL = 0f;
+                            p.LegR = new Vector3(0.24f, 0.105f, -0.06f); p.FootYawR = 6f; p.FootPitchR = 32f;
                         })),
-                        K(0.28f, KeyEase.Smooth, P(p =>
+                        // the fist sweeps on, up and to the left, the arm straight
+                        K(0.16f, KeyEase.Smooth, P(p =>
                         {
-                            p.RootPos = new Vector3(0f, 0f, 0.44f); p.RootYaw = -25f; p.RootPitch = 8f; p.RootRoll = -4f;
-                            p.HipsPos = new Vector3(0f, -0.23f, 0f); p.HipsYaw = -14f; p.HipsPitch = 12f;
-                            p.TorsoYaw = -14f; p.TorsoPitch = 18f; p.HeadPitch = -22f;
-                            p.ArmR = new Vector3(0.03f, 1.33f, 1.24f); p.TwistR = 65f; p.ArmL = new Vector3(-0.22f, 1.36f, 0.08f); p.TwistL = -30f;
-                            p.LegL = new Vector3(-0.20f, 0.105f, 0.78f); p.FootYawL = 0f;
-                            p.LegR = new Vector3(0.22f, 0.105f, -0.10f); p.FootYawR = 10f; p.FootPitchR = 35f;
+                            p.RootPos = new Vector3(0f, 0f, 0.43f); p.RootYaw = -26f; p.RootPitch = 0f; p.RootRoll = 0f;
+                            p.HipsPos = new Vector3(-0.03f, -0.17f, 0f); p.HipsYaw = -8f; p.HipsPitch = 2f; p.HipsRoll = 0f;
+                            p.TorsoYaw = -10f; p.TorsoPitch = -8f; p.TorsoRoll = 12f; p.HeadYaw = -25f; p.HeadPitch = -38f;
+                            p.ArmR = new Vector3(-0.191f, 1.836f, 0.851f); p.TwistR = 55f; p.OpenR = 0f;
+                            p.ArmL = new Vector3(-0.519f, 1.096f, 0.102f); p.TwistL = -20f; p.OpenL = 0.2f;
+                            p.LegL = new Vector3(-0.23f, 0.105f, 0.80f); p.FootYawL = -8f; p.FootPitchL = 0f;
+                            p.LegR = new Vector3(0.27f, 0.105f, -0.04f); p.FootYawR = 3f; p.FootPitchR = 34f;
                         })),
-                        // recovery: a step back into the guard (the lead foot lifts, so the lunge doesn't skate back)
-                        K(0.45f, KeyEase.Smooth, P(p =>
+                        // the follow-through: the arm straight across the face and over to the left, held while the opponent flies
+                        K(0.24f, KeyEase.Smooth, Follow(-14f, 22f, -50f, -40f, new Vector3(-0.343f, 1.847f, 0.28f))),
+                        K(0.52f, KeyEase.Smooth, Follow(-12f, 20f, -45f, -34f, new Vector3(-0.323f, 1.797f, 0.30f))),
+                        // the slump
+                        K(0.70f, KeyEase.Smooth, Slump(-0.27f, 22f, 40f, 40f, new Vector3(0.121f, 0.673f, 1.01f), new Vector3(-0.366f, 0.695f, 0.825f))),
+                        K(0.82f, KeyEase.Smooth, Slump(-0.29f, 24f, 43f, 44f, new Vector3(0.116f, 0.629f, 1.027f), new Vector3(-0.372f, 0.652f, 0.842f))),
+                        // back into the guard in two steps, so the lunge doesn't skate: the lead foot lifts and comes back...
+                        K(0.92f, KeyEase.Smooth, P(p =>
                         {
-                            p.RootPos = new Vector3(0f, 0f, 0.20f); p.RootYaw = -6f;
-                            p.HipsPos = new Vector3(0f, -0.13f, 0f); p.HipsYaw = -4f; p.HipsPitch = 6f;
-                            p.TorsoYaw = -2f; p.TorsoPitch = 10f; p.HeadPitch = -8f;
-                            p.ArmR = new Vector3(0.10f, 1.45f, 0.55f); p.TwistR = 35f; p.ArmL = new Vector3(-0.10f, 1.50f, 0.25f); p.TwistL = -25f;
-                            p.LegL = new Vector3(-0.19f, 0.20f, 0.48f); p.FootYawL = 6f;
-                            p.LegR = new Vector3(0.22f, 0.105f, -0.20f); p.FootYawR = 28f; p.FootPitchR = 5f;
+                            p.RootPos = new Vector3(0f, 0f, 0.16f); p.RootYaw = 2f; p.RootPitch = 2f; p.RootRoll = 0f;
+                            p.HipsPos = new Vector3(0f, -0.14f, 0f); p.HipsYaw = 2f; p.HipsPitch = 6f; p.HipsRoll = 0f;
+                            p.TorsoYaw = 2f; p.TorsoPitch = 12f; p.TorsoRoll = 0f; p.HeadYaw = 0f; p.HeadPitch = 0f;
+                            p.ArmR = new Vector3(0.14f, 1.30f, 0.42f); p.TwistR = 25f; p.OpenR = 0.1f;
+                            p.ArmL = new Vector3(-0.10f, 1.38f, 0.34f); p.TwistL = -20f; p.OpenL = 0.05f;
+                            p.LegL = new Vector3(-0.19f, 0.24f, 0.46f); p.FootYawL = 10f; p.FootPitchL = 0f;
+                            p.LegR = new Vector3(0.30f, 0.105f, -0.02f); p.FootYawR = 14f; p.FootPitchR = 6f;
                         })),
-                        K(0.62f, KeyEase.Smooth, P()),
+                        // ...lands, and the back foot follows
+                        K(0.97f, KeyEase.Smooth, P(p =>
+                        {
+                            p.RootPos = new Vector3(0f, 0f, 0.08f); p.RootYaw = 7f; p.RootPitch = 1f; p.RootRoll = 0f;
+                            p.HipsPos = new Vector3(0f, -0.10f, 0f); p.HipsYaw = 4f; p.HipsPitch = 4.5f; p.HipsRoll = 0f;
+                            p.TorsoYaw = 3f; p.TorsoPitch = 9f; p.TorsoRoll = 0f; p.HeadYaw = 0f; p.HeadPitch = -3f;
+                            p.ArmR = new Vector3(0.13f, 1.395f, 0.31f); p.TwistR = 22.5f; p.OpenR = 0.05f;
+                            p.ArmL = new Vector3(-0.085f, 1.465f, 0.33f); p.TwistL = -20f; p.OpenL = 0.025f;
+                            p.LegL = new Vector3(-0.18f, 0.105f, 0.24f); p.FootYawL = 14f; p.FootPitchL = 0f;
+                            p.LegR = new Vector3(0.24f, 0.17f, -0.12f); p.FootYawR = 30f; p.FootPitchR = 0f;
+                        })),
+                        K(1.02f, KeyEase.Smooth, P()),
                     },
                 },
             };
@@ -473,10 +539,11 @@ namespace LightMMORPG.Characters
         /// Where the elbow points (a pole for the hinge IK). The rest stance's elbow aim carried along with the arm's swing
         /// (<see cref="CharacterRig.RestArm"/>), so a swinging arm doesn't roll about itself and wring the shoulder; for big
         /// raises (70°-120° from rest and beyond: guard, fist at the chin) it blends to down, out and a little back in the chest's
-        /// frame. If that would sink the elbow into the torso (the run's fist under the chin with the body leant far forward),
-        /// the elbow swings out to the side, step by step, until it clears.
+        /// frame. A pose's own elbow aim (<paramref name="hint"/>, <see cref="AttackPose.ElbowL"/> / <see cref="AttackPose.ElbowR"/>
+        /// in the chest's frame, its length the weight) overrides that. If the elbow would sink into the torso (the run's fist under
+        /// the chin with the body leant far forward), it swings out to the side, step by step, until it clears.
         /// </summary>
-        public static Vector3 ElbowPole(CharacterRig rig, int side, Vector3 shoulder, Vector3 fist, Quaternion chest, float hs)
+        public static Vector3 ElbowPole(CharacterRig rig, int side, Vector3 shoulder, Vector3 fist, Quaternion chest, float hs, Vector3 hint = default)
         {
             var ua = (CharacterBone)CharacterBones.Side(CharacterBone.LeftUpperArm, side);
             float l1 = rig.BindLocal(ua + 1).magnitude, l2 = rig.BindLocal(ua + 2).magnitude;
@@ -496,6 +563,16 @@ namespace LightMMORPG.Characters
             float tb = Mathf.Clamp01((swing - 70f) / 50f);
             Vector3 basePole = Vector3.Lerp(carried, chestPole, tb * tb * (3f - 2f * tb)).normalized;
             if (basePole == Vector3.zero) basePole = chestPole;
+            float hw = hint.magnitude;
+            if (hw > 1e-4f)
+            {
+                Vector3 aim = Perp(chest * hint);
+                if (aim != Vector3.zero)
+                {
+                    Vector3 p = Vector3.Lerp(basePole, aim, Mathf.Min(1f, hw)).normalized;
+                    if (p != Vector3.zero) basePole = p;
+                }
+            }
             float angA = Mathf.Acos(Mathf.Clamp((l1 * l1 + dist * dist - l2 * l2) / (2f * l1 * dist), -1f, 1f));
             Vector3 d = basePole;
             for (int i = 0; i <= 10; i++)
@@ -563,8 +640,9 @@ namespace LightMMORPG.Characters
         /// <summary>
         /// Arm IK with the body in the way: collarbone follows, hinge IK from the posed shoulder, then the fist is checked against
         /// the shoulders and torso (<see cref="FistClearance"/>) and moved out and solved again (up to three passes).
+        /// <paramref name="elbowHint"/> = the pose's own elbow aim (chest frame, zero = the solver's).
         /// </summary>
-        private static void SolveArm(CharacterRig rig, int side, Vector3 fist, Quaternion chest, float weight, float hs, Quaternion? clavicleFrom)
+        private static void SolveArm(CharacterRig rig, int side, Vector3 fist, Quaternion chest, float weight, float hs, Quaternion? clavicleFrom, Vector3 elbowHint = default)
         {
             var sh = (CharacterBone)CharacterBones.Side(CharacterBone.LeftShoulder, side);
             var ua = sh + 1;
@@ -578,7 +656,7 @@ namespace LightMMORPG.Characters
                 // the arm starts each pass from the same rotations, so a partial weight blends from the incoming pose
                 rig.SetModelRotation(ua, armU); rig.SetModelRotation(ua + 1, armM); rig.SetModelRotation(ua + 2, armE);
                 Vector3 shoulder = rig.ModelPosition(ua);
-                rig.SolveTwoBoneHinged(ua, fist, ElbowPole(rig, side, shoulder, fist, chest, hs), weight, Vector3.back);
+                rig.SolveTwoBoneHinged(ua, fist, ElbowPole(rig, side, shoulder, fist, chest, hs, elbowHint), weight, Vector3.back);
                 Vector3 push = FistClearance(rig, FistCentre(rig, side, hs), hs);
                 if (push.magnitude < 0.002f * hs) break;
                 fist += push * 1.15f;
@@ -657,7 +735,7 @@ namespace LightMMORPG.Characters
                 rig.Inherit(sh);
                 Vector3 fist = KeepOutOfTorso(rig, ToModel(side < 0 ? P.ArmL : P.ArmR), hs);
                 rig.SetModelRotation(ua, chest); rig.SetModelRotation(ua + 1, chest); rig.SetModelRotation(ua + 2, chest);
-                SolveArm(rig, side, fist, chest, 1f, hs, null);
+                SolveArm(rig, side, fist, chest, 1f, hs, null, side < 0 ? P.ElbowL : P.ElbowR);
                 float twist = side < 0 ? P.TwistL : P.TwistR;
                 Vector3 fore = (rig.ModelPosition(ua + 2) - rig.ModelPosition(ua + 1)).normalized;
                 Quaternion roll = Quaternion.AngleAxis(twist * 0.5f, fore);

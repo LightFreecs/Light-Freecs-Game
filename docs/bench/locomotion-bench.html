@@ -347,8 +347,9 @@ function mirrorPose(P) {
   m.hips.p[0] = -P.hips.p[0]; m.hips.yaw = -P.hips.yaw; m.hips.roll = -P.hips.roll;
   m.torso.yaw = -P.torso.yaw; m.torso.roll = -P.torso.roll;
   m.head.yaw = -P.head.yaw;
-  m.armL = { t: [-P.armR.t[0], P.armR.t[1], P.armR.t[2]], twist: -P.armR.twist, open: P.armR.open };
-  m.armR = { t: [-P.armL.t[0], P.armL.t[1], P.armL.t[2]], twist: -P.armL.twist, open: P.armL.open };
+  const me = e => e ? [-e[0], e[1], e[2]] : [0, 0, 0];
+  m.armL = { t: [-P.armR.t[0], P.armR.t[1], P.armR.t[2]], twist: -P.armR.twist, open: P.armR.open, elbow: me(P.armR.elbow) };
+  m.armR = { t: [-P.armL.t[0], P.armL.t[1], P.armL.t[2]], twist: -P.armL.twist, open: P.armL.open, elbow: me(P.armL.elbow) };
   m.legL = { t: [-P.legR.t[0], P.legR.t[1], P.legR.t[2]], yaw: -P.legR.yaw, pitch: P.legR.pitch };
   m.legR = { t: [-P.legL.t[0], P.legL.t[1], P.legL.t[2]], yaw: -P.legL.yaw, pitch: P.legL.pitch };
   return m;
@@ -358,8 +359,8 @@ const ZERO = {
   hips: { p: [0, 0, 0], yaw: 0, pitch: 0, roll: 0 },
   torso: { yaw: 0, pitch: 0, roll: 0 },
   head: { yaw: 0, pitch: 0 },
-  armL: { t: [-0.31, 1.10, 0.09], twist: 0, open: 0 },
-  armR: { t: [0.31, 1.10, 0.09], twist: 0, open: 0 },
+  armL: { t: [-0.31, 1.10, 0.09], twist: 0, open: 0, elbow: [0, 0, 0] },
+  armR: { t: [0.31, 1.10, 0.09], twist: 0, open: 0, elbow: [0, 0, 0] },
   legL: { t: [-0.19, 0.105, -0.068], yaw: 0, pitch: 0 },
   legR: { t: [0.19, 0.105, -0.068], yaw: 0, pitch: 0 },
 };
@@ -580,8 +581,8 @@ const GUARD = {
   hips: { p: [0, -0.06, 0], yaw: 6, pitch: 3, roll: 0 },
   torso: { yaw: 4, pitch: 6, roll: 0 },
   head: { yaw: 0, pitch: -6 },
-  armL: { t: [-0.07, 1.55, 0.32], twist: -20, open: 0 },
-  armR: { t: [0.12, 1.49, 0.20], twist: 20, open: 0 },
+  armL: { t: [-0.07, 1.55, 0.32], twist: -20, open: 0, elbow: [0, 0, 0] },
+  armR: { t: [0.12, 1.49, 0.20], twist: 20, open: 0, elbow: [0, 0, 0] },
   legL: { t: [-0.18, 0.105, 0.22], yaw: 14, pitch: 0 },
   legR: { t: [0.22, 0.105, -0.22], yaw: 34, pitch: 0 },
 };
@@ -660,7 +661,7 @@ function insideTorso(rig, p, room) {
 // NEW (AttackPoseSolver.ElbowPole): the elbow keeps the rest stance's aim carried along with the arm's swing (so a swinging
 // arm doesn't roll about itself and wring the shoulder); for big raises (guard, fist at the chin) it blends to down, out and a
 // little back in the chest's frame; if that would sink the elbow into the torso it swings out to the side until it clears
-function elbowPole(rig, side, shoulder, fist, chest, ua) {
+function elbowPole(rig, side, shoulder, fist, chest, ua, hint) {
   const l1 = rig.bindLocal[ua + 1].length(), l2 = rig.bindLocal[ua + 2].length();
   const to = fist.clone().sub(shoulder), dist = clamp(to.length(), Math.abs(l1 - l2) + 1e-3, l1 + l2 - 1e-3), dir = to.normalize();
   const perp = v => { const w = v.clone().sub(dir.clone().multiplyScalar(v.dot(dir))); return w.lengthSq() < 1e-6 ? null : w.normalize(); };
@@ -669,7 +670,14 @@ function elbowPole(rig, side, shoulder, fist, chest, ua) {
   const rest = rig.restArm(side), restDir = rot(chest, rest.dir);
   const carried = perp(rot(new THREE.Quaternion().setFromUnitVectors(restDir, dir), rot(chest, rest.elbow))) || chestPole;
   const swing = restDir.angleTo(dir) * 180 / Math.PI;
-  const base = carried.clone().lerp(chestPole, smoothstep(70, 120, swing)).normalize();
+  let base = carried.clone().lerp(chestPole, smoothstep(70, 120, swing)).normalize();
+  // AttackPose.ElbowL / ElbowR: the pose's own elbow aim in the chest's frame (+x right, +y up, +z forward); its length (0..1) is
+  // how much it overrides the solver's pole. The charged heavy's cocked haymaker (elbow up and back) needs it.
+  if (hint) {
+    const hl = Math.hypot(hint[0], hint[1], hint[2]);
+    const h = hl > 1e-4 ? perp(rot(chest, V(hint[0], hint[1], hint[2]))) : null;
+    if (h) { const p = base.clone().lerp(h, Math.min(1, hl)); if (p.lengthSq() > 1e-8) base = p.normalize(); }
+  }
   const angA = Math.acos(clamp((l1 * l1 + dist * dist - l2 * l2) / (2 * l1 * dist), -1, 1));
   let d = base;
   for (let t = 0; t <= 1.0001; t += 0.1) {
@@ -740,7 +748,7 @@ function solvePose(rig, P) {
       if (state.shoulders) applyClavicle(rig, side, fist.clone().sub(rig.modelPos(ua)));   // NEW: collarbone first, then the arm from it
       rig.setModel(ua, rig.model[sh]); rig.setModel(ua + 1, rig.model[sh]); rig.setModel(ua + 2, rig.model[sh]);
       const shoulder = rig.modelPos(ua);
-      const pole = elbowPole(rig, side, shoulder, fist, chest, ua);
+      const pole = elbowPole(rig, side, shoulder, fist, chest, ua, A.elbow);
       rig.solveTwoBone(ua, fist, pole, 1, V(0, 0, -1));
       if (!state.shoulders) break;
       const push = fistClearance(rig, fistCentre(rig, side));   // NEW: fist out of the shoulders / chest, then solve again
@@ -1013,6 +1021,7 @@ function pressAttack() {
   comboIdx = (comboIdx + 1) % MOVES.length;
 }
 function applyAttack(adt) {
+  if (window.__atk) { move = null; fromMove = null; moveW = 1; guardHold = 1; }
   if (move) {
     moveT += adt; if (fromMove) fromT += adt;
     moveBlend = Math.min(1, moveBlend + adt / 0.06);
@@ -1025,7 +1034,7 @@ function applyAttack(adt) {
   const w = smooth(moveW);
   fighter.position.set(0, 0, 0); fighter.quaternion.identity();
   if (w <= 0) return;
-  let A = move ? sampleMove(move, moveT) : GUARD;
+  let A = window.__atk || (move ? sampleMove(move, moveT) : GUARD);
   if (move && fromMove && moveBlend < 1) A = lerpPose(sampleMove(fromMove, fromT), A, smooth(moveBlend));
   const legW = w * (1 - locoW);
   const b = lerpPose(basePose, A, w);
@@ -1220,6 +1229,10 @@ window.__bench = {
   settle(seconds = 1.5) { for (let t = 0; t < seconds; t += 1 / 60) step(1 / 60); if (camAnim) { camera.position.copy(camAnim.to); controls.target.copy(camAnim.tTo); camAnim = null; } controls.update(); renderer.render(scene, camera); return { v: speedSm, locoW, runBlend, phase }; },
   cam(px, py, pz, tx, ty, tz) { camAnim = null; camera.position.copy(world.localToWorld(V(px, py, pz))); controls.target.copy(world.localToWorld(V(tx, ty, tz))); controls.update(); renderer.render(scene, camera); },
   shoulders(on) { state.shoulders = on; syncToggles(); if (rig) setBody(on ? bodies.new : bodies.old); },
+  // hold a whole attack pose through the attack layer (root offset / turn included; partial = over the guard, like C#'s
+  // P(edit)); atk(null) lets go. For checking new attack poses before porting them to BasicMovesets.
+  merge, GUARD,
+  atk(p) { window.__atk = p ? merge(GUARD, p) : null; this.settle(0.05); },
   joints() { const o = {}; for (const n of ["Hips", "LeftUpperArm", "LeftHand", "RightHand", "LeftUpperLeg", "LeftFoot", "RightFoot", "Head", "Neck", "UpperChest"]) { const p = rig.modelPos(B[n]); o[n] = [+p.x.toFixed(3), +p.y.toFixed(3), +p.z.toFixed(3)]; } return o; },
 };
 </script>

@@ -57,8 +57,8 @@ Later sessions add to `ProjectBuilder` rather than writing a second builder.
 - Melee: 4-hit light combo (damage 30/30/40/60, combo window 0.6 s after each hit, last hit knockback), heavy attack
   = hold to charge (owner 2026-11-21), up to 1.5 s: damage 110 (tap) → 300 (full), knockback 15 → 32 m/s with lift 8 → 14
   (a tap shoves ~5 m, a full charge sends the victim flying ~23 m, ~1 s in the air), hitstun 0.6 → 1.3 s; winding up slows
-  to 0.35× walk (no running); 1.2 s cooldown from the release; the hit lands 0.09 s after the release (when the fist
-  arrives). Hit = sphere overlap 1.2 m radius at 1.3 m in front of attacker, server side.
+  to 0.35× walk (no running); 1.2 s cooldown from the release; the hit lands 0.10 s after the release (when the fist
+  arrives on the face; owner's clip, 2026-11-22). Hit = sphere overlap 1.2 m radius at 1.3 m in front of attacker, server side.
 - Block: hold, movement x0.35, blocks 80% damage, guard meter 100 drains by blocked damage/2, at 0 → guard break (stun 1.0 s).
 - Hitstun: 0.35 s light, 0.6 s heavy/knockback. Stunned players cannot act.
 - Powers (data-driven `AbilityDefinition` ScriptableObjects):
@@ -783,8 +783,8 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
   - `PlayerCombat`: the server half of every attack is a public `Server*` method (`ServerLight/Heavy/Blast/BeamCharge/
     BeamFire/Surge`; the `[ServerRpc]` Cmds just call them), so a server-driven fighter attacks through the same rules.
     Melee hits report the spot on the victim nearest the striking limb at the move's impact frame (`StrikePoint`: the
-    attacker's moveset sampled at `AttackMove.Hit`, limb + root offset, scaled by the capsule height); heavy = its belly-
-    height target. Default "Rush": straights land at chest height (1.55 of 2.3), the body blow at the gut (1.2).
+    attacker's moveset sampled at `AttackMove.Hit`, limb + root offset, scaled by the capsule height); heavy = its swing's
+    impact key (the face since 2026-11-22). Default "Rush": straights land at chest height (1.55 of 2.3), the body blow at the gut (1.2).
   - `TrainingDummy` modes Spar (default) / Stand / Block (pause menu cycles them). Spar: closes in (runs when far, weaves),
     2-4 hit combos 0.32 s apart (30 % end in a heavy) with 0.7-1.5 s gaps, guards (30 %) or backs off (15 %) after taking a
     hit, energy blasts from 5-20 m, powers up with Charge when 7+ m away (to ~70 %, sometimes full; keeps 25 % aura; the
@@ -901,3 +901,26 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     fill from the bottom with the charge and pulse at full; labels "RMB hold" / "HEAVY (hold)" / "Heavy attack (hold)".
   - Verified: headless compile only (owner tests by hand). Not seen in game: the poses on the Toon Head + hair (the cocked fist
     sits near the ear), the launch arc against walls, the remote view of a wind-up.
+- Heavy attack re-made from the owner's reference clip (2026-11-22; owner: "make a heavy attack and base it on this video here
+  1:1, face close up not necessary"; a 13.7 s anime clip of a cocked haymaker to the face that sends the opponent flying). Only
+  the animation changed; the charge rules, flow and effects above stay.
+  - Method: ffmpeg frames (4 / 12 / 60 fps) → the key poses (the clench beside the head, the cocked arm, the full-body impact,
+    the held follow-through, the slump); each built on a scratch Locomotion Bench and rendered from a camera matching its shot,
+    side by side with the frame, then timed as a game move. The clip's wind-up shot is mirrored (its punch is a right), so the
+    whole attack is right-handed. The face close-ups (attacker yelling, victim's face) were left out as asked.
+  - Rush's "Charged punch": WindUp 0.30 s (0.10 the fist up beside the cheek, elbow out; 0.30 cocked: elbow up and back, fist at
+    the shoulder, chest 48° away and leaning 30°+ in, head on the target, left arm hanging loose); Coiled = deeper (elbow
+    higher, 10 cm lower, more lean). Swing 1.02 s, `Hit` 0.10 (was 0.09): 0.05 the elbow leads round at shoulder height, 0.10
+    the fist on the face (1.92 of 2.3, arm straight, head thrown back, left arm out low, lunge +0.40), 0.16 sweeping up and to
+    the left, 0.24-0.52 the follow-through held (arm straight across the face and over to the left, chest arched and leaning
+    left, head back), 0.70-0.82 slumped deep over the front knee with the arms hanging, 0.92 the lead foot steps back, 0.97
+    the back foot follows, 1.02 guard. Planted feet stay put from the impact to the step (checked in the bench); the wind-up's
+    lead foot steps out instead of sliding. The full-charge hit-stop (0.23 s) freezes it on the impact frame like the clip's
+    slow-motion close-up.
+  - `AttackPose.ElbowL / ElbowR` (new): where the elbow points in the chest's frame, length = weight; zero = the solver's own.
+    `AttackPoseSolver.ElbowPole(..., hint)` blends its pole towards it before the torso check; `Apply` passes the pose's,
+    `ArmTo` none. Lerp / Combine / Mirror carry it. The solver alone always drops a raised elbow, so the cocked haymaker (and
+    the drive with the elbow leading) set it. The Locomotion Bench has the same hint and `__bench.atk(pose)` (hold a whole
+    attack pose through the attack layer, root offset included).
+  - Verified: headless compile only (owner tests by hand). Not seen in game: the poses on the Toon Head + hair, the swing on a
+    moving fighter (the legs keep walking under it), the remote view.
