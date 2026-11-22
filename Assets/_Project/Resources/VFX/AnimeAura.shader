@@ -1,10 +1,12 @@
 // LightMMORPG/AnimeAura - the hand-drawn anime flame aura (charging, Power Surge), drawn on a camera-facing quad.
 // 1:1 port of docs/bench/aura-bench.html (keep the two in step). Aura space: x right, y up, feet at 0, the fighter's head
 // top at 0.62. The outline is traced from the owner's reference (a classic anime power-up aura): a flame "pine tree" of
-// seven tiers a side - wide wings low down, blades that stand up straighter the higher they sit - and a narrow spire with
-// one peak, round an arch-shaped see-through hollow where the fighter stands (its top just over the head). Every tier tip
-// licks out and snaps back on its own rhythm, the outline boils 12 times a second like hand-drawn frames, the peak
-// flickers, streaks run up the flame and small flicks rise in the hollow.
+// tiers - wide wings low down, blades that stand up straighter the higher they sit - and a narrow spire with one peak,
+// round an arch-shaped see-through hollow where the fighter stands (its top just over the head). The tiers rise like the
+// owner's reference clip: in a cycle of 4 hand-drawn drawings (0.45 s) every tier climbs to the next tier's place, so the
+// bottom wings become the middle tiers and the middle ones the top, the top one melts into the spire and a new one grows
+// out of the base (each tier keeps its own reach on the way up). The outline is redrawn with each drawing (it boils), the
+// peak flickers, streaks run up the flame and small flicks rise in the hollow.
 // Two layers: _Front = 0 is the flame (behind the fighter), _Front = 1 only the rising flicks (in front of the fighter).
 // Premultiplied output: rgb adds (HDR, feeds Bloom), alpha darkens what is behind so the aura reads on bright skies.
 // Lives in Resources so builds include it (AnimeAura.cs loads it by name).
@@ -68,55 +70,72 @@ Shader "LightMMORPG/AnimeAura"
                 return lerp(lerp(H21(i), H21(i + float2(1.0, 0.0)), f.x), lerp(H21(i + float2(0.0, 1.0)), H21(i + float2(1.0, 1.0)), f.x), f.y);
             }
 
-            // the right half of the outline in units of the aura's height (x out from the centre, y up from the feet): the
-            // bottom corner, then each tier's tip and the notch where the next tier starts, then the spire; the peak (0, 1)
-            // sits on the axis
-            static const float2 OUTLINE[14] =
+            // the right half of the outline in units of the aura's height (x out from the centre, y up from the feet), as tiers:
+            // each tier's tip and the notch above it where the next tier starts. 1..6 are the traced tiers; 0 is the bottom
+            // corner, where a new tier grows from, and 7 the spire, where the top tier melts away. The peak (0, 1) is on the axis
+            static const float2 TIP[8] =
             {
-                float2(0.252, 0.000),
-                float2(0.457, 0.150), float2(0.299, 0.142),
-                float2(0.449, 0.346), float2(0.248, 0.268),
-                float2(0.319, 0.583), float2(0.224, 0.488),
-                float2(0.232, 0.732), float2(0.165, 0.583),
-                float2(0.157, 0.776), float2(0.130, 0.740),
-                float2(0.087, 0.913), float2(0.055, 0.850),
-                float2(0.035, 0.961)
+                float2(0.252, 0.000), float2(0.457, 0.150), float2(0.449, 0.346), float2(0.319, 0.583),
+                float2(0.232, 0.732), float2(0.157, 0.776), float2(0.087, 0.913), float2(0.035, 0.961)
             };
-            #define NV 29   // 14 a side + the peak
-
-            // how far a tier tip reaches now: it licks out slowly, whips out and snaps back, each tip on its own rhythm
-            float Pump(float j, float side, float t)
+            static const float2 NOTCH[8] =
             {
-                float f = frac(t * 1.9 + H21(float2(j, side + 4.0)));
-                return lerp(0.9, 1.12, f * f);
+                float2(0.252, 0.000), float2(0.299, 0.142), float2(0.248, 0.268), float2(0.224, 0.488),
+                float2(0.165, 0.583), float2(0.130, 0.740), float2(0.055, 0.850), float2(0.035, 0.961)
+            };
+            #define NS 16           // vertices a side: the bottom corner, 7 rising tiers x (tip, notch), the spire
+            #define NV 33           // both sides + the peak
+            #define DRAWING 0.1125  // seconds each drawing is held: 4 drawings lift every tier one place in 0.45 s (the reference)
+
+            // a vertex's hand-drawn wobble in drawing dn (every drawing redraws the outline a little differently)
+            float2 Boil(float dn, float i, float side)
+            {
+                return (float2(H21(float2(dn, i * 3.0 + side)), H21(float2(dn + 0.5, i * 7.0 + side))) - 0.5) * 0.014;
             }
 
-            // signed distance to the animated outline (negative inside), in aura-height units. t = drawing time, nb = boil frame
-            float SdOutline(float2 q, float t, float nb)
+            // signed distance to the animated outline (negative inside), in aura-height units. dn = drawing number (wrapped),
+            // td = drawing time. Each drawing lifts every tier a quarter of the way to the next tier's place; after 4 drawings
+            // the outline is the traced one again with every tier one place higher
+            float SdOutline(float2 q, float td, float dn)
             {
                 float2 v[NV];
-                float sway = 0.025 * sin(t * 2.6);                       // the upper part sways
+                float ph = frac(dn * 0.25);                              // how far the tiers have risen this cycle (0, 1/4, 1/2, 3/4)
+                float cyc = floor(dn * 0.25);
+                float sway = 0.025 * sin(td * 2.6);                      // the upper part sways
                 [unroll] for (int side = 0; side < 2; side++)
                 {
                     float sx = side == 0 ? 1.0 : -1.0;
-                    [unroll] for (int j = 0; j < 14; j++)
+                    float fs = (float)side;
+                    v[side == 0 ? 0 : NV - 1] = float2(sx * TIP[0].x, 0.0);   // the bottom corner stays planted
+                    float2 root = TIP[0];
+                    [unroll] for (int j = 0; j < 7; j++)
                     {
-                        float2 c = OUTLINE[j];
-                        if (j % 2 == 1 && j < 13) { float2 s0 = OUTLINE[j - 1]; c = s0 + (c - s0) * Pump((float)j, (float)side, t); }
-                        if (j > 0) c += (float2(H21(float2(nb, (float)(j * 3 + side))), H21(float2(nb + 0.5, (float)(j * 7 + side)))) - 0.5) * 0.014;
-                        v[side == 0 ? j : NV - 1 - j] = float2(sx * c.x + sway * c.y * c.y, c.y);
+                        // a tier growing out of the base or melting into the spire is small: less reach and wobble
+                        float amp = j == 0 ? ph : (j == 6 ? 1.0 - ph : 1.0);
+                        float2 tip = lerp(TIP[j], TIP[j + 1], ph);
+                        float2 notch = lerp(NOTCH[j], NOTCH[j + 1], ph);
+                        // each tier keeps its own reach (0.9..1.1) all the way up, so the eye can follow it rising
+                        tip = root + (tip - root) * (1.0 + (H21(float2(cyc - (float)j, fs + 4.0)) - 0.5) * 0.2 * amp);
+                        root = notch;
+                        int a = 1 + j * 2;
+                        tip += Boil(dn, (float)a, fs) * amp;
+                        notch += Boil(dn, (float)(a + 1), fs) * amp;
+                        v[side == 0 ? a : NV - 1 - a] = float2(sx * tip.x + sway * tip.y * tip.y, tip.y);
+                        v[side == 0 ? a + 1 : NV - 2 - a] = float2(sx * notch.x + sway * notch.y * notch.y, notch.y);
                     }
+                    float2 sp = TIP[7] + Boil(dn, 15.0, fs);
+                    v[side == 0 ? NS - 1 : NV - NS] = float2(sx * sp.x + sway * sp.y * sp.y, sp.y);
                 }
-                float pk = 1.0 + (H21(float2(nb, 99.0)) - 0.5) * 0.06;     // the peak flickers
-                v[14] = float2(sway * pk * pk, pk);
-                // polygon distance (Inigo Quilez)
+                float pk = 1.0 + (H21(float2(dn, 99.0)) - 0.5) * 0.06;     // the peak flickers
+                v[NS] = float2(sway * pk * pk, pk);
+                // polygon distance (Inigo Quilez); the max() keeps a tier that has not grown yet (coincident vertices) harmless
                 float d = dot(q - v[0], q - v[0]);
                 float s = 1.0;
                 [unroll] for (int i = 0; i < NV; i++)
                 {
                     int k = i == 0 ? NV - 1 : i - 1;
                     float2 e = v[k] - v[i], w = q - v[i];
-                    float2 b = w - e * saturate(dot(w, e) / dot(e, e));
+                    float2 b = w - e * saturate(dot(w, e) / max(dot(e, e), 1e-8));
                     d = min(d, dot(b, b));
                     bool c1 = q.y >= v[i].y, c2 = q.y < v[k].y, c3 = e.x * w.y > e.y * w.x;
                     if ((c1 && c2 && c3) || (!c1 && !c2 && !c3)) s = -s;
@@ -155,8 +174,10 @@ Shader "LightMMORPG/AnimeAura"
                 float k = saturate((_Strength - 0.55) / 0.45);           // 0 a weak charge .. 1 Power Surge
                 float hgt = lerp(0.865, 0.996, k) * lerp(0.6, 1.0, _Fade); // the aura's height (the hollow's top just over the head)
                 float2 q = p / hgt;
-                float tn = floor(t * 24.0) / 24.0;                        // drawing time (24 a second)
-                float nb = floor(t * 12.0);                               // boil frame (12 a second)
+                float tn = floor(t * 24.0) / 24.0;                        // streak / flick time (24 a second)
+                float nb = floor(t * 12.0);                               // the flicks' boil frame (12 a second)
+                float dr = floor(t / DRAWING);                            // the outline's drawing (~9 a second, as in the reference)
+                float dn = fmod(dr, 1024.0);                              // wrapped (a multiple of 4) so the hashes keep their precision
                 float3 c = _Color.rgb;
                 // anything that reaches the quad's edge thins out instead of being cut off
                 float edge = smoothstep(1.0, 0.95, i.uv.y) * smoothstep(0.0, 0.03, i.uv.x) * smoothstep(1.0, 0.97, i.uv.x);
@@ -167,7 +188,7 @@ Shader "LightMMORPG/AnimeAura"
                     float fl = Flicks(q, tn, nb, 0.0) * hol * smoothstep(0.05, 0.12, q.y) * smoothstep(0.66, 0.5, q.y);
                     return float4(c * fl * 0.85, 0.0) * fade;
                 }
-                float d = SdOutline(q, tn, nb);
+                float d = SdOutline(q, dr * DRAWING, dn);
                 float w = max(fwidth(d), 1e-4) * 0.75;
                 float inside = 1.0 - smoothstep(-w, w, d);
                 float band = inside * (1.0 - hol);

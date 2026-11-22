@@ -728,15 +728,26 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
   - `Resources/VFX/AnimeAura.shader` (bench `docs/bench/aura-bench.html`, same code in GLSL; keep the two in step).
     History 2026-11-21: the spiky egg was "not dynamic enough"; a wide radial fan was "uneven, too wide"; a body-hugging
     teardrop was then replaced by "copy this one 1:1" (owner's green-screen reference of the classic tiered power-up
-    aura). Now the outline IS that reference, traced from the keyed image (`OUTLINE`: right half in aura-height units,
-    bottom corner, 6 tiers × (tip, notch), spire; the peak (0, 1) on the axis; mirrored into a 29-vertex polygon, signed
-    distance via iq's sdPolygon; overlay IoU check against the reference's silhouette: within a few px). Tier tips pump
-    (lick out to 1.12, snap back to 0.9, own phase per tier / side), every vertex boils 12×/s (±0.007), the peak flickers
-    ±3 %, the top sways. Aura height `hgt` 0.865-0.996 by power (× 0.6-1 with `_Fade`) so the see-through arch
-    (`Hollow`: half-width 0.173·(1-(y/0.7)²)^0.65, top at 0.70 hgt) tops out just over the head (0.62). Band: opaque-ish
-    (a 0.78) with vertical streaks flowing up and a brighter rim; hollow: faint tint + flame flicks rising (`Flicks`).
-    Premultiplied (HDR rgb for Bloom). `_Front = 1` draws only the flicks (over the fighter).
-    **Owner approved in game (2026-11-21, acb5c04): "Looks great".** Keep the traced outline; tune motion, not shape.
+    aura). Now the outline IS that reference, traced from the keyed image (`TIP` / `NOTCH`: right half in aura-height
+    units, the 6 traced tiers × (tip, notch) at 1..6, index 0 = the bottom corner, 7 = the spire; the peak (0, 1) on the
+    axis; signed distance via iq's sdPolygon; overlay IoU check against the reference's silhouette: within a few px).
+    **Owner approved the traced outline in game (2026-11-21, acb5c04): "Looks great".** Keep it; tune motion, not shape.
+    Rising tiers (2026-11-21, owner, from a gif of the classic power-up aura: "the bottom spikes should rise up and become
+    the middle spikes and the middle becomes the top", lightning ignored). Measured from the gif (9 frames × 100 ms): only
+    4 distinct aura drawings cycle (A B C C D A B C D), ~0.45 s a cycle, and each drawing lifts every spike ~¼ of the way
+    to the one above, so the pattern repeats every cycle. Shader: a conveyor of 7 tiers a side (33-vertex polygon);
+    drawing `dn = floor(t / DRAWING)` (0.1125 s), phase `ph = frac(dn / 4)`; tier j sits at lerp(tier j, tier j+1, ph),
+    so tier 0 grows out of the bottom corner and tier 6 melts into the spire, and at ph = 0 the outline is exactly the
+    traced one. Each tier keeps its own reach (0.9-1.1, hashed from its birth cycle `cyc - j`) all the way up (this
+    replaced the per-tip lick / pump); growing and melting tiers get reach and boil × their size. The boil (±0.007),
+    the peak flicker (±3 %) and the sway run on the same drawing clock (~9/s, the boil was 12/s), so every drawing
+    changes the whole outline at once like hand-drawn frames. `dn` wraps at 1024 (a multiple of 4) so the hashes keep
+    float precision; `max(dot(e, e), 1e-8)` keeps the coincident vertices of a tier not grown yet harmless. Checked
+    offline: 12 000 drawings × sway extremes, no self-crossing polygon. Not yet seen by the owner in game.
+    Aura height `hgt` 0.865-0.996 by power (× 0.6-1 with `_Fade`) so the see-through arch (`Hollow`: half-width
+    0.173·(1-(y/0.7)²)^0.65, top at 0.70 hgt) tops out just over the head (0.62). Band: opaque-ish (a 0.78) with
+    vertical streaks flowing up and a brighter rim; hollow: faint tint + flame flicks rising (`Flicks`). Premultiplied
+    (HDR rgb for Bloom). `_Front = 1` draws only the flicks (over the fighter).
   - `VFX.AnimeAura`: two camera-facing (about the vertical) quads at the feet, flame 0.18 h behind the fighter, flicks
     0.16 h in front; the quad spans aura space x ±0.55, y -0.04..1.21 (`SpanX`/`SpanY`, fighter = 0.62); flares up when it appears, shrinks away when it stops; per-fighter
     time offset. `PlayerAura` uses it (charging: size 0.85, Power Surge: 1) in the rig's aura colour; the old capsule shell
@@ -745,7 +756,8 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     Sky, Emerald, Lime, White; 0 = gold, also for older saves) → `recipe.auraColor` (× 1.8 HDR). Synced with the face JSON
     (`PlayerIdentity.Face`), so everyone sees each player's colour. Customize → Body: AURA swatches under the body sliders;
     the menu fighter shows the flame aura while the Body tab is open and recolours it without rebuilding the hero.
-  - Verified: headless compile only (owner tests by hand).
+  - Verified: headless compile only (owner tests by hand). Rising tiers: headless compile, the AnimeAura pass compiled in
+    batchmode (Direct3D11, 0 messages) and the bench's GLSL links; not yet seen in game.
 - Power level + aura reserve (2026-11-19; owner: battles start at 10 % strength with a full aura reserve that never
   recovers, charge up to 100 %, high strength and energy attacks exhaust it, then strength and defence dip): rules under
   "Gameplay rules". `Core/AuraReserve` (pure, `Tests/EditMode/AuraReserveTests`), `PlayerStats` SyncVars `Power`, `Aura`,

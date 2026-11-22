@@ -6,8 +6,9 @@ namespace LightMMORPG.VFX
     /// <summary>
     /// The hand-drawn anime flame aura (shader <c>LightMMORPG/AnimeAura</c>, bench <c>docs/bench/aura-bench.html</c>): the
     /// owner's reference outline (a tiered flame "pine tree" with one peak over the head, round a see-through arch where
-    /// the fighter stands), its tips licking and boiling. Two camera-facing quads at the fighter's feet, the flame just
-    /// behind the fighter and the rising flicks just in front.
+    /// the fighter stands), its tiers rising in hand-drawn steps (the bottom wings climb to become the middle tiers, the
+    /// middle ones the top) and boiling. Two camera-facing quads at the fighter's feet, the flame just behind the fighter
+    /// and the rising flicks just in front.
     /// Set <see cref="Visible"/>, <see cref="Size"/> (0.85 charging, 1 Power Surge), <see cref="Color"/> and
     /// <see cref="Height"/> (the fighter's height); it flares up when it appears and shrinks away when it stops.
     /// </summary>

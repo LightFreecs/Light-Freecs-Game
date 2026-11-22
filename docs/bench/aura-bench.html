@@ -28,7 +28,7 @@
 
 <div class="wrap">
   <h1>Charge Aura</h1>
-  <p class="lede">The flame aura shown while charging (hold Charge) and, bigger, during Power Surge. The outline is traced from the reference aura: a flame pine tree of seven tiers a side, wide wings low down and blades that stand up straighter the higher they sit, with a narrow spire and one peak over the head. The fighter stands in a see-through arch. Every tier tip licks out and snaps back, the outline boils like hand-drawn frames, the peak flickers, and small flicks rise inside. It is drawn flat, facing the camera: the flame behind the fighter and bright dashes flying up in front. The flame moves 24 times a second and the outline boils 12 times a second. Pick a colour to preview the Customize choices.</p>
+  <p class="lede">The flame aura shown while charging (hold Charge) and, bigger, during Power Surge. The outline is traced from the reference aura: a flame pine tree of seven tiers a side, wide wings low down and blades that stand up straighter the higher they sit, with a narrow spire and one peak over the head. The fighter stands in a see-through arch. The tiers rise like the reference clip: the bottom wings climb to become the middle tiers and the middle ones the top, the top one melts into the spire and a new one grows out of the base. The outline is redrawn in hand-drawn steps, about 9 drawings a second (4 per rise, 0.45 s, as in the clip), so it also boils; the peak flickers and small flicks rise inside. It is drawn flat, facing the camera: the flame behind the fighter and bright dashes flying up in front. Streaks and flicks move 24 times a second. Pick a colour to preview the Customize choices.</p>
   <div class="stage">
     <canvas id="c" width="704" height="800"></canvas>
     <div class="panel">
@@ -87,10 +87,12 @@ uniform float uTime, uStrength, uFade, uBg, uFig, uSpanX;
 uniform vec3 uColor;
 
 // Aura space: x right, y up, feet at 0, the fighter's head top at 0.62. The outline is traced from the owner's reference
-// (a classic anime power-up aura): a flame "pine tree" of seven tiers a side - wide wings low down, blades that stand up
-// straighter the higher they sit - and a narrow spire with one peak, round an arch-shaped see-through hollow where the
-// fighter stands (its top just over the head). Every tier tip licks out and snaps back on its own rhythm, the outline
-// boils 12 times a second like hand-drawn frames, the peak flickers, streaks run up the flame and small flicks rise in
+// (a classic anime power-up aura): a flame "pine tree" of tiers - wide wings low down, blades that stand up straighter the
+// higher they sit - and a narrow spire with one peak, round an arch-shaped see-through hollow where the fighter stands (its
+// top just over the head). The tiers rise like the owner's reference clip: in a cycle of 4 hand-drawn drawings (0.45 s)
+// every tier climbs to the next tier's place, so the bottom wings become the middle tiers and the middle ones the top, the
+// top one melts into the spire and a new one grows out of the base (each tier keeps its own reach on the way up). The
+// outline is redrawn with each drawing (it boils), the peak flickers, streaks run up the flame and small flicks rise in
 // the hollow.
 float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 float vnoise(vec2 p) {
@@ -99,47 +101,63 @@ float vnoise(vec2 p) {
   return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y);
 }
 
-// the right half of the outline in units of the aura's height (x out from the centre, y up from the feet): the bottom
-// corner, then each tier's tip and the notch where the next tier starts, then the spire; the peak (0, 1) sits on the axis
-const vec2 OUTLINE[14] = vec2[14](
-  vec2(0.252, 0.000),
-  vec2(0.457, 0.150), vec2(0.299, 0.142),
-  vec2(0.449, 0.346), vec2(0.248, 0.268),
-  vec2(0.319, 0.583), vec2(0.224, 0.488),
-  vec2(0.232, 0.732), vec2(0.165, 0.583),
-  vec2(0.157, 0.776), vec2(0.130, 0.740),
-  vec2(0.087, 0.913), vec2(0.055, 0.850),
-  vec2(0.035, 0.961));
-const int NV = 29;   // 14 a side + the peak
+// the right half of the outline in units of the aura's height (x out from the centre, y up from the feet), as tiers: each
+// tier's tip and the notch above it where the next tier starts. 1..6 are the traced tiers; 0 is the bottom corner, where a
+// new tier grows from, and 7 the spire, where the top tier melts away. The peak (0, 1) is on the axis
+const vec2 TIP[8] = vec2[8](
+  vec2(0.252, 0.000), vec2(0.457, 0.150), vec2(0.449, 0.346), vec2(0.319, 0.583),
+  vec2(0.232, 0.732), vec2(0.157, 0.776), vec2(0.087, 0.913), vec2(0.035, 0.961));
+const vec2 NOTCH[8] = vec2[8](
+  vec2(0.252, 0.000), vec2(0.299, 0.142), vec2(0.248, 0.268), vec2(0.224, 0.488),
+  vec2(0.165, 0.583), vec2(0.130, 0.740), vec2(0.055, 0.850), vec2(0.035, 0.961));
+const int NS = 16;              // vertices a side: the bottom corner, 7 rising tiers x (tip, notch), the spire
+const int NV = 33;              // both sides + the peak
+const float DRAWING = 0.1125;   // seconds each drawing is held: 4 drawings lift every tier one place in 0.45 s (the reference)
 
-// how far a tier tip reaches now: it licks out slowly, whips out and snaps back, each tip on its own rhythm
-float pump(float j, float side, float t) {
-  float f = fract(t * 1.9 + h21(vec2(j, side + 4.0)));
-  return mix(0.9, 1.12, f * f);
+// a vertex's hand-drawn wobble in drawing dn (every drawing redraws the outline a little differently)
+vec2 boil(float dn, float i, float side) {
+  return (vec2(h21(vec2(dn, i * 3.0 + side)), h21(vec2(dn + 0.5, i * 7.0 + side))) - 0.5) * 0.014;
 }
 
-// signed distance to the animated outline (negative inside), in aura-height units. t = drawing time, nb = boil frame
-float sdOutline(vec2 q, float t, float nb) {
+// signed distance to the animated outline (negative inside), in aura-height units. dn = drawing number (wrapped),
+// td = drawing time. Each drawing lifts every tier a quarter of the way to the next tier's place; after 4 drawings the
+// outline is the traced one again with every tier one place higher
+float sdOutline(vec2 q, float td, float dn) {
   vec2 v[NV];
-  float sway = 0.025 * sin(t * 2.6);                       // the upper part sways
+  float ph = fract(dn * 0.25);                             // how far the tiers have risen this cycle (0, 1/4, 1/2, 3/4)
+  float cyc = floor(dn * 0.25);
+  float sway = 0.025 * sin(td * 2.6);                      // the upper part sways
   for (int side = 0; side < 2; side++) {
     float sx = side == 0 ? 1.0 : -1.0;
-    for (int j = 0; j < 14; j++) {
-      vec2 c = OUTLINE[j];
-      if (j % 2 == 1 && j < 13) { vec2 s0 = OUTLINE[j - 1]; c = s0 + (c - s0) * pump(float(j), float(side), t); }
-      if (j > 0) c += (vec2(h21(vec2(nb, float(j * 3 + side))), h21(vec2(nb + 0.5, float(j * 7 + side)))) - 0.5) * 0.014;
-      v[side == 0 ? j : NV - 1 - j] = vec2(sx * c.x + sway * c.y * c.y, c.y);
+    float fs = float(side);
+    v[side == 0 ? 0 : NV - 1] = vec2(sx * TIP[0].x, 0.0);  // the bottom corner stays planted
+    vec2 root = TIP[0];
+    for (int j = 0; j < 7; j++) {
+      // a tier growing out of the base or melting into the spire is small: less reach and wobble
+      float amp = j == 0 ? ph : (j == 6 ? 1.0 - ph : 1.0);
+      vec2 tip = mix(TIP[j], TIP[j + 1], ph);
+      vec2 notch = mix(NOTCH[j], NOTCH[j + 1], ph);
+      // each tier keeps its own reach (0.9..1.1) all the way up, so the eye can follow it rising
+      tip = root + (tip - root) * (1.0 + (h21(vec2(cyc - float(j), fs + 4.0)) - 0.5) * 0.2 * amp);
+      root = notch;
+      int a = 1 + j * 2;
+      tip += boil(dn, float(a), fs) * amp;
+      notch += boil(dn, float(a + 1), fs) * amp;
+      v[side == 0 ? a : NV - 1 - a] = vec2(sx * tip.x + sway * tip.y * tip.y, tip.y);
+      v[side == 0 ? a + 1 : NV - 2 - a] = vec2(sx * notch.x + sway * notch.y * notch.y, notch.y);
     }
+    vec2 sp = TIP[7] + boil(dn, 15.0, fs);
+    v[side == 0 ? NS - 1 : NV - NS] = vec2(sx * sp.x + sway * sp.y * sp.y, sp.y);
   }
-  float pk = 1.0 + (h21(vec2(nb, 99.0)) - 0.5) * 0.06;     // the peak flickers
-  v[14] = vec2(sway * pk * pk, pk);
-  // polygon distance (Inigo Quilez)
+  float pk = 1.0 + (h21(vec2(dn, 99.0)) - 0.5) * 0.06;     // the peak flickers
+  v[NS] = vec2(sway * pk * pk, pk);
+  // polygon distance (Inigo Quilez); the max() keeps a tier that has not grown yet (coincident vertices) harmless
   float d = dot(q - v[0], q - v[0]);
   float s = 1.0;
   for (int i = 0; i < NV; i++) {
     int k = i == 0 ? NV - 1 : i - 1;
     vec2 e = v[k] - v[i], w = q - v[i];
-    vec2 b = w - e * clamp(dot(w, e) / dot(e, e), 0.0, 1.0);
+    vec2 b = w - e * clamp(dot(w, e) / max(dot(e, e), 1e-8), 0.0, 1.0);
     d = min(d, dot(b, b));
     bool c1 = q.y >= v[i].y, c2 = q.y < v[k].y, c3 = e.x * w.y > e.y * w.x;
     if ((c1 && c2 && c3) || (!c1 && !c2 && !c3)) s = -s;
@@ -187,8 +205,10 @@ vec4 aura(vec2 p, vec2 uv, float t, float front) {
   float k = clamp((uStrength - 0.55) / 0.45, 0.0, 1.0);    // 0 a weak charge .. 1 Power Surge
   float hgt = mix(0.865, 0.996, k) * mix(0.6, 1.0, uFade); // the aura's height (the hollow's top just over the head)
   vec2 q = p / hgt;
-  float tn = floor(t * 24.0) / 24.0;                       // drawing time (24 a second)
-  float nb = floor(t * 12.0);                              // boil frame (12 a second)
+  float tn = floor(t * 24.0) / 24.0;                       // streak / flick time (24 a second)
+  float nb = floor(t * 12.0);                              // the flicks' boil frame (12 a second)
+  float dr = floor(t / DRAWING);                           // the outline's drawing (~9 a second, as in the reference)
+  float dn = mod(dr, 1024.0);                              // wrapped (a multiple of 4) so the hashes keep their precision
   vec3 c = uColor;
   // anything that reaches the quad's edge thins out instead of being cut off
   float edge = smoothstep(1.0, 0.95, uv.y) * smoothstep(0.0, 0.03, uv.x) * smoothstep(1.0, 0.97, uv.x);
@@ -198,7 +218,7 @@ vec4 aura(vec2 p, vec2 uv, float t, float front) {
     float fl = flicks(q, tn, nb, 0.0) * hol * smoothstep(0.05, 0.12, q.y) * smoothstep(0.66, 0.5, q.y);
     return vec4(c * fl * 0.85, 0.0) * fade;
   }
-  float d = sdOutline(q, tn, nb);
+  float d = sdOutline(q, dr * DRAWING, dn);
   float w = max(fwidth(d), 1e-4) * 0.75;
   float inside = 1.0 - smoothstep(-w, w, d);
   float band = inside * (1.0 - hol);
