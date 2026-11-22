@@ -675,7 +675,7 @@ function elbowPole(rig, side, shoulder, fist, chest, ua, hint) {
   const swing = restDir.angleTo(dir) * 180 / Math.PI;
   let base = carried.clone().lerp(chestPole, smoothstep(70, 120, swing)).normalize();
   // AttackPose.ElbowL / ElbowR: the pose's own elbow aim in the chest's frame (+x right, +y up, +z forward); its length (0..1) is
-  // how much it overrides the solver's pole. The charged heavy's cocked haymaker (elbow up and back) needs it.
+  // how much it overrides the solver's pole. The charged heavy's wind-up uses it to keep the elbow down.
   // NEW (AttackPoseSolver.TurnTowards): turn a towards b round the shoulder→wrist line (both perpendicular to it), an even
   // swing; a lerp between far-apart aims barely moved and then flipped through the middle in a frame. Almost opposite, it
   // goes round the outside of the arm, not through the body.

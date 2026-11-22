@@ -21,8 +21,8 @@ namespace LightMMORPG.Characters
         public float OpenL, OpenR;
         /// <summary>
         /// Where the elbow points, in the chest's frame (+x right, +y up, +z forward); the length (0..1) is how much it overrides
-        /// the solver's own elbow (<see cref="AttackPoseSolver.ElbowPole"/>). Zero = the solver's. The heavy's cocked haymaker
-        /// (the elbow up and back, the fist at the shoulder) needs it; the solver alone always drops a raised elbow.
+        /// the solver's own elbow (<see cref="AttackPoseSolver.ElbowPole"/>). Zero = the solver's. The heavy's wind-up uses it to
+        /// keep the elbow pointing at the floor while the chest leans far forward (the solver's own "down" tilts with the chest).
         /// </summary>
         public Vector3 ElbowL, ElbowR;
         public Vector3 LegL, LegR; public float FootYawL, FootYawR, FootPitchL, FootPitchR;
@@ -343,23 +343,22 @@ namespace LightMMORPG.Characters
             // left out): a cocked haymaker to the face that launches the opponent, a long follow-through, then a slump. Traced on a
             // copy of the Locomotion Bench with the game's solver, each key rendered beside its frame from a matching camera.
             // The clip's wind-up shot is mirrored (the punch itself is a right), so it is done here with the right hand.
-            // Hold: the fist comes up beside the cheek and clenches, then the elbow swings up and back, the fist cocked beside the
-            // head, the chest turned 48° away and leaning in, the head on the target, the left arm hanging loose. Full charge coils
-            // deeper (elbow further back, lower, more lean). Release: the elbow leads round at shoulder height, the fist lands on the
-            // opponent's face with the head thrown back, sweeps on up and across the face to the left (the clip's long held
-            // follow-through: arm straight over the head, left arm out low, chest arched and leaning left), then the arm drops in
-            // an arc out in front, the fighter slumps forward, arms hanging, and steps back into the guard.
-            // The cocked arm (owner 2026-11-22: "the elbow bends weird and the arm ends up looking terrible"): it was folded shut
-            // (elbow 150°) with the fist on top of the shoulder, which the hinge IK can only reach by rolling the upper arm 160°+
-            // about itself; the skin wrung round the shoulder. Now the elbow is bent ~105-115° and the forearm points up the chest
-            // to the fist beside the head (the upper arm rolls ~85°, a thrower's cocked arm), placed from the posed shoulder in the
-            // chest's frame on a scratch bench and checked from the game camera (limb audit, 2026-11-22).
+            // Hold: the fist comes up beside the cheek and clenches with the elbow pointing at the floor, then draws back out to the
+            // side as the chest turns 48° away and leans in, the head on the target, the left arm hanging loose. Full charge coils
+            // deeper (fist further back, body lower, more lean) with the elbow still down. Release: the elbow stays low as the arm
+            // drives forward, the fist lands on the opponent's face with the head thrown back, sweeps on up and across the face to
+            // the left (the clip's long held follow-through: arm straight over the head, left arm out low, chest arched and leaning
+            // left), then the arm drops in an arc out in front, the fighter slumps forward, arms hanging, and steps back into the guard.
+            // The cocked arm (owner 2026-11-22: "the elbow should be down"; docs/bench/heavy-windup-bench.html,
+            // https://claude.ai/artifact/2M5MydQdsjRYCsoU7AUQJB): the elbow stays 17-25 cm below the shoulder for the whole wind-up
+            // and the upper arm rolls 67° at most. Placed from the posed shoulder, aimed at the most downward direction square to
+            // shoulder→fist and turned 15-25° outward, which keeps it out of the torso.
             var raise = P(p =>
             {
                 p.RootPos = new Vector3(0f, 0f, -0.02f); p.RootYaw = 18f; p.RootPitch = 2f; p.RootRoll = 0f;
                 p.HipsPos = new Vector3(0f, -0.10f, -0.01f); p.HipsYaw = 6f; p.HipsPitch = 5f; p.HipsRoll = 0f;
                 p.TorsoYaw = 8f; p.TorsoPitch = 12f; p.TorsoRoll = -2f; p.HeadYaw = 0f; p.HeadPitch = 0f;
-                p.ArmR = new Vector3(0.314f, 1.811f, 0.09f); p.TwistR = 20f; p.OpenR = 0f; p.ElbowR = new Vector3(0.72f, 0.643f, -0.262f);
+                p.ArmR = new Vector3(0.393f, 1.631f, 0.219f); p.TwistR = 20f; p.OpenR = 0f; p.ElbowR = new Vector3(0.259f, -0.795f, 0.548f);
                 p.ArmL = new Vector3(-0.12f, 1.28f, 0.32f); p.TwistL = -15f; p.OpenL = 0.1f;
                 // the lead foot steps out a little (lifted mid-step); the back foot stays where the guard has it
                 p.LegL = new Vector3(-0.19f, 0.15f, 0.30f); p.FootYawL = 16f; p.FootPitchL = 0f;
@@ -370,7 +369,7 @@ namespace LightMMORPG.Characters
                 p.RootPos = new Vector3(0f, 0f, -0.06f); p.RootYaw = 28f; p.RootPitch = 8f; p.RootRoll = 0f;
                 p.HipsPos = new Vector3(0f, -0.15f, -0.04f); p.HipsYaw = 8f; p.HipsPitch = 12f; p.HipsRoll = 0f;
                 p.TorsoYaw = 12f; p.TorsoPitch = 32f; p.TorsoRoll = -4f; p.HeadYaw = 0f; p.HeadPitch = 0f;
-                p.ArmR = new Vector3(0.557f, 1.654f, 0.248f); p.TwistR = 20f; p.OpenR = 0f; p.ElbowR = new Vector3(0.587f, 0.643f, -0.492f);
+                p.ArmR = new Vector3(0.608f, 1.482f, 0.259f); p.TwistR = 20f; p.OpenR = 0f; p.ElbowR = new Vector3(0.298f, -0.49f, 0.819f);
                 p.ArmL = new Vector3(-0.06f, 1.02f, 0.36f); p.TwistL = -10f; p.OpenL = 0.15f;
                 p.LegL = new Vector3(-0.20f, 0.105f, 0.36f); p.FootYawL = 18f; p.FootPitchL = 0f;
                 p.LegR = new Vector3(0.22f, 0.105f, -0.22f); p.FootYawR = 40f; p.FootPitchR = 0f;
@@ -380,7 +379,7 @@ namespace LightMMORPG.Characters
                 p.RootPos = new Vector3(0f, 0f, -0.10f); p.RootYaw = 33f; p.RootPitch = 10f; p.RootRoll = 0f;
                 p.HipsPos = new Vector3(0f, -0.22f, -0.06f); p.HipsYaw = 10f; p.HipsPitch = 14f; p.HipsRoll = 0f;
                 p.TorsoYaw = 13f; p.TorsoPitch = 36f; p.TorsoRoll = -5f; p.HeadYaw = 0f; p.HeadPitch = -2f;
-                p.ArmR = new Vector3(0.646f, 1.519f, 0.174f); p.TwistR = 20f; p.OpenR = 0f; p.ElbowR = new Vector3(0.383f, 0.643f, -0.663f);
+                p.ArmR = new Vector3(0.671f, 1.367f, 0.167f); p.TwistR = 20f; p.OpenR = 0f; p.ElbowR = new Vector3(0.352f, -0.426f, 0.833f);
                 p.ArmL = new Vector3(-0.05f, 0.98f, 0.38f); p.TwistL = -10f; p.OpenL = 0.15f;
                 p.LegL = new Vector3(-0.22f, 0.105f, 0.42f); p.FootYawL = 20f; p.FootPitchL = 0f;
                 p.LegR = new Vector3(0.24f, 0.105f, -0.26f); p.FootYawR = 44f; p.FootPitchR = 0f;
@@ -424,9 +423,9 @@ namespace LightMMORPG.Characters
                     Keys = new[]
                     {
                         K(0f, KeyEase.Smooth, P()),
-                        // the fist comes up beside the cheek and clenches, the elbow out to the side
+                        // the fist comes up beside the cheek and clenches, the elbow down
                         K(0.10f, KeyEase.Smooth, raise),
-                        // cocked: the elbow up and back, the fist at the shoulder, leaning in
+                        // cocked: the elbow down, the fist drawn back out to the side at shoulder height, leaning in
                         K(0.30f, KeyEase.Smooth, cock),
                     },
                 },
@@ -436,13 +435,13 @@ namespace LightMMORPG.Characters
                     Keys = new[]
                     {
                         K(0f, KeyEase.Smooth, cock),
-                        // the elbow leads round at shoulder height, the fist beside the face, the lead foot driving in
+                        // the elbow stays low as the arm drives forward past the face, the lead foot driving in
                         K(0.05f, KeyEase.In, P(p =>
                         {
                             p.RootPos = new Vector3(0f, 0f, 0.12f); p.RootYaw = 8f; p.RootPitch = 4f; p.RootRoll = 0f;
                             p.HipsPos = new Vector3(0f, -0.19f, 0f); p.HipsYaw = -2f; p.HipsPitch = 8f; p.HipsRoll = 0f;
                             p.TorsoYaw = 2f; p.TorsoPitch = 14f; p.TorsoRoll = 0f; p.HeadYaw = 0f; p.HeadPitch = -8f;
-                            p.ArmR = new Vector3(0.225f, 1.644f, 0.431f); p.TwistR = 35f; p.OpenR = 0f; p.ElbowR = new Vector3(0.871f, 0.407f, 0.274f);
+                            p.ArmR = new Vector3(0.26f, 1.58f, 0.52f); p.TwistR = 35f; p.OpenR = 0f; p.ElbowR = new Vector3(0.458f, -0.814f, 0.356f);
                             p.ArmL = new Vector3(-0.36f, 1.22f, -0.02f); p.TwistL = -25f; p.OpenL = 0.1f;
                             p.LegL = new Vector3(-0.21f, 0.16f, 0.60f); p.FootYawL = 8f; p.FootPitchL = 0f;
                             p.LegR = new Vector3(0.22f, 0.105f, -0.22f); p.FootYawR = 36f; p.FootPitchR = 15f;

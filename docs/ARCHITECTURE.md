@@ -959,3 +959,13 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
   - Not changed: the block's arms are nearly straight and roll ~95° while walking (no pops); a jab pressed within 0.05 s of a
     heavy's release passes the left fist near the shoulder for a frame of the 0.06 s cross-fade.
   - Verified: headless compile only (owner tests by hand).
+- Heavy wind-up: elbow down (2026-11-22; owner: "the windup of the heavy punch still looks like its bending the elbow wrong the
+  elbow should be down", approved on a bench before the commit: `docs/bench/heavy-windup-bench.html`,
+  https://claude.ai/artifact/2M5MydQdsjRYCsoU7AUQJB).
+  - Only `ArmR` / `ElbowR` of four keys changed: raise, cock, Coiled and the swing's 0.05 s key. Body, feet, timing, `Hit` and
+    the rest of the swing are unchanged.
+  - Measured on the bench: the elbow was 22-24 cm above the shoulder when cocked / fully charged and is now 19 cm below (17-25 cm
+    below for the whole wind-up); worst upper-arm roll 84° → 67°; the fist on release clipped the face by 1 cm, now clears it by 6 cm.
+  - New rule from the owner (`CLAUDE.md`): every animation is made in Blender. This wind-up predates the rule and was accepted
+    "for now". Nothing moves keys between Blender and `BasicMovesets` yet.
+  - Verified: headless compile only (owner tests by hand). Not seen in game on the Toon Head + hair.

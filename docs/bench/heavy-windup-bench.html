@@ -1,0 +1,1062 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Heavy Windup Bench</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: a sticky 3D stage with the charge button under it; on wide screens the controls move to a column beside it. Same look as the other LightMMORPG benches. */
+:root{
+  --bg:#eef1f6; --panel:#ffffff; --ink:#1b2130; --muted:#5d6678; --line:#d8dde7; --chip:#f3f5f9;
+  --accent:#f26b1d; --accent-ink:#ffffff; --accent-soft:#fde3d2; --warn:#a33a12;
+  --stage-a:#cfe2f4; --stage-b:#f4e8dc;
+  --f-display:"M PLUS Rounded 1c","Segoe UI",system-ui,sans-serif;
+  --f-body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11141b; --panel:#191e29; --ink:#e7ebf3; --muted:#9aa3b6; --line:#2b3242; --chip:#222838;
+  --accent:#ff8a3d; --accent-ink:#1a1006; --accent-soft:#3a2416; --warn:#ffb08a;
+  --stage-a:#1d2a40; --stage-b:#33283a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11141b; --panel:#191e29; --ink:#e7ebf3; --muted:#9aa3b6; --line:#2b3242; --chip:#222838;
+  --accent:#ff8a3d; --accent-ink:#1a1006; --accent-soft:#3a2416; --warn:#ffb08a;
+  --stage-a:#1d2a40; --stage-b:#33283a; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45;margin:0}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--stage-a)}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+.stage{position:relative;height:clamp(300px,52svh,640px);overflow:hidden;background:radial-gradient(120% 90% at 50% 20%,var(--stage-b),var(--stage-a))}
+.stage canvas{display:block;width:100%;height:100%;touch-action:none}
+.stage[data-mode="both"]::after{content:"";position:absolute;top:0;bottom:0;left:50%;width:1px;background:color-mix(in srgb,var(--ink) 22%,transparent);pointer-events:none}
+.loading{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-weight:600;padding:16px;text-align:center}
+.hud{position:absolute;display:flex;gap:6px;align-items:center;pointer-events:none;z-index:1}
+.hud.t{top:10px;left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px));justify-content:space-between}
+.hud.b{bottom:10px;left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px))}
+.pill{border:1px solid color-mix(in srgb,var(--ink) 14%,transparent);background:color-mix(in srgb,var(--panel) 88%,transparent);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border-radius:999px;padding:5px 11px;font-size:12.5px;font-weight:600;white-space:nowrap}
+.pill.new{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.pill.phase{font-family:var(--f-mono);font-weight:500;font-size:11.5px;font-variant-numeric:tabular-nums}
+.views{display:flex;gap:6px;overflow-x:auto;pointer-events:auto;scrollbar-width:none;max-width:100%}
+.views::-webkit-scrollbar{display:none}
+.views button{flex:none;border:1px solid color-mix(in srgb,var(--ink) 14%,transparent);background:color-mix(in srgb,var(--panel) 88%,transparent);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border-radius:999px;padding:6px 12px;font-weight:600;font-size:12.5px}
+.views button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+
+.transport{display:flex;gap:8px;align-items:stretch;padding-block:8px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.hold{position:relative;flex:1;min-width:0;overflow:hidden;border:0;border-radius:14px;background:var(--accent);color:var(--accent-ink);padding:12px 16px;
+  font-family:var(--f-display);font-weight:800;font-size:17px;letter-spacing:.03em;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.hold i{position:absolute;inset:0;transform-origin:left center;transform:scaleX(0);background:color-mix(in srgb,var(--accent-ink) 24%,transparent)}
+.hold span{position:relative;font-variant-numeric:tabular-nums}
+.hold[aria-disabled="true"]{opacity:.65}
+
+.panel{padding-block:18px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:20px;max-width:760px;margin:0 auto}
+.panel>*{min-width:0}
+.head{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+h1{font-family:var(--f-display);font-weight:800;font-size:26px;margin:0;text-wrap:balance;letter-spacing:.01em}
+h2{font-family:var(--f-display);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+p{margin:0;max-width:65ch}
+.lede{color:var(--muted)}
+.flag{display:inline-block;background:var(--accent-soft);color:var(--ink);border:1px solid var(--accent);border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.chip{border:1px solid var(--line);background:var(--chip);border-radius:12px;padding:8px 13px;font-weight:600;white-space:nowrap}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+.seg{display:flex;border-radius:14px;overflow:hidden;border:1px solid var(--line);max-width:100%}
+.seg button{flex:1;min-width:0;border:0;background:var(--panel);padding:11px 8px;font-family:var(--f-display);font-weight:800;font-size:14px;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px;min-width:0}
+ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;max-width:65ch}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:0}
+th{color:var(--muted);font-weight:600}
+td.num,th.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+th.num{font-family:var(--f-body)}
+td.bad{color:var(--warn)}
+td.good{font-weight:500}
+.status{color:var(--muted);font-size:13px}
+kbd{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:1px 6px;background:var(--chip)}
+
+@media (min-width:1040px){
+  html,body{overflow:hidden}
+  .app{display:grid;grid-template-columns:minmax(0,1fr) 420px;height:100%}
+  .top{position:relative;top:auto;display:flex;flex-direction:column;height:100%;min-height:0;border-bottom:0;border-right:1px solid var(--line)}
+  .stage{flex:1;height:auto;min-height:0}
+  .panel{height:100%;overflow-y:auto;max-width:none;margin:0;padding-inline:18px}
+}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+
+<div class="app">
+  <div class="top">
+    <div class="stage" id="stage" data-mode="both">
+      <canvas id="c" aria-label="3D view of the fighter winding up the charged punch. Drag to turn the camera, pinch or scroll to zoom."></canvas>
+      <div class="loading" id="loading">Loading the fighter…</div>
+      <div class="hud t">
+        <span class="pill" id="tag-a">Before</span>
+        <span class="pill phase" id="phase" role="status">Standing</span>
+        <span class="pill new" id="tag-b">Elbow down</span>
+      </div>
+      <div class="hud b">
+        <div class="views" role="group" aria-label="Camera view" id="views">
+          <button data-v="v-game" aria-pressed="true">Game camera</button>
+          <button data-v="v-arm" aria-pressed="false">Arm close-up</button>
+          <button data-v="v-side" aria-pressed="false">Side</button>
+          <button data-v="v-front" aria-pressed="false">Front</button>
+          <button data-v="v-three" aria-pressed="false">¾</button>
+        </div>
+      </div>
+    </div>
+    <div class="transport">
+      <button class="hold" id="hold" aria-label="Hold to charge the punch, let go to throw it"><i id="fill"></i><span id="hold-text">Hold to charge</span></button>
+      <button class="chip" id="loop" aria-pressed="true">Auto-play</button>
+    </div>
+  </div>
+
+  <main class="panel">
+    <div class="head">
+      <h1>Heavy Windup Bench</h1>
+      <span class="flag">In the game</span>
+      <p class="lede">The charged punch on the game's own body and arm solver. The fist comes up beside the cheek and the elbow stays down for the whole windup. Hold the button like the heavy key, or hold <kbd>H</kbd>.</p>
+    </div>
+
+    <section>
+      <h2>Show</h2>
+      <div class="seg" role="group" aria-label="Which version to show" id="modes"></div>
+    </section>
+
+    <section>
+      <h2>Stop on a pose</h2>
+      <div class="row" role="group" aria-label="Hold one pose" id="poses"></div>
+    </section>
+
+    <section>
+      <h2>Speed</h2>
+      <div class="row" role="group" aria-label="Playback speed" id="speeds"></div>
+    </section>
+
+    <section class="card">
+      <h2>What changed</h2>
+      <ul>
+        <li><b>Windup and full charge:</b> the fist comes up beside the cheek with the elbow pointing at the floor. It used to swing up above the shoulder.</li>
+        <li><b>Start of the punch:</b> the elbow stays low while the arm drives forward, and the fist no longer clips the face.</li>
+        <li><b>Stays the same:</b> the body, footwork, timing, damage and the rest of the swing.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Measured on the game's body</h2>
+      <div class="tablewrap"><table id="numbers"><tbody><tr><td class="status">Measuring…</td></tr></tbody></table></div>
+    </section>
+
+    <p class="status">This bench uses a stand-in head, so the Toon Head and hair still need a look in the game.</p>
+  </main>
+</div>
+
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+// The rig, pose blending, solver and scene below are copied unchanged from the Locomotion Bench (docs/bench/locomotion-bench.html),
+// which mirrors CharacterRig and AttackPoseSolver.
+const state = { shoulders: true };
+// ================================================================== rig (port of CharacterRig.cs; all numbers are Unity model space:
+// +Y up, +Z forward, +X = the character's right. Quaternion maths is identical to Unity's; the view mirrors x so it looks like the game.)
+const BN = ["Hips","Spine","Chest","UpperChest","Neck","Head","LeftShoulder","LeftUpperArm","LeftLowerArm","LeftHand","RightShoulder","RightUpperArm","RightLowerArm","RightHand",
+  "LeftUpperLeg","LeftLowerLeg","LeftFoot","LeftToes","RightUpperLeg","RightLowerLeg","RightFoot","RightToes",
+  "LeftThumbProximal","LeftThumbIntermediate","LeftIndexProximal","LeftIndexIntermediate","LeftMiddleProximal","LeftMiddleIntermediate","LeftRingProximal","LeftRingIntermediate","LeftLittleProximal","LeftLittleIntermediate",
+  "RightThumbProximal","RightThumbIntermediate","RightIndexProximal","RightIndexIntermediate","RightMiddleProximal","RightMiddleIntermediate","RightRingProximal","RightRingIntermediate","RightLittleProximal","RightLittleIntermediate"];
+const B = Object.fromEntries(BN.map((n, i) => [n, i]));
+const NB = BN.length, ARM_OFF = 4, LEG_OFF = 4, FINGER_OFF = 10;
+function sideBone(left, side) {
+  if (side < 0) return left;
+  if (left >= B.LeftThumbProximal) return left + FINGER_OFF;
+  if (left >= B.LeftUpperLeg) return left + LEG_OFF;
+  return left + ARM_OFF;
+}
+function parentOf(i) {
+  switch (i) {
+    case B.Hips: return -1; case B.Spine: return B.Hips; case B.Chest: return B.Spine; case B.UpperChest: return B.Chest;
+    case B.Neck: return B.UpperChest; case B.Head: return B.Neck;
+    case B.LeftShoulder: case B.RightShoulder: return B.UpperChest;
+    case B.LeftUpperLeg: case B.RightUpperLeg: return B.Hips;
+  }
+  if (i >= B.LeftThumbProximal) {
+    const local = (i - B.LeftThumbProximal) % FINGER_OFF, right = i >= B.RightThumbProximal;
+    if (local % 2 === 1) return i - 1;
+    return right ? B.RightHand : B.LeftHand;
+  }
+  return i - 1;
+}
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const UP = V(0, 1, 0), FWD = V(0, 0, 1), RIGHT = V(1, 0, 0);
+const AA = (deg, axis) => new THREE.Quaternion().setFromAxisAngle(axis.clone().normalize(), deg * Math.PI / 180);
+const QI = () => new THREE.Quaternion();
+const mul = (...qs) => qs.reduce((a, b) => a.clone().multiply(b));
+const rot = (q, v) => v.clone().applyQuaternion(q);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = u => 0.5 - 0.5 * Math.cos(Math.PI * clamp(u, 0, 1));
+const smoothstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+function frameQ(x, y) {
+  const X = x.clone().normalize(), Y = y.clone().sub(X.clone().multiplyScalar(y.dot(X))).normalize(), Z = X.clone().cross(Y);
+  return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(X, Y, Z));
+}
+const aimFrame = (xBind, yBind, xTarget, yTarget) => frameQ(xTarget, yTarget).multiply(frameQ(xBind, yBind).invert());
+// shortest rotation taking direction a to direction b (Unity's Quaternion.FromToRotation)
+const fromTo = (a, b) => new THREE.Quaternion().setFromUnitVectors(a.clone().normalize(), b.clone().normalize());
+
+class Rig {
+  constructor(joints) {
+    this.bindLocal = joints.map((p, i) => { const pa = parentOf(i); return pa < 0 ? p.clone() : p.clone().sub(joints[pa]); });
+    this.localPos = this.bindLocal.map(v => v.clone());
+    this.model = Array.from({ length: NB }, QI);
+    this.local = Array.from({ length: NB }, QI);
+    const a = 40 * Math.PI / 180;
+    this.armDir = s => V(s * Math.sin(a), -Math.cos(a), 0);
+    this.palm = s => V(-s * Math.cos(a), -Math.sin(a), 0);
+    this.curlAxis = s => this.armDir(s).cross(this.palm(s)).normalize();
+  }
+  resetPose() { for (let i = 0; i < NB; i++) { this.model[i] = QI(); this.local[i] = QI(); this.localPos[i] = this.bindLocal[i].clone(); } }
+  setModel(i, q) { const p = parentOf(i); const pm = p < 0 ? QI() : this.model[p]; this.model[i] = q.clone(); this.local[i] = pm.clone().invert().multiply(q); }
+  inherit(i) { const p = parentOf(i); this.setModel(i, p < 0 ? QI() : this.model[p]); }
+  modelPos(i) { const p = parentOf(i); if (p < 0) return this.localPos[i].clone(); return this.modelPos(p).add(rot(this.model[p], this.localPos[i])); }
+  setFingerCurl(side, curl) {
+    const hand = this.model[sideBone(B.LeftHand, side)];
+    const axis = rot(hand, this.curlAxis(side)), palm = rot(hand, this.palm(side)), dir = rot(hand, this.armDir(side));
+    for (let f = 1; f < 5; f++) {
+      const prox = sideBone(B.LeftThumbProximal + f * 2, side);
+      const q1 = mul(AA(curl * 85, axis), hand);
+      this.setModel(prox, q1); this.setModel(prox + 1, mul(AA(curl * 100, axis), q1));
+    }
+    const thumbAxis = dir.clone().cross(palm).normalize(), t1 = sideBone(B.LeftThumbProximal, side);
+    const qt = mul(AA(curl * 35, palm), AA(curl * 25, thumbAxis), hand);
+    this.setModel(t1, qt); this.setModel(t1 + 1, mul(AA(curl * 45, thumbAxis), qt));
+  }
+  applyRestPose(armDown = 29, elbow = 22, fist = 1) {
+    this.resetPose();
+    for (const side of [-1, 1]) {
+      const ua = sideBone(B.LeftUpperArm, side);
+      const qa = mul(AA(-side * armDown, FWD), AA(-8, RIGHT));
+      if (state.shoulders) applyClavicle(this, side, rot(qa, this.armDir(side)));   // NEW: the collarbone follows the arm a little
+      this.setModel(ua, qa);
+      const armDir = rot(qa, this.armDir(side)), bend = armDir.clone().cross(FWD).normalize();
+      const qe = mul(AA(elbow, bend), qa);
+      this.setModel(ua + 1, qe); this.setModel(ua + 2, qe);
+      this.setFingerCurl(side, fist);
+    }
+  }
+  // NEW (CharacterRig.RestArm): the rest stance's shoulder→wrist direction and where its elbow points (chest frame)
+  restArm(side) {
+    const ua = sideBone(B.LeftUpperArm, side);
+    const qa = mul(AA(-side * 29, FWD), AA(-8, RIGHT));
+    const up = rot(qa, this.bindLocal[ua + 1].clone().normalize()), bend = rot(qa, this.armDir(side)).cross(FWD).normalize();
+    const fore = rot(mul(AA(22, bend), qa), this.bindLocal[ua + 2].clone().normalize());
+    const l1 = this.bindLocal[ua + 1].length(), l2 = this.bindLocal[ua + 2].length();
+    const dir = up.clone().multiplyScalar(l1).add(fore.clone().multiplyScalar(l2)).normalize();
+    const elbow = up.clone().sub(dir.clone().multiplyScalar(up.dot(dir))).normalize();
+    return { dir, elbow };
+  }
+  // two-bone IK from the joint's posed position, both bones on one hinge (CharacterRig.SolveTwoBoneHinged)
+  solveTwoBone(upper, target, pole, weight, bindPole) {
+    if (weight <= 0) return;
+    const mid = upper + 1, end = upper + 2;
+    const a = this.modelPos(upper);
+    const l1 = this.bindLocal[mid].length(), l2 = this.bindLocal[end].length();
+    const d1 = this.bindLocal[mid].clone().normalize(), d2 = this.bindLocal[end].clone().normalize();
+    const curU = this.model[upper].clone(), curM = this.model[mid].clone();
+    const toT = target.clone().sub(a);
+    const dist = clamp(toT.length(), Math.abs(l1 - l2) + 1e-3, l1 + l2 - 1e-3);
+    const dir = toT.clone().normalize();
+    const cosA = (l1 * l1 + dist * dist - l2 * l2) / (2 * l1 * dist), angA = Math.acos(clamp(cosA, -1, 1));
+    let poleDir = pole.clone().sub(a); poleDir.sub(dir.clone().multiplyScalar(poleDir.dot(dir)));
+    if (poleDir.lengthSq() < 1e-6) { poleDir = V(0, -1, 0); poleDir.sub(dir.clone().multiplyScalar(poleDir.dot(dir))); }
+    poleDir.normalize();
+    const elbowDir = dir.clone().multiplyScalar(Math.cos(angA)).add(poleDir.clone().multiplyScalar(Math.sin(angA)));
+    const elbowPos = a.clone().add(elbowDir.clone().multiplyScalar(l1)), endPos = a.clone().add(dir.clone().multiplyScalar(dist));
+    const hinge = poleDir.clone().cross(dir).normalize();
+    const hingeBind = bindPole.clone().cross(d1).normalize();
+    const qU = aimFrame(d1, hingeBind, elbowDir, hinge), qM = aimFrame(d2, hingeBind, endPos.clone().sub(elbowPos), hinge);
+    const endModel = this.model[end].clone();
+    this.setModel(upper, curU.clone().slerp(qU, weight));
+    this.setModel(mid, curM.clone().slerp(qM, weight));
+    this.setModel(end, mul(this.model[mid], curM.clone().invert(), endModel));
+  }
+}
+
+// NEW (CharacterRig.FollowArm): the collarbone turns part of the way with the upper arm, so raising an arm lifts and rolls
+// the shoulder forward instead of folding the skin over a fixed joint. Arms at or below the A-pose leave it alone (idle unchanged).
+const CLAV_FOLLOW = 0.25, CLAV_UP = 25, CLAV_FWD = 14, CLAV_BACK = 8;
+function applyClavicle(rig, side, armDirModel) {
+  const sh = sideBone(B.LeftShoulder, side);
+  const parent = rig.model[parentOf(sh)];
+  const want = rot(parent.clone().invert(), armDirModel).normalize();    // where the upper arm points, in the chest's frame
+  // lift: the part of the arm's rise above the A-pose (50° below level); forward / back: only when the arm really reaches
+  const elevBind = Math.asin(clamp(-rig.armDir(side).y, -1, 1)), elevNow = Math.asin(clamp(-want.y, -1, 1));
+  const up = clamp((elevBind - elevNow) * 180 / Math.PI * CLAV_FOLLOW, 0, CLAV_UP);
+  // forward / back: follows the arm's swing from the rest stance (z 0.14), so walking arms roll the shoulders a little
+  const fwd = clamp((want.z - 0.14) * 17, -CLAV_BACK, CLAV_FWD);
+  // left collarbone points to -x: raising it is a turn about +z by -angle, forward about +y by +angle (right side: mirrored)
+  const lift = AA(side * up, FWD), swing = AA(-side * fwd, UP);
+  rig.setModel(sh, mul(parent, swing, lift));
+}
+
+
+const merge = (base, over) => {
+  if (over === undefined) return structuredClone(base);
+  if (Array.isArray(over) || typeof over !== "object" || over === null) return over;
+  const o = structuredClone(base);
+  for (const k of Object.keys(over)) o[k] = merge(base[k], over[k]);
+  return o;
+};
+function lerpPose(a, b, t) {
+  if (typeof a === "number") return a + (b - a) * t;
+  if (Array.isArray(a)) return a.map((v, i) => v + (b[i] - v) * t);
+  const o = {};
+  for (const k of Object.keys(a)) o[k] = lerpPose(a[k], b[k], t);
+  return o;
+}
+const ZERO = {
+  root: { p: [0, 0, 0], yaw: 0, pitch: 0, roll: 0 },
+  hips: { p: [0, 0, 0], yaw: 0, pitch: 0, roll: 0 },
+  torso: { yaw: 0, pitch: 0, roll: 0 },
+  head: { yaw: 0, pitch: 0 },
+  armL: { t: [-0.31, 1.10, 0.09], twist: 0, open: 0, elbow: [0, 0, 0] },
+  armR: { t: [0.31, 1.10, 0.09], twist: 0, open: 0, elbow: [0, 0, 0] },
+  legL: { t: [-0.19, 0.105, -0.068], yaw: 0, pitch: 0 },
+  legR: { t: [0.19, 0.105, -0.068], yaw: 0, pitch: 0 },
+};
+
+
+// ================================================================== the solver (AttackPoseSolver.Apply). Writes every bone's model rotation.
+const rootQ = P => mul(AA(P.root.yaw, UP), AA(P.root.pitch, RIGHT), AA(P.root.roll, FWD));
+const TORSO_SIDE = 0.19, TORSO_FRONT = 0.135, TORSO_BACK = 0.12, FIST_ROOM = 0.07;
+// NEW (AttackPoseSolver.Girth): the cylinder's girth fades out over the first 10 % (hips) and the last 15 % (neck); it used to
+// stop dead at the neck, so the run's fist at chin height was shoved sideways one frame and left alone the next
+const girth = u => smoothstep(0, 0.1, u) * smoothstep(1, 0.85, u);
+function keepOutOfTorso(rig, target) {
+  const a = rig.modelPos(B.Hips), b = rig.modelPos(B.Neck), axis = b.clone().sub(a);
+  const len2 = axis.lengthSq(); if (len2 < 1e-6) return target;
+  const u = target.clone().sub(a).dot(axis) / len2;
+  const g = girth(u); if (g <= 0) return target;
+  const c = a.clone().add(axis.clone().multiplyScalar(u)), chest = rig.model[B.Chest];
+  const o = rot(chest.clone().invert(), target.clone().sub(c));
+  const rx = (TORSO_SIDE + FIST_ROOM) * g, rz = ((o.z >= 0 ? TORSO_FRONT : TORSO_BACK) + FIST_ROOM) * g;
+  const k = (o.x / rx) ** 2 + (o.z / rz) ** 2;
+  if (k >= 1) return target;
+  if (k < 1e-6) o.set(0, o.y, rz); else { const s = 1 / Math.sqrt(k); o.x *= s; o.z *= s; }
+  return c.add(rot(chest, o));
+}
+// is p inside the torso (the same elliptic cylinder round the spine) grown by room?
+function insideTorso(rig, p, room) {
+  const a = rig.modelPos(B.Hips), b = rig.modelPos(B.Neck), axis = b.clone().sub(a);
+  const u = p.clone().sub(a).dot(axis) / axis.lengthSq();
+  const g = smoothstep(-0.05, 0.05, u) * smoothstep(1.05, 0.9, u); if (g <= 0) return false;
+  const c = a.clone().add(axis.clone().multiplyScalar(u));
+  const o = rot(rig.model[B.Chest].clone().invert(), p.clone().sub(c));
+  return (o.x / ((TORSO_SIDE + room) * g)) ** 2 + (o.z / (((o.z >= 0 ? TORSO_FRONT : TORSO_BACK) + room) * g)) ** 2 < 1;
+}
+// NEW (AttackPoseSolver.ElbowPole): the elbow keeps the rest stance's aim carried along with the arm's swing (so a swinging
+// arm doesn't roll about itself and wring the shoulder); for big raises (guard, fist at the chin) it blends to down, out and a
+// little back in the chest's frame; if that would sink the elbow into the torso it swings out to the side until it clears
+function elbowPole(rig, side, shoulder, fist, chest, ua, hint) {
+  const l1 = rig.bindLocal[ua + 1].length(), l2 = rig.bindLocal[ua + 2].length();
+  const to = fist.clone().sub(shoulder), dist = clamp(to.length(), Math.abs(l1 - l2) + 1e-3, l1 + l2 - 1e-3), dir = to.normalize();
+  const perp = v => { const w = v.clone().sub(dir.clone().multiplyScalar(v.dot(dir))); return w.lengthSq() < 1e-6 ? null : w.normalize(); };
+  const out = perp(rot(chest, V(side, -0.25, 0))) || perp(rot(chest, V(0, -1, 0)));
+  const chestPole = perp(rot(chest, V(side * 0.5, -0.7, -0.25))) || out;
+  const rest = rig.restArm(side), restDir = rot(chest, rest.dir);
+  const carried = perp(rot(new THREE.Quaternion().setFromUnitVectors(restDir, dir), rot(chest, rest.elbow))) || chestPole;
+  const swing = restDir.angleTo(dir) * 180 / Math.PI;
+  let base = carried.clone().lerp(chestPole, smoothstep(70, 120, swing)).normalize();
+  // AttackPose.ElbowL / ElbowR: the pose's own elbow aim in the chest's frame (+x right, +y up, +z forward); its length (0..1) is
+  // how much it overrides the solver's pole. The charged heavy's wind-up uses it to keep the elbow down.
+  // NEW (AttackPoseSolver.TurnTowards): turn a towards b round the shoulder→wrist line (both perpendicular to it), an even
+  // swing; a lerp between far-apart aims barely moved and then flipped through the middle in a frame. Almost opposite, it
+  // goes round the outside of the arm, not through the body.
+  const turnTo = (a, b, t) => {
+    let ang = Math.atan2(dir.dot(a.clone().cross(b)), clamp(a.dot(b), -1, 1));
+    if (Math.abs(ang) > 150 * Math.PI / 180) {
+      const alt = ang - Math.sign(ang) * 2 * Math.PI;
+      if (rot(AA(alt * 90 / Math.PI, dir), a).dot(out) > rot(AA(ang * 90 / Math.PI, dir), a).dot(out)) ang = alt;
+    }
+    return rot(AA(ang * t * 180 / Math.PI, dir), a).normalize();
+  };
+  if (hint) {
+    const hl = Math.hypot(hint[0], hint[1], hint[2]);
+    const h = hl > 1e-4 ? perp(rot(chest, V(hint[0], hint[1], hint[2]))) : null;
+    if (h) base = turnTo(base, h, Math.min(1, hl));
+  }
+  const angA = Math.acos(clamp((l1 * l1 + dist * dist - l2 * l2) / (2 * l1 * dist), -1, 1));
+  // out of the torso: round to the outside just far enough to clear it (in tenths, then halved down to the edge), so the
+  // elbow slides along the body instead of stepping
+  const sinks = t => insideTorso(rig, shoulder.clone().add(dir.clone().multiplyScalar(Math.cos(angA) * l1)).add(turnTo(base, out, t).multiplyScalar(Math.sin(angA) * l1)), 0.05);
+  let lo = 0, hi = -1;
+  for (let i = 0; i <= 10; i++) { const t = i / 10; if (!sinks(t)) { hi = t; break; } lo = t; }
+  if (hi > 0) for (let k = 0; k < 6; k++) { const m = (lo + hi) / 2; if (sinks(m)) lo = m; else hi = m; }
+  return shoulder.clone().add(turnTo(base, out, hi < 0 ? 1 : hi));
+}
+// NEW (AttackPoseSolver.FistClearance): the fist (its centre 7 cm past the wrist, 5.5 cm round) must stay out of the torso
+// cylinder and of the shoulder girdle (an ellipsoid round the posed shoulders and upper chest, which the torso cylinder is too
+// narrow for). Returns how far to move the fist out (zero if it's clear).
+const FIST_LOCAL = [0.025, -0.069, 0.017], FIST_R = 0.065;   // measured fist: centre 7 cm past the wrist, ~5.5 cm round (+1 cm margin)
+function fistCentre(rig, side) {
+  const hand = sideBone(B.LeftHand, side);
+  return rig.modelPos(hand).add(rot(rig.model[hand], V(side * FIST_LOCAL[0], FIST_LOCAL[1], FIST_LOCAL[2])));
+}
+function fistClearance(rig, c) {
+  const chest = rig.model[B.UpperChest], inv = chest.clone().invert();
+  const mid = rig.modelPos(B.LeftUpperArm).add(rig.modelPos(B.RightUpperArm)).multiplyScalar(0.5).add(rot(chest, V(0, -0.02, 0.02)));
+  const o = rot(inv, c.clone().sub(mid));
+  const ax = 0.27 + FIST_R, ay = 0.14 + FIST_R, az = (o.z >= 0 ? 0.14 : 0.13) + FIST_R;
+  const s = (o.x / ax) ** 2 + (o.y / ay) ** 2 + (o.z / az) ** 2;
+  let push = V(0, 0, 0);
+  // out through the front, so a guard stays in front of the chest instead of flying out wide; only well behind the shoulders'
+  // plane out along the ellipsoid's radius (back / up / out), blended in between. NEW: the plain front-or-back choice flipped
+  // the run's fist at the chin (over the top of the leaning shoulders) to behind the neck and back every stride.
+  if (s < 1) {
+    const front = V(0, 0, Math.sqrt(Math.max(0, 1 - (o.x / ax) ** 2 - (o.y / ay) ** 2)) * (0.14 + FIST_R) - o.z);
+    const radial = o.clone().multiplyScalar(1 / Math.sqrt(Math.max(s, 1e-6)) - 1);
+    push = rot(chest, radial.lerp(front, smoothstep(-0.6 * az, -0.2 * az, o.z)));
+  }
+  const t = keepOutOfTorsoRoom(rig, c.clone().add(push), FIST_R);
+  return push.add(t.sub(c.clone().add(push)));
+}
+function keepOutOfTorsoRoom(rig, target, room) {
+  const a = rig.modelPos(B.Hips), b = rig.modelPos(B.Neck), axis = b.clone().sub(a);
+  const u = target.clone().sub(a).dot(axis) / axis.lengthSq();
+  const g = girth(u); if (g <= 0) return target.clone();
+  const c = a.clone().add(axis.clone().multiplyScalar(u)), chest = rig.model[B.Chest];
+  const o = rot(chest.clone().invert(), target.clone().sub(c));
+  const rx = (TORSO_SIDE + room) * g, rz = ((o.z >= 0 ? TORSO_FRONT : TORSO_BACK) + room) * g;
+  const k = (o.x / rx) ** 2 + (o.z / rz) ** 2;
+  if (k >= 1) return target.clone();
+  if (k < 1e-6) o.set(0, o.y, rz); else { const s = 1 / Math.sqrt(k); o.x *= s; o.z *= s; }
+  return c.add(rot(chest, o));
+}
+// NEW (AttackPoseSolver.KneePole): knees bend towards the front of the leg, wherever the foot is (in front, under or kicked up
+// behind); the old pole sat above the hip when the foot was thrown back, and the knee bent the wrong way
+function kneePole(hip, foot, fy) {
+  const dir = foot.clone().sub(hip).normalize(), right = rot(AA(fy, UP), V(1, 0, 0));
+  let n = dir.clone().cross(right);
+  if (n.lengthSq() < 1e-6) n = rot(AA(fy, UP), V(0, 0, 1));
+  return hip.clone().add(foot).multiplyScalar(0.5).add(n.normalize().multiplyScalar(0.5));
+}
+function solvePose(rig, P) {
+  const RQ = rootQ(P), RQi = RQ.clone().invert(), RP = V(...P.root.p);
+  const toModel = a => rot(RQi, V(...a).sub(RP));
+  rig.localPos[0] = rig.bindLocal[0].clone().add(V(...P.hips.p));
+  const H = mul(AA(P.hips.yaw, UP), AA(P.hips.pitch, RIGHT), AA(P.hips.roll, FWD));
+  rig.setModel(B.Hips, H);
+  const T = f => mul(AA(P.torso.yaw * f, UP), AA(P.torso.pitch * f, RIGHT), AA(P.torso.roll * f, FWD));
+  rig.setModel(B.Spine, mul(H, T(0.35))); rig.setModel(B.Chest, mul(H, T(0.7))); rig.setModel(B.UpperChest, mul(H, T(1)));
+  const chest = rig.model[B.UpperChest];
+  const chestYaw = P.hips.yaw + P.torso.yaw;
+  const headYaw = chestYaw + clamp(P.head.yaw - P.root.yaw - chestYaw, -55, 55);
+  const Hd = mul(AA(headYaw, UP), AA(P.head.pitch, RIGHT));
+  rig.setModel(B.Neck, chest.clone().slerp(Hd, 0.5)); rig.setModel(B.Head, Hd);
+  for (const side of [-1, 1]) {
+    const A = side < 0 ? P.armL : P.armR, sh = sideBone(B.LeftShoulder, side), ua = sh + 1;
+    let fist = keepOutOfTorso(rig, toModel(A.t));
+    for (let iter = 0; iter < 3; iter++) {
+      rig.inherit(sh);
+      if (state.shoulders) applyClavicle(rig, side, fist.clone().sub(rig.modelPos(ua)));   // NEW: collarbone first, then the arm from it
+      rig.setModel(ua, rig.model[sh]); rig.setModel(ua + 1, rig.model[sh]); rig.setModel(ua + 2, rig.model[sh]);
+      const shoulder = rig.modelPos(ua);
+      const pole = elbowPole(rig, side, shoulder, fist, chest, ua, A.elbow);
+      rig.solveTwoBone(ua, fist, pole, 1, V(0, 0, -1));
+      if (!state.shoulders) break;
+      const push = fistClearance(rig, fistCentre(rig, side));   // NEW: fist out of the shoulders / chest, then solve again
+      if (push.length() < 0.002) break;
+      fist = fist.clone().add(push.multiplyScalar(1.15));
+    }
+    const fore = rig.modelPos(ua + 2).sub(rig.modelPos(ua + 1)).normalize();
+    rig.setModel(ua + 1, mul(AA(A.twist * 0.5, fore), rig.model[ua + 1]));
+    rig.setModel(ua + 2, mul(AA(A.twist * 0.5, fore), rig.model[ua + 1]));
+    rig.setFingerCurl(side, 1 - (A.open || 0));
+  }
+  for (const side of [-1, 1]) {
+    const L = side < 0 ? P.legL : P.legR, ul = sideBone(B.LeftUpperLeg, side);
+    rig.setModel(ul, H); rig.setModel(ul + 1, H); rig.setModel(ul + 2, H);
+    const footT = toModel(L.t), fy = L.yaw - P.root.yaw;
+    const pole = kneePole(rig.modelPos(ul), footT, fy);
+    rig.solveTwoBone(ul, footT, pole, 1, V(0, 0, 1));
+    const planted = mul(AA(fy, UP), AA(L.pitch, RIGHT)), lifted = mul(rig.model[ul + 1], AA(L.pitch, RIGHT));
+    const lift = smooth((L.t[1] - 0.2) / 0.25);
+    const foot = planted.clone().slerp(lifted, lift);
+    rig.setModel(ul + 2, foot);
+    // NEW: toes stay flat on the floor while the heel lifts (push-off)
+    const toes = L.pitch > 0 ? AA(fy, UP).slerp(foot, Math.max(lift, 0)) : foot;
+    rig.setModel(ul + 3, toes);
+  }
+}
+
+
+// ================================================================== three.js scene
+const canvas = document.getElementById("c");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 80);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true; controls.minDistance = 1.0; controls.maxDistance = 16;
+scene.add(new THREE.HemisphereLight(0xfff4ea, 0x8a8fa2, 1.3));
+const sun = new THREE.DirectionalLight(0xffffff, 2.0); sun.position.set(-3, 6, 4); scene.add(sun);
+const world = new THREE.Group(); world.scale.x = -1; scene.add(world);
+
+const grad = (() => { const d = new Uint8Array([120, 120, 120, 255, 205, 205, 205, 255, 255, 255, 255, 255]); const t = new THREE.DataTexture(d, 3, 1, THREE.RGBAFormat); t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true; return t; })();
+const toon = color => new THREE.MeshToonMaterial({ color, gradientMap: grad });
+const outline = (color, w) => {
+  const m = new THREE.MeshBasicMaterial({ color, side: THREE.BackSide });
+  m.onBeforeCompile = s => { s.vertexShader = s.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>\ntransformed += normalize(normal) * ${w.toFixed(4)};`); };
+  return m;
+};
+const INK = 0x2a1a18;
+
+// moving floor: 0.5 m tiles that scroll back at the fighter's speed (a planted foot should stay on its tile)
+const TILE = 0.5;
+const floorTex = (() => {
+  const S = 256, cv = document.createElement("canvas"); cv.width = cv.height = S; const g = cv.getContext("2d");
+  g.fillStyle = "#d9cfc4"; g.fillRect(0, 0, S, S);
+  g.fillStyle = "#cdbfb1"; g.fillRect(0, 0, S / 2, S / 2); g.fillRect(S / 2, S / 2, S / 2, S / 2);
+  g.strokeStyle = "#b3a493"; g.lineWidth = 3; g.strokeRect(0, 0, S, S);
+  const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8; return t;
+})();
+const FLOOR_R = 7;
+floorTex.repeat.set(FLOOR_R * 2 / (TILE * 2), FLOOR_R * 2 / (TILE * 2));
+const floor = new THREE.Mesh(new THREE.CircleGeometry(FLOOR_R, 72), new THREE.MeshToonMaterial({ map: floorTex, gradientMap: grad }));
+floor.rotation.x = -Math.PI / 2; world.add(floor);
+let floorZ = 0;
+// ================================================================== the fighter (the game's baked body)
+const fighter = new THREE.Group(); world.add(fighter);
+let rig = null, bones = null, bodyParts = null, bodyMeshes = [];
+function parseBody(buf) {
+  const dv = new DataView(buf); let o = 0;
+  const tag = String.fromCharCode(dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3)); o = 4;
+  if (tag !== "LBB1") throw new Error("not LBB1");
+  const nb = dv.getInt32(o, true); o += 4;
+  o += 16;
+  const joints = [];
+  for (let i = 0; i < nb; i++) { joints.push(V(dv.getFloat32(o, true), dv.getFloat32(o + 4, true), dv.getFloat32(o + 8, true))); o += 12; }
+  const parts = [];
+  for (let k = 0; k < 3; k++) {
+    const nv = dv.getInt32(o, true), nt = dv.getInt32(o + 4, true); o += 8;
+    const pos = new Float32Array(buf.slice(o, o + nv * 12)); o += nv * 12;
+    const bi = new Uint8Array(buf.slice(o, o + nv * 4)); o += nv * 4;
+    const bw = new Float32Array(buf.slice(o, o + nv * 16)); o += nv * 16;
+    const tri = new Uint16Array(buf.slice(o, o + nt * 6)); o += nt * 6;
+    parts.push({ pos, bi, bw, tri });
+  }
+  return { joints, parts };
+}
+async function fetchBody(name) {
+  // published page: base64 text beside the page; in the repo: the game's own file (or a copy beside the page)
+  try {
+    const r = await fetch(name.replace(".bytes", ".b64.txt"));
+    if (r.ok) { const bin = atob((await r.text()).trim()); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return parseBody(u.buffer); }
+  } catch (e) {}
+  try { const r = await fetch(name); if (r.ok) return parseBody(await r.arrayBuffer()); } catch (e) {}
+  const r = await fetch("../../Assets/_Project/Resources/Bodies/" + name);
+  if (r.ok) return parseBody(await r.arrayBuffer());
+  throw new Error(name + " not found");
+}
+function buildFighter(body) {
+  rig = new Rig(body.joints);
+  bones = body.joints.map((_, i) => { const b = new THREE.Bone(); b.name = BN[i]; b.position.copy(rig.bindLocal[i]); return b; });
+  bones.forEach((b, i) => { const p = parentOf(i); (p < 0 ? fighter : bones[p]).add(b); });
+  setBody(body);
+  const head = bones[B.Head], hc = V(0, 0.155, 0.02);
+  const skull = new THREE.SphereGeometry(1, 32, 20); skull.scale(0.15, 0.19, 0.165); skull.translate(hc.x, hc.y, hc.z);
+  head.add(new THREE.Mesh(skull, toon(0xffdcc8)), new THREE.Mesh(skull, outline(INK, 0.009)));
+  const hair = new THREE.SphereGeometry(1, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.58); hair.scale(0.165, 0.2, 0.18); hair.rotateX(-0.35); hair.translate(hc.x, hc.y + 0.02, hc.z - 0.01);
+  head.add(new THREE.Mesh(hair, toon(0x1d2238)), new THREE.Mesh(hair, outline(INK, 0.009)));
+  for (const s of [-1, 1]) { const e = new THREE.SphereGeometry(1, 12, 8); e.scale(0.016, 0.03, 0.01); e.translate(hc.x + s * 0.055, hc.y - 0.02, hc.z + 0.158); head.add(new THREE.Mesh(e, new THREE.MeshBasicMaterial({ color: 0x15151c }))); }
+}
+// (re)skins the body meshes from a parsed body (old and new shoulder weights are two files)
+function setBody(body) {
+  for (const m of bodyMeshes) { fighter.remove(m); m.geometry.dispose(); }
+  bodyMeshes = [];
+  const saved = bones.map(b => [b.position.clone(), b.quaternion.clone()]);
+  bones.forEach((b, i) => { b.position.copy(rig.bindLocal[i]); b.quaternion.identity(); });
+  fighter.position.set(0, 0, 0); fighter.quaternion.identity();
+  const colours = [0xffdcc8, 0x24305c, 0x5b6fa8];
+  body.parts.forEach((part, k) => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(part.pos, 3));
+    g.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(Uint16Array.from(part.bi), 4));
+    g.setAttribute("skinWeight", new THREE.BufferAttribute(part.bw, 4));
+    g.setIndex(new THREE.BufferAttribute(Uint32Array.from(part.tri), 1));
+    g.computeVertexNormals();
+    for (const mat of [toon(colours[k]), outline(INK, k === 0 ? 0.009 : 0.007)]) {
+      const m = new THREE.SkinnedMesh(g, mat); m.frustumCulled = false; fighter.add(m); bodyMeshes.push(m);
+    }
+  });
+  scene.updateMatrixWorld(true);
+  const skeleton = new THREE.Skeleton(bones);
+  for (const m of bodyMeshes) m.bind(skeleton, m.matrixWorld);
+  bones.forEach((b, i) => { b.position.copy(saved[i][0]); b.quaternion.copy(saved[i][1]); });
+}
+function syncBones() { for (let i = 0; i < NB; i++) { bones[i].quaternion.copy(rig.local[i]); bones[i].position.copy(rig.localPos[i]); } }
+
+
+
+// ================================================================== the charged heavy, in the game's field names (BasicMovesets.BuildRush)
+const HEAVY = (() => {
+  const GUARD = {
+    RootPos: [0, 0, 0], RootYaw: 12, RootPitch: 0, RootRoll: 0,
+    HipsPos: [0, -0.06, 0], HipsYaw: 6, HipsPitch: 3, HipsRoll: 0,
+    TorsoYaw: 4, TorsoPitch: 6, TorsoRoll: 0, HeadYaw: 0, HeadPitch: -6,
+    ArmL: [-0.07, 1.55, 0.32], TwistL: -20, OpenL: 0, ElbowL: [0, 0, 0],
+    ArmR: [0.12, 1.49, 0.20], TwistR: 20, OpenR: 0, ElbowR: [0, 0, 0],
+    LegL: [-0.18, 0.105, 0.22], FootYawL: 14, FootPitchL: 0,
+    LegR: [0.22, 0.105, -0.22], FootYawR: 34, FootPitchR: 0,
+  };
+  const P = e => ({ ...structuredClone(GUARD), ...e });
+  // C# fields -> bench pose
+  const toBench = p => ({
+    root: { p: p.RootPos, yaw: p.RootYaw, pitch: p.RootPitch, roll: p.RootRoll },
+    hips: { p: p.HipsPos, yaw: p.HipsYaw, pitch: p.HipsPitch, roll: p.HipsRoll },
+    torso: { yaw: p.TorsoYaw, pitch: p.TorsoPitch, roll: p.TorsoRoll },
+    head: { yaw: p.HeadYaw, pitch: p.HeadPitch },
+    armL: { t: p.ArmL, twist: p.TwistL, open: p.OpenL, elbow: p.ElbowL },
+    armR: { t: p.ArmR, twist: p.TwistR, open: p.OpenR, elbow: p.ElbowR },
+    legL: { t: p.LegL, yaw: p.FootYawL, pitch: p.FootPitchL },
+    legR: { t: p.LegR, yaw: p.FootYawR, pitch: p.FootPitchR },
+  });
+  const raise = P({
+    RootPos: [0, 0, -0.02], RootYaw: 18, RootPitch: 2, RootRoll: 0,
+    HipsPos: [0, -0.10, -0.01], HipsYaw: 6, HipsPitch: 5, HipsRoll: 0,
+    TorsoYaw: 8, TorsoPitch: 12, TorsoRoll: -2, HeadYaw: 0, HeadPitch: 0,
+    ArmR: [0.314, 1.811, 0.09], TwistR: 20, OpenR: 0, ElbowR: [0.72, 0.643, -0.262],
+    ArmL: [-0.12, 1.28, 0.32], TwistL: -15, OpenL: 0.1,
+    LegL: [-0.19, 0.15, 0.30], FootYawL: 16, FootPitchL: 0,
+    LegR: [0.22, 0.105, -0.22], FootYawR: 34, FootPitchR: 0,
+  });
+  const cock = P({
+    RootPos: [0, 0, -0.06], RootYaw: 28, RootPitch: 8, RootRoll: 0,
+    HipsPos: [0, -0.15, -0.04], HipsYaw: 8, HipsPitch: 12, HipsRoll: 0,
+    TorsoYaw: 12, TorsoPitch: 32, TorsoRoll: -4, HeadYaw: 0, HeadPitch: 0,
+    ArmR: [0.557, 1.654, 0.248], TwistR: 20, OpenR: 0, ElbowR: [0.587, 0.643, -0.492],
+    ArmL: [-0.06, 1.02, 0.36], TwistL: -10, OpenL: 0.15,
+    LegL: [-0.20, 0.105, 0.36], FootYawL: 18, FootPitchL: 0,
+    LegR: [0.22, 0.105, -0.22], FootYawR: 40, FootPitchR: 0,
+  });
+  const coiled = P({
+    RootPos: [0, 0, -0.10], RootYaw: 33, RootPitch: 10, RootRoll: 0,
+    HipsPos: [0, -0.22, -0.06], HipsYaw: 10, HipsPitch: 14, HipsRoll: 0,
+    TorsoYaw: 13, TorsoPitch: 36, TorsoRoll: -5, HeadYaw: 0, HeadPitch: -2,
+    ArmR: [0.646, 1.519, 0.174], TwistR: 20, OpenR: 0, ElbowR: [0.383, 0.643, -0.663],
+    ArmL: [-0.05, 0.98, 0.38], TwistL: -10, OpenL: 0.15,
+    LegL: [-0.22, 0.105, 0.42], FootYawL: 20, FootPitchL: 0,
+    LegR: [0.24, 0.105, -0.26], FootYawR: 44, FootPitchR: 0,
+  });
+  const drive = P({
+    RootPos: [0, 0, 0.12], RootYaw: 8, RootPitch: 4, RootRoll: 0,
+    HipsPos: [0, -0.19, 0], HipsYaw: -2, HipsPitch: 8, HipsRoll: 0,
+    TorsoYaw: 2, TorsoPitch: 14, TorsoRoll: 0, HeadYaw: 0, HeadPitch: -8,
+    ArmR: [0.225, 1.644, 0.431], TwistR: 35, OpenR: 0, ElbowR: [0.871, 0.407, 0.274],
+    ArmL: [-0.36, 1.22, -0.02], TwistL: -25, OpenL: 0.1,
+    LegL: [-0.21, 0.16, 0.60], FootYawL: 8, FootPitchL: 0,
+    LegR: [0.22, 0.105, -0.22], FootYawR: 36, FootPitchR: 15,
+  });
+  const impact = P({
+    RootPos: [0, 0, 0.40], RootYaw: -22, RootPitch: 3, RootRoll: 0,
+    HipsPos: [0, -0.17, 0], HipsYaw: -8, HipsPitch: 4, HipsRoll: 0,
+    TorsoYaw: -10, TorsoPitch: -2, TorsoRoll: 4, HeadYaw: 0, HeadPitch: -32,
+    ArmR: [0, 1.92, 1.20], TwistR: 60, OpenR: 0,
+    ArmL: [-0.461, 1.033, 0.293], TwistL: -20, OpenL: 0.3,
+    LegL: [-0.22, 0.105, 0.80], FootYawL: -4, FootPitchL: 0,
+    LegR: [0.24, 0.105, -0.06], FootYawR: 6, FootPitchR: 32,
+  });
+  const sweep = P({
+    RootPos: [0, 0, 0.43], RootYaw: -26, RootPitch: 0, RootRoll: 0,
+    HipsPos: [-0.03, -0.17, 0], HipsYaw: -8, HipsPitch: 2, HipsRoll: 0,
+    TorsoYaw: -10, TorsoPitch: -8, TorsoRoll: 12, HeadYaw: -25, HeadPitch: -38,
+    ArmR: [-0.191, 1.836, 0.851], TwistR: 55, OpenR: 0,
+    ArmL: [-0.519, 1.096, 0.102], TwistL: -20, OpenL: 0.2,
+    LegL: [-0.23, 0.105, 0.80], FootYawL: -8, FootPitchL: 0,
+    LegR: [0.27, 0.105, -0.04], FootYawR: 3, FootPitchR: 34,
+  });
+  const Follow = (torsoPitch, torsoRoll, headYaw, headPitch, armR) => P({
+    RootPos: [0, 0, 0.44], RootYaw: -26, RootPitch: -3, RootRoll: 0,
+    HipsPos: [-0.06, -0.16, 0], HipsYaw: -8, HipsPitch: 0, HipsRoll: 0,
+    TorsoYaw: -10, TorsoPitch: torsoPitch, TorsoRoll: torsoRoll, HeadYaw: headYaw, HeadPitch: headPitch,
+    ArmR: armR, TwistR: 50, OpenR: 0,
+    ArmL: [-0.589, 1.171, -0.047], TwistL: -20, OpenL: 0.1,
+    LegL: [-0.24, 0.105, 0.80], FootYawL: -10, FootPitchL: 0,
+    LegR: [0.30, 0.105, -0.02], FootYawR: 0, FootPitchR: 35,
+  });
+  const Slump = (hipsY, hipsPitch, torsoPitch, headPitch, armR, armL) => P({
+    RootPos: [0, 0, 0.36], RootYaw: -10, RootPitch: 8, RootRoll: 0,
+    HipsPos: [0, hipsY, 0], HipsYaw: -4, HipsPitch: hipsPitch, HipsRoll: 0,
+    TorsoYaw: -4, TorsoPitch: torsoPitch, TorsoRoll: 0, HeadYaw: 0, HeadPitch: headPitch,
+    ArmR: armR, TwistR: 20, OpenR: 0.35,
+    ArmL: armL, TwistL: -20, OpenL: 0.35,
+    LegL: [-0.24, 0.105, 0.80], FootYawL: 0, FootPitchL: 0,
+    LegR: [0.30, 0.105, -0.02], FootYawR: 14, FootPitchR: 10,
+  });
+  const held = Follow(-12, 20, -45, -34, [-0.323, 1.797, 0.30]);
+  const slump = Slump(-0.27, 22, 40, 40, [0.121, 0.673, 1.01], [-0.366, 0.695, 0.825]);
+  const lerpF = (a, b, t) => {
+    const o = {};
+    for (const k of Object.keys(a)) o[k] = Array.isArray(a[k]) ? a[k].map((v, i) => v + (b[k][i] - v) * t) : a[k] + (b[k] - a[k]) * t;
+    return o;
+  };
+  const drop = { ...lerpF(held, slump, 0.5), ArmR: [-0.048, 1.407, 1.169] };
+  const back1 = P({
+    RootPos: [0, 0, 0.16], RootYaw: 2, RootPitch: 2, RootRoll: 0,
+    HipsPos: [0, -0.14, 0], HipsYaw: 2, HipsPitch: 6, HipsRoll: 0,
+    TorsoYaw: 2, TorsoPitch: 12, TorsoRoll: 0, HeadYaw: 0, HeadPitch: 0,
+    ArmR: [0.14, 1.30, 0.42], TwistR: 25, OpenR: 0.1,
+    ArmL: [-0.10, 1.38, 0.34], TwistL: -20, OpenL: 0.05,
+    LegL: [-0.19, 0.24, 0.46], FootYawL: 10, FootPitchL: 0,
+    LegR: [0.30, 0.105, -0.02], FootYawR: 14, FootPitchR: 6,
+  });
+  const back2 = P({
+    RootPos: [0, 0, 0.08], RootYaw: 7, RootPitch: 1, RootRoll: 0,
+    HipsPos: [0, -0.10, 0], HipsYaw: 4, HipsPitch: 4.5, HipsRoll: 0,
+    TorsoYaw: 3, TorsoPitch: 9, TorsoRoll: 0, HeadYaw: 0, HeadPitch: -3,
+    ArmR: [0.13, 1.395, 0.31], TwistR: 22.5, OpenR: 0.05,
+    ArmL: [-0.085, 1.465, 0.33], TwistL: -20, OpenL: 0.025,
+    LegL: [-0.18, 0.105, 0.24], FootYawL: 14, FootPitchL: 0,
+    LegR: [0.24, 0.17, -0.12], FootYawR: 30, FootPitchR: 0,
+  });
+  
+  return { P, toBench, raise, cock, coiled, drive, impact, sweep, Follow, Slump, held, slump, drop, back1, back2, lerpF };
+})();
+const { toBench, lerpF } = HEAVY;
+const EASE = { smooth, snap: u => 1 - Math.pow(1 - u, 5), in: u => u * u };
+const SWING_REST = [
+  [0.10, "snap", HEAVY.impact], [0.16, "smooth", HEAVY.sweep],
+  [0.24, "smooth", HEAVY.Follow(-14, 22, -50, -40, [-0.343, 1.847, 0.28])], [0.52, "smooth", HEAVY.held],
+  [0.57, "in", HEAVY.drop], [0.70, "snap", HEAVY.slump],
+  [0.82, "smooth", HEAVY.Slump(-0.29, 24, 43, 44, [0.116, 0.629, 1.027], [-0.372, 0.652, 0.842])],
+  [0.92, "smooth", HEAVY.back1], [0.97, "smooth", HEAVY.back2], [1.02, "smooth", HEAVY.P()],
+];
+const build = (raise, cock, coiled, drive) => ({
+  coiled,
+  wind: [[0, "smooth", HEAVY.P()], [0.10, "smooth", raise], [0.30, "smooth", cock]],
+  swing: [[0, "smooth", cock], [0.05, "in", drive], ...SWING_REST],
+});
+// The approved wind-up: only the right arm's fist target (ArmR) and elbow aim (ElbowR) of these four keys changed.
+const ELBOW_DOWN = {
+  raise: { ArmR: [0.393, 1.631, 0.219], ElbowR: [0.259, -0.795, 0.548] },
+  cock: { ArmR: [0.608, 1.482, 0.259], ElbowR: [0.298, -0.49, 0.819] },
+  coiled: { ArmR: [0.671, 1.367, 0.167], ElbowR: [0.352, -0.426, 0.833] },
+  drive: { ArmR: [0.26, 1.58, 0.52], ElbowR: [0.458, -0.814, 0.356] },
+};
+const VERSIONS = {
+  now: build(HEAVY.raise, HEAVY.cock, HEAVY.coiled, HEAVY.drive),
+  new: build({ ...HEAVY.raise, ...ELBOW_DOWN.raise }, { ...HEAVY.cock, ...ELBOW_DOWN.cock }, { ...HEAVY.coiled, ...ELBOW_DOWN.coiled }, { ...HEAVY.drive, ...ELBOW_DOWN.drive }),
+};
+const MAX_CHARGE = 1.5, SWING_LEN = 1.02;
+
+// PlayerProceduralAnimator: AttackMove.Sample / SampleFrom / SampleHeavyHeld
+function sampleKeys(keys, t) {
+  if (t <= 0) return keys[0][2];
+  for (let i = 1; i < keys.length; i++) if (t <= keys[i][0]) {
+    const u = clamp((t - keys[i - 1][0]) / Math.max(1e-5, keys[i][0] - keys[i - 1][0]), 0, 1);
+    return lerpF(keys[i - 1][2], keys[i][2], EASE[keys[i][1]](u));
+  }
+  return keys[keys.length - 1][2];
+}
+function heldPose(v, t, charge, shakeT) {
+  let o = sampleKeys(v.wind, t);
+  if (charge > 0) o = lerpF(o, v.coiled, smooth(charge));
+  if (shakeT == null) return o;
+  const a = 0.003 + 0.012 * charge * charge;
+  return { ...o,
+    RootPos: [o.RootPos[0] + Math.sin(shakeT * 53) * a, o.RootPos[1], o.RootPos[2] + Math.cos(shakeT * 47) * a],
+    ArmR: [o.ArmR[0] + Math.sin(shakeT * 61) * a, o.ArmR[1] + Math.cos(shakeT * 59) * a, o.ArmR[2]] };
+}
+function swingPose(v, start, t) {
+  const k = v.swing[1];
+  if (t < k[0]) return lerpF(start, k[2], EASE[k[1]](clamp(t / k[0], 0, 1)));
+  return sampleKeys(v.swing, t);
+}
+const fullStart = v => heldPose(v, MAX_CHARGE, 1);
+const POSES = [
+  { id: "raise", label: "Fist up", at: v => heldPose(v, 0.10, 0.10 / MAX_CHARGE) },
+  { id: "cock", label: "Cocked", at: v => heldPose(v, 0.30, 0.30 / MAX_CHARGE) },
+  { id: "full", label: "Full charge", at: fullStart },
+  { id: "release", label: "Release", at: v => swingPose(v, fullStart(v), 0.05) },
+  { id: "impact", label: "Impact", at: v => swingPose(v, fullStart(v), 0.10) },
+];
+
+// the attack layer over the rest stance (PlayerProceduralAnimator.BlendOverBase, standing)
+function applyAttackPose(A, w) {
+  rig.applyRestPose();
+  const base = structuredClone(ZERO);
+  for (const side of [-1, 1]) {
+    const wr = rig.modelPos(sideBone(B.LeftHand, side)), an = rig.modelPos(sideBone(B.LeftFoot, side));
+    base[side < 0 ? "armL" : "armR"].t = [wr.x, wr.y, wr.z];
+    base[side < 0 ? "legL" : "legR"].t = [an.x, an.y, an.z];
+  }
+  fighter.position.set(0, 0, 0); fighter.quaternion.identity();
+  if (w <= 0) return;
+  const b = lerpPose(base, A, w);
+  b.root = { p: A.root.p.map(x => x * w), yaw: A.root.yaw * w, pitch: A.root.pitch * w, roll: A.root.roll * w };
+  const rq = rootQ(b), rp = V(...b.root.p);
+  const toAtk = m => rot(rq, V(...m)).add(rp);
+  for (const s of ["L", "R"]) {
+    const arm = "arm" + s, leg = "leg" + s;
+    const wr = toAtk(base[arm].t); b[arm].t = [lerp(wr.x, A[arm].t[0], w), lerp(wr.y, A[arm].t[1], w), lerp(wr.z, A[arm].t[2], w)];
+    const an = toAtk(base[leg].t); b[leg].t = [lerp(an.x, A[leg].t[0], w), lerp(an.y, A[leg].t[1], w), lerp(an.z, A[leg].t[2], w)];
+    b[leg].yaw = lerp(base[leg].yaw + b.root.yaw, A[leg].yaw, w); b[leg].pitch = lerp(base[leg].pitch, A[leg].pitch, w);
+  }
+  b.hips.p = base.hips.p.map((x, i) => lerp(x, A.hips.p[i], w));
+  solvePose(rig, b);
+  fighter.position.copy(rp); fighter.quaternion.copy(rq);
+}
+
+// ================================================================== playback (the heavy's flow: press, hold, release, back to guard)
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const ui = { mode: "both", view: "v-game", speed: 1, frozen: reduce ? "full" : null };
+try { const s = JSON.parse(localStorage.getItem("heavy-windup-bench-1") || "{}"); for (const k of ["mode", "view", "speed"]) if (s[k] !== undefined) ui[k] = s[k]; } catch (e) {}
+const save = () => { try { localStorage.setItem("heavy-windup-bench-1", JSON.stringify({ mode: ui.mode, view: ui.view, speed: ui.speed })); } catch (e) {} };
+const play = { heavy: null, t: 0, charge: 0, w: 0, guardHold: 0, clock: 0, starts: { now: null, new: null } };
+const loop = { on: !reduce, stage: "rest", t: 0 };
+let holding = false;
+
+function press() { if (play.heavy === "swing") return false; play.heavy = "wind"; play.t = 0; play.charge = 0; return true; }
+function release() {
+  if (play.heavy !== "wind") return;
+  for (const k of ["now", "new"]) play.starts[k] = heldPose(VERSIONS[k], play.t, play.charge, play.clock);
+  play.heavy = "swing"; play.t = 0;
+}
+function advance(dt) {
+  play.clock += dt;
+  if (play.heavy) {
+    play.t += dt; play.w = Math.min(1, play.w + dt / 0.06);
+    if (play.heavy === "wind") play.charge = clamp(play.t / MAX_CHARGE, 0, 1);
+    else if (play.t >= SWING_LEN) { play.heavy = null; play.guardHold = 0.35; }
+  } else if (play.w > 0) {
+    play.guardHold -= dt;
+    if (play.guardHold <= 0) play.w = Math.max(0, play.w - dt / 0.3);
+  }
+}
+function driveLoop(dt) {
+  if (!loop.on) return;
+  loop.t += dt;
+  if (loop.stage === "rest" && loop.t >= 0.5) { press(); loop.stage = "hold"; loop.t = 0; }
+  else if (loop.stage === "hold" && loop.t >= 1.75) { release(); loop.stage = "swing"; loop.t = 0; }
+  else if (loop.stage === "swing" && !play.heavy && play.w <= 0) { loop.stage = "rest"; loop.t = 0; }
+}
+function attackPose(key) {
+  const v = VERSIONS[key];
+  if (ui.frozen) return POSES.find(p => p.id === ui.frozen).at(v);
+  if (play.heavy === "wind") return heldPose(v, play.t, play.charge, play.clock);
+  if (play.heavy === "swing") return swingPose(v, play.starts[key], play.t);
+  return HEAVY.P();
+}
+function poseFighter(key) {
+  applyAttackPose(toBench(attackPose(key)), ui.frozen ? 1 : smooth(play.w));
+  syncBones();
+  fighter.updateMatrixWorld(true);
+  if (bodyMeshes[0]) bodyMeshes[0].skeleton.update();
+}
+
+// ================================================================== camera views (Unity coords; the world group mirrors x)
+const VIEWS = {
+  "v-game": [[1.0, 2.5, -4.05], [0.08, 1.02, 0.35]],
+  "v-arm": [[1.75, 1.85, 1.15], [0.38, 1.42, 0.15]],
+  "v-side": [[4.5, 1.45, 0.45], [0.05, 1.02, 0.45]],
+  "v-front": [[0.65, 1.65, 4.75], [0.1, 1.02, 0.2]],
+  "v-three": [[3.0, 2.05, 2.9], [0.1, 1.02, 0.2]],
+};
+// the narrowest width / height each view can show without cutting off an arm; narrower halves pull the camera back
+const VIEW_FIT = { "v-game": 0.55, "v-arm": 0.62, "v-side": 0.62, "v-front": 0.52, "v-three": 0.68 };
+const stageEl = document.getElementById("stage"), viewsEl = document.getElementById("views");
+let camAnim = null, userMoved = false;
+const follow = V(0, 0, 0);   // the close-up stays with the fighter through the lunge (eased, so the charge tremble doesn't shake the camera)
+function followRoot(dt) {
+  const want = ui.view === "v-arm" ? V(-fighter.position.x, 0, fighter.position.z) : V(0, 0, 0);
+  const delta = want.sub(follow).multiplyScalar(1 - Math.exp(-14 * dt));
+  if (delta.lengthSq() < 1e-10) return;
+  follow.add(delta); camera.position.add(delta); controls.target.add(delta);
+  if (camAnim) for (const k of ["from", "to", "tFrom", "tTo"]) camAnim[k].add(delta);
+}
+const halfAspect = () => { const r = canvas.getBoundingClientRect(); return (ui.mode === "both" ? r.width / 2 : r.width) / Math.max(1, r.height); };
+function setView(id, instant) {
+  if (!VIEWS[id]) id = "v-game";
+  ui.view = id; userMoved = false; save();
+  for (const b of viewsEl.children) b.setAttribute("aria-pressed", String(b.dataset.v === id));
+  const [p, t] = VIEWS[id], T = V(...t), k = Math.max(1, VIEW_FIT[id] / halfAspect());
+  world.updateMatrixWorld(true);
+  const to = world.localToWorld(T.clone().add(V(...p).sub(T).multiplyScalar(k))).add(follow), tTo = world.localToWorld(T.clone()).add(follow);
+  if (instant || reduce) { camAnim = null; camera.position.copy(to); controls.target.copy(tTo); controls.update(); return; }
+  camAnim = { from: camera.position.clone(), to, tFrom: controls.target.clone(), tTo, t: 0 };
+}
+controls.addEventListener("start", () => { userMoved = true; camAnim = null; });
+for (const b of viewsEl.children) b.addEventListener("click", () => setView(b.dataset.v));
+function resize() {
+  const r = canvas.getBoundingClientRect();
+  if (r.width < 1 || r.height < 1) return;
+  renderer.setSize(r.width, r.height, false);
+  if (!userMoved) setView(ui.view, true);
+}
+new ResizeObserver(resize).observe(canvas);
+function draw(dt = 1) {
+  const r = canvas.getBoundingClientRect(), W = r.width, H = Math.max(1, r.height);
+  poseFighter(ui.mode === "both" ? "new" : ui.mode);
+  followRoot(dt);
+  if (ui.mode === "both") {
+    camera.aspect = (W / 2) / H; camera.updateProjectionMatrix();
+    renderer.setScissorTest(true);
+    for (const [key, x] of [["now", 0], ["new", W / 2]]) {
+      poseFighter(key);
+      renderer.setViewport(x, 0, W / 2, H); renderer.setScissor(x, 0, W / 2, H);
+      renderer.render(scene, camera);
+    }
+    renderer.setScissorTest(false);
+  } else {
+    camera.aspect = W / H; camera.updateProjectionMatrix();
+    renderer.setViewport(0, 0, W, H);
+    poseFighter(ui.mode);
+    renderer.render(scene, camera);
+  }
+}
+
+// ================================================================== UI
+const MODES = [["both", "Side by side"], ["new", "Elbow down"], ["now", "Before"]];
+const SPEEDS = [[1, "1×"], [0.5, "½×"], [0.25, "¼×"], [0.1, "⅒×"]];
+const modesEl = document.getElementById("modes"), posesEl = document.getElementById("poses"), speedsEl = document.getElementById("speeds");
+const tagA = document.getElementById("tag-a"), tagB = document.getElementById("tag-b"), phaseEl = document.getElementById("phase");
+const holdBtn = document.getElementById("hold"), holdText = document.getElementById("hold-text"), fillEl = document.getElementById("fill"), loopBtn = document.getElementById("loop");
+for (const [id, label] of MODES) {
+  const b = document.createElement("button"); b.textContent = label; b.dataset.m = id;
+  b.addEventListener("click", () => { ui.mode = id; syncUI(); if (!userMoved) setView(ui.view); save(); });
+  modesEl.appendChild(b);
+}
+for (const p of POSES) {
+  const b = document.createElement("button"); b.className = "chip"; b.textContent = p.label; b.dataset.p = p.id;
+  b.addEventListener("click", () => { if (ui.frozen === p.id) setLoop(true); else setFrozen(p.id); });
+  posesEl.appendChild(b);
+}
+for (const [v, label] of SPEEDS) {
+  const b = document.createElement("button"); b.className = "chip"; b.textContent = label; b.dataset.v = v;
+  b.addEventListener("click", () => { ui.speed = v; save(); syncUI(); });
+  speedsEl.appendChild(b);
+}
+function syncUI() {
+  stageEl.dataset.mode = ui.mode;
+  for (const b of modesEl.children) b.setAttribute("aria-pressed", String(b.dataset.m === ui.mode));
+  for (const b of posesEl.children) b.setAttribute("aria-pressed", String(b.dataset.p === ui.frozen));
+  for (const b of speedsEl.children) b.setAttribute("aria-pressed", String(+b.dataset.v === ui.speed));
+  loopBtn.setAttribute("aria-pressed", String(loop.on));
+  const both = ui.mode === "both";
+  tagA.textContent = ui.mode === "new" ? "Elbow down" : "Before";
+  tagA.classList.toggle("new", ui.mode === "new");
+  tagB.hidden = !both;
+}
+function setFrozen(id) {
+  ui.frozen = id; loop.on = false; holding = false;
+  play.heavy = null; play.t = 0; play.charge = 0; play.w = 0;
+  syncUI();
+}
+function setLoop(on) {
+  ui.frozen = null; loop.on = on;
+  if (on) { if (play.heavy === "wind") release(); loop.stage = play.heavy ? "swing" : "rest"; loop.t = 0; }
+  syncUI();
+}
+function startHold() {
+  if (play.heavy === "swing") return;
+  if (ui.frozen) { ui.frozen = null; play.w = 0; }
+  loop.on = false; syncUI();
+  holding = press();
+}
+function endHold() { if (!holding) return; holding = false; release(); }
+loopBtn.addEventListener("click", () => setLoop(!loop.on));
+holdBtn.addEventListener("pointerdown", e => { e.preventDefault(); try { holdBtn.setPointerCapture(e.pointerId); } catch (err) {} startHold(); });
+for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) holdBtn.addEventListener(type, endHold);
+holdBtn.addEventListener("contextmenu", e => e.preventDefault());
+const isHoldKey = e => e.key === "h" || e.key === "H" || (e.target === holdBtn && (e.key === " " || e.key === "Enter"));
+addEventListener("keydown", e => { if (isHoldKey(e) && !e.metaKey && !e.ctrlKey) { e.preventDefault(); if (!e.repeat) startHold(); } });
+addEventListener("keyup", e => { if (isHoldKey(e)) { e.preventDefault(); endHold(); } });
+addEventListener("blur", endHold);
+
+function phaseText() {
+  if (ui.frozen) return POSES.find(p => p.id === ui.frozen).label;
+  if (play.heavy === "wind") return play.charge >= 1 ? "Full charge" : `Charging ${Math.round(play.charge * 100)}%`;
+  if (play.heavy === "swing") return play.t < 0.10 ? "Release" : play.t < 0.57 ? "Punch" : "Recovering";
+  return play.w > 0 ? "Back in guard" : "Standing";
+}
+let lastPhase = "", lastHold = "", lastFill = -1;
+function syncLive() {
+  const ph = phaseText();
+  if (ph !== lastPhase) { phaseEl.textContent = ph; lastPhase = ph; }
+  const winding = play.heavy === "wind" && !ui.frozen;
+  const text = winding && holding ? (play.charge >= 1 ? "Full charge, let go" : `Charging ${Math.round(play.charge * 100)}%`) : "Hold to charge";
+  if (text !== lastHold) { holdText.textContent = text; lastHold = text; }
+  const f = winding ? play.charge : 0;
+  if (f !== lastFill) { fillEl.style.transform = `scaleX(${f})`; lastFill = f; }
+  const busy = String(play.heavy === "swing" && !ui.frozen);
+  if (holdBtn.getAttribute("aria-disabled") !== busy) holdBtn.setAttribute("aria-disabled", busy);
+}
+
+// ================================================================== measured live from the same poses and solver
+function measure(pose) {
+  const P = toBench(pose); solvePose(rig, P);
+  const rq = rootQ(P), rp = V(...pose.RootPos), w = v => rot(rq, v).add(rp), sh = B.RightShoulder, ua = B.RightUpperArm;
+  const S = w(rig.modelPos(ua)), E = w(rig.modelPos(ua + 1));
+  const q = rig.model[sh].clone().invert().multiply(rig.model[ua]), ax = rig.bindLocal[ua + 1].clone().normalize();
+  let roll = 2 * Math.atan2(q.x * ax.x + q.y * ax.y + q.z * ax.z, q.w) * 180 / Math.PI; roll = ((roll + 540) % 360) - 180;
+  const hc = rig.modelPos(B.Head).add(rot(rig.model[B.Head], V(0, 0.155, 0.02)));
+  return { drop: (S.y - E.y) * 100, roll: Math.abs(roll), clear: (fistCentre(rig, 1).distanceTo(hc) - 0.175 - 0.055) * 100 };
+}
+function report(v) {
+  let lowest = 99, rollMax = 0, clear = 99;
+  for (let t = 0; t <= MAX_CHARGE + 1e-6; t += 1 / 120) { const m = measure(heldPose(v, t, t / MAX_CHARGE)); rollMax = Math.max(rollMax, m.roll); if (t >= 0.10) lowest = Math.min(lowest, m.drop); }
+  const s = fullStart(v);
+  for (let t = 0; t <= 0.13; t += 1 / 600) clear = Math.min(clear, measure(swingPose(v, s, t)).clear);
+  return { cock: measure(heldPose(v, 0.30, 0.30 / MAX_CHARGE)).drop, full: measure(s).drop, lowest, rollMax, clear };
+}
+const elbowText = cm => `${Math.abs(cm).toFixed(0)} cm ${cm >= 0 ? "below" : "above"}`;
+const clearText = cm => cm >= 0 ? `${cm.toFixed(0)} cm clear` : `clips ${Math.max(1, -cm).toFixed(0)} cm`;
+function fillNumbers() {
+  const a = report(VERSIONS.now), b = report(VERSIONS.new);
+  const row = (label, x, y, xBad) => `<tr><td>${label}</td><td class="num${xBad ? " bad" : ""}">${x}</td><td class="num good">${y}</td></tr>`;
+  document.getElementById("numbers").innerHTML = `<thead><tr><th></th><th class="num">Before</th><th class="num">Elbow down</th></tr></thead><tbody>` +
+    row("Elbow vs shoulder, cocked", elbowText(a.cock), elbowText(b.cock), a.cock < 0) +
+    row("Elbow vs shoulder, full charge", elbowText(a.full), elbowText(b.full), a.full < 0) +
+    row("Most the upper arm twists", `${a.rollMax.toFixed(0)}°`, `${b.rollMax.toFixed(0)}°`, a.rollMax > b.rollMax) +
+    row("Fist to the face on release", clearText(a.clear), clearText(b.clear), a.clear < 0) + `</tbody>`;
+}
+
+// ================================================================== go
+syncUI(); resize(); setView(ui.view, true);
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (camAnim) {
+    camAnim.t = Math.min(1, camAnim.t + dt / 0.35); const e = smooth(camAnim.t);
+    camera.position.lerpVectors(camAnim.from, camAnim.to, e); controls.target.lerpVectors(camAnim.tFrom, camAnim.tTo, e);
+    if (camAnim.t >= 1) camAnim = null;
+  }
+  controls.update();
+  if (rig) {
+    if (!ui.frozen) { const adt = dt * ui.speed; driveLoop(adt); advance(adt); }
+    syncLive();
+    draw(dt);
+  }
+  requestAnimationFrame(frame);
+}
+fetchBody("BaseBody.bytes").then(body => {
+  buildFighter(body);
+  fillNumbers();
+  document.getElementById("loading").hidden = true;
+}).catch(e => { document.getElementById("loading").textContent = `Couldn't load the fighter's body (${e.message}). Reload the page to try again.`; });
+requestAnimationFrame(frame);
+window.__windup = { ui, play, loop, VERSIONS, POSES, setFrozen, setLoop, setView, syncUI, report, measure, heldPose, swingPose, get rig() { return rig; }, draw, canvas,
+  tick(dt) { if (!ui.frozen) { const adt = dt * ui.speed; driveLoop(adt); advance(adt); } syncLive(); draw(dt); } };
+</script>
