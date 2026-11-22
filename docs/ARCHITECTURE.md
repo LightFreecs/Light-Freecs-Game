@@ -726,17 +726,18 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
 - Charge aura + aura colour (2026-11-19; owner: the classic anime flame aura from a reference clip, "1:1", lightning left out;
   players pick their aura colour).
   - `Resources/VFX/AnimeAura.shader` (bench `docs/bench/aura-bench.html`, same code in GLSL; keep the two in step).
-    Rewritten 2026-11-21 (owner: the spiky egg was "not dynamic enough"; a wide radial fan was then rejected as uneven
-    and too wide: "should end on a peak at the top, above the head, run along the body"). Now: a smooth teardrop
-    envelope (`Envelope`: narrow rounded base, fullest round the shoulders, concave taper to ONE peak at `ytop` 0.86-1.08
-    by power, head top = 0.62) plus side spikes (`Spikes`: sawtooth swell-and-snap, 5.5 per side, racing up at 2.2/s,
-    per-drawing size jitter) evaluated in sheared space (`y - lean·d`, lean 1.3 low → 3 high) so every tip leans up and
-    out; spikes fade out before the peak; the peak sways and flickers; small fbm licks; streaks / dashes in envelope-
-    normalised x so they converge on the peak; outer sheet (dim see-through body, bright rim) + a paler inner sheet
-    (mostly rim); redrawn 24×/s; rises from 60 % height as `_Fade` comes in. Premultiplied (HDR rgb for Bloom, a little
-    alpha so it reads on bright skies). `_Front = 1` draws only the rising dashes.
-  - `VFX.AnimeAura`: two camera-facing (about the vertical) quads at the feet, flame 0.18 h behind the fighter, dashes
-    0.16 h in front; the quad spans aura space x ±0.42, y -0.04..1.21 (`SpanX`/`SpanY`, fighter = 0.62); flares up when it appears, shrinks away when it stops; per-fighter
+    History 2026-11-21: the spiky egg was "not dynamic enough"; a wide radial fan was "uneven, too wide"; a body-hugging
+    teardrop was then replaced by "copy this one 1:1" (owner's green-screen reference of the classic tiered power-up
+    aura). Now the outline IS that reference, traced from the keyed image (`OUTLINE`: right half in aura-height units,
+    bottom corner, 6 tiers × (tip, notch), spire; the peak (0, 1) on the axis; mirrored into a 29-vertex polygon, signed
+    distance via iq's sdPolygon; overlay IoU check against the reference's silhouette: within a few px). Tier tips pump
+    (lick out to 1.12, snap back to 0.9, own phase per tier / side), every vertex boils 12×/s (±0.007), the peak flickers
+    ±3 %, the top sways. Aura height `hgt` 0.865-0.996 by power (× 0.6-1 with `_Fade`) so the see-through arch
+    (`Hollow`: half-width 0.173·(1-(y/0.7)²)^0.65, top at 0.70 hgt) tops out just over the head (0.62). Band: opaque-ish
+    (a 0.78) with vertical streaks flowing up and a brighter rim; hollow: faint tint + flame flicks rising (`Flicks`).
+    Premultiplied (HDR rgb for Bloom). `_Front = 1` draws only the flicks (over the fighter).
+  - `VFX.AnimeAura`: two camera-facing (about the vertical) quads at the feet, flame 0.18 h behind the fighter, flicks
+    0.16 h in front; the quad spans aura space x ±0.55, y -0.04..1.21 (`SpanX`/`SpanY`, fighter = 0.62); flares up when it appears, shrinks away when it stops; per-fighter
     time offset. `PlayerAura` uses it (charging: size 0.85, Power Surge: 1) in the rig's aura colour; the old capsule shell
     is gone from the game (the menu keeps its soft shell outside the Body tab).
   - Aura colour: `FaceCustomization.auraColor` → `PlayerAppearance.AuraColors` (Gold, Flame, Crimson, Rose, Violet, Blue,

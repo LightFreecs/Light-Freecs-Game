@@ -4,9 +4,10 @@ using UnityEngine.Rendering;
 namespace LightMMORPG.VFX
 {
     /// <summary>
-    /// The hand-drawn anime flame aura (shader <c>LightMMORPG/AnimeAura</c>, bench <c>docs/bench/aura-bench.html</c>): a tall
-    /// flame that hugs the body and ends in one peak well over the head, spikes racing up its sides. Two camera-facing
-    /// quads at the fighter's feet, the flame just behind the fighter and the rising dashes just in front.
+    /// The hand-drawn anime flame aura (shader <c>LightMMORPG/AnimeAura</c>, bench <c>docs/bench/aura-bench.html</c>): the
+    /// owner's reference outline (a tiered flame "pine tree" with one peak over the head, round a see-through arch where
+    /// the fighter stands), its tips licking and boiling. Two camera-facing quads at the fighter's feet, the flame just
+    /// behind the fighter and the rising flicks just in front.
     /// Set <see cref="Visible"/>, <see cref="Size"/> (0.85 charging, 1 Power Surge), <see cref="Color"/> and
     /// <see cref="Height"/> (the fighter's height); it flares up when it appears and shrinks away when it stops.
     /// </summary>
@@ -16,9 +17,9 @@ namespace LightMMORPG.VFX
         /// <summary>How bright the aura colour is drawn (HDR, so the spikes catch Bloom).</summary>
         public const float Intensity = 1.35f;
 
-        // The quad spans aura space x -0.42..0.42, y -0.04..1.21 (the fighter is 0.62 tall in it, so the peak at up to
-        // ~1.1 towers well over the head while the flame stays close round the body).
-        private const float SpanX = 0.84f, SpanY = 1.25f, FeetY = 0.04f, FighterY = 0.62f;
+        // The quad spans aura space x -0.55..0.55, y -0.04..1.21 (the fighter is 0.62 tall in it; the traced outline's
+        // wings reach x ±0.5 and its peak ~1.0 at full power).
+        private const float SpanX = 1.1f, SpanY = 1.25f, FeetY = 0.04f, FighterY = 0.62f;
 
         public bool Visible { get; set; }
         public float Size { get; set; } = 0.85f;

@@ -1,11 +1,12 @@
 // LightMMORPG/AnimeAura - the hand-drawn anime flame aura (charging, Power Surge), drawn on a camera-facing quad.
 // 1:1 port of docs/bench/aura-bench.html (keep the two in step). Aura space: x right, y up, feet at 0, the fighter's head
-// top at 0.62. The flame hugs the body: a tall teardrop, narrow at the feet, fullest round the shoulders, narrowing to one
-// sharp peak well over the head. Flame spikes (swell slowly, snap back, sheared so every tip leans up and out) race up
-// both sides and melt into the peak; the peak sways and flickers; streaks and dashes rise inside; redrawn 24 times a
-// second like anime frames. Two nested sheets: the outer flame (dim see-through body, bright rim) and a hotter, paler one.
-// Two layers: _Front = 0 is the flame (behind the fighter), _Front = 1 only the rising dashes (in front of the fighter).
-// Premultiplied output: rgb adds (HDR, feeds Bloom), alpha darkens what is behind a little so the aura reads on bright skies.
+// top at 0.62. The outline is traced from the owner's reference (a classic anime power-up aura): a flame "pine tree" of
+// seven tiers a side - wide wings low down, blades that stand up straighter the higher they sit - and a narrow spire with
+// one peak, round an arch-shaped see-through hollow where the fighter stands (its top just over the head). Every tier tip
+// licks out and snaps back on its own rhythm, the outline boils 12 times a second like hand-drawn frames, the peak
+// flickers, streaks run up the flame and small flicks rise in the hollow.
+// Two layers: _Front = 0 is the flame (behind the fighter), _Front = 1 only the rising flicks (in front of the fighter).
+// Premultiplied output: rgb adds (HDR, feeds Bloom), alpha darkens what is behind so the aura reads on bright skies.
 // Lives in Resources so builds include it (AnimeAura.cs loads it by name).
 Shader "LightMMORPG/AnimeAura"
 {
@@ -13,9 +14,9 @@ Shader "LightMMORPG/AnimeAura"
     {
         [HDR] _Color ("Aura Color (HDR)", Color) = (1.3, 1.1, 0.13, 1)
         _Strength ("Size (charging 0.72-0.92, surge 1)", Range(0.3, 1.2)) = 1
-        _Fade ("Fade (also raises the flame as it appears)", Range(0, 1)) = 1
-        _Front ("Front layer (dashes only)", Float) = 0
-        _SpanX ("Aura-space width of the quad", Float) = 0.84
+        _Fade ("Fade (also grows the aura as it appears)", Range(0, 1)) = 1
+        _Front ("Front layer (flicks only)", Float) = 0
+        _SpanX ("Aura-space width of the quad", Float) = 1.1
         _Seed ("Time offset (per fighter)", Float) = 0
     }
 
@@ -67,84 +68,117 @@ Shader "LightMMORPG/AnimeAura"
                 return lerp(lerp(H21(i), H21(i + float2(1.0, 0.0)), f.x), lerp(H21(i + float2(0.0, 1.0)), H21(i + float2(1.0, 1.0)), f.x), f.y);
             }
 
-            float Fbm(float2 p) { return VNoise(p) * 0.57 + VNoise(p * 2.03 + 17.1) * 0.29 + VNoise(p * 4.1 + 31.7) * 0.14; }
-
-            // the smooth envelope: half width at height y for a flame whose peak is at ytop
-            float Envelope(float y, float ytop, float wmax)
+            // the right half of the outline in units of the aura's height (x out from the centre, y up from the feet): the
+            // bottom corner, then each tier's tip and the notch where the next tier starts, then the spire; the peak (0, 1)
+            // sits on the axis
+            static const float2 OUTLINE[14] =
             {
-                float u = saturate(y / ytop);
-                float body = lerp(0.58, 1.0, smoothstep(0.0, 0.4, u)) * sqrt(saturate((y + 0.035) / 0.09));   // rounded base
-                float taper = pow(saturate((1.0 - u) / 0.52), 1.3);                                           // concave sides to the peak
-                return wmax * body * taper;
+                float2(0.252, 0.000),
+                float2(0.457, 0.150), float2(0.299, 0.142),
+                float2(0.449, 0.346), float2(0.248, 0.268),
+                float2(0.319, 0.583), float2(0.224, 0.488),
+                float2(0.232, 0.732), float2(0.165, 0.583),
+                float2(0.157, 0.776), float2(0.130, 0.740),
+                float2(0.087, 0.913), float2(0.055, 0.850),
+                float2(0.035, 0.961)
+            };
+            #define NV 29   // 14 a side + the peak
+
+            // how far a tier tip reaches now: it licks out slowly, whips out and snaps back, each tip on its own rhythm
+            float Pump(float j, float side, float t)
+            {
+                float f = frac(t * 1.9 + H21(float2(j, side + 4.0)));
+                return lerp(0.9, 1.12, f * f);
             }
 
-            // flame spikes up one side (side 0 left, 1 right), v counting spikes up the side: each one swells slowly and
-            // snaps back; the shear in Flame() leans it up, so every tip points up and out. They race up the side and
-            // every drawing redraws them a little differently.
-            float Spikes(float u, float side, float t, float n, float seed)
+            // signed distance to the animated outline (negative inside), in aura-height units. t = drawing time, nb = boil frame
+            float SdOutline(float2 q, float t, float nb)
             {
-                float v = u * 5.5 - t * 2.2 + side * 0.5 + seed;
-                float id = floor(v), f = frac(v);
-                float amp = lerp(0.55, 1.0, H21(float2(id, side * 7.0 + 3.0 + seed)));
-                amp *= lerp(0.82, 1.15, H21(float2(id + side * 50.0, n + seed)));
-                return amp * pow(f, 1.8) * smoothstep(1.0, 0.93, f);
+                float2 v[NV];
+                float sway = 0.025 * sin(t * 2.6);                       // the upper part sways
+                [unroll] for (int side = 0; side < 2; side++)
+                {
+                    float sx = side == 0 ? 1.0 : -1.0;
+                    [unroll] for (int j = 0; j < 14; j++)
+                    {
+                        float2 c = OUTLINE[j];
+                        if (j % 2 == 1 && j < 13) { float2 s0 = OUTLINE[j - 1]; c = s0 + (c - s0) * Pump((float)j, (float)side, t); }
+                        if (j > 0) c += (float2(H21(float2(nb, (float)(j * 3 + side))), H21(float2(nb + 0.5, (float)(j * 7 + side)))) - 0.5) * 0.014;
+                        v[side == 0 ? j : NV - 1 - j] = float2(sx * c.x + sway * c.y * c.y, c.y);
+                    }
+                }
+                float pk = 1.0 + (H21(float2(nb, 99.0)) - 0.5) * 0.06;     // the peak flickers
+                v[14] = float2(sway * pk * pk, pk);
+                // polygon distance (Inigo Quilez)
+                float d = dot(q - v[0], q - v[0]);
+                float s = 1.0;
+                [unroll] for (int i = 0; i < NV; i++)
+                {
+                    int k = i == 0 ? NV - 1 : i - 1;
+                    float2 e = v[k] - v[i], w = q - v[i];
+                    float2 b = w - e * saturate(dot(w, e) / dot(e, e));
+                    d = min(d, dot(b, b));
+                    bool c1 = q.y >= v[i].y, c2 = q.y < v[k].y, c3 = e.x * w.y > e.y * w.x;
+                    if ((c1 && c2 && c3) || (!c1 && !c2 && !c3)) s = -s;
+                }
+                return s * sqrt(d);
             }
 
-            // flame shape: < 1 inside, 1 on the edge. t = drawing time, n = drawing number
-            float Flame(float2 p, float t, float n, float ytop, float wmax, float amp, float sway, float seed)
+            // the see-through hollow round the fighter: 1 inside, 0 in the flame (an arch, top at 0.70 of the aura's height)
+            float Hollow(float2 q)
             {
-                float u = p.y / ytop;
-                float x = p.x - sway * u * u * wmax / 0.2;                               // the upper part sways
-                float W = Envelope(p.y, ytop, wmax);
-                float A = amp * lerp(1.0, 0.6, saturate(u)) * smoothstep(0.0, 0.08, u) * smoothstep(0.98, 0.7, u);
-                float d = max(abs(x) - W, 0.0);                                          // how far out past the smooth envelope
-                float lean = lerp(1.3, 3.0, saturate(u));                                // spikes lean out low down, point up high up
-                float g = Spikes((p.y - lean * d) / ytop, x < 0.0 ? 0.0 : 1.0, t, n, seed);
-                float s = abs(x) / max(W + A * g, 0.002);
-                s += (Fbm(float2(x / max(W, 0.02) * 3.0 + seed, p.y * 4.0 - t * 4.5)) - 0.5) * 0.14 * smoothstep(0.7, 1.0, s);   // licks tear off
-                return u > 0.995 ? max(s, 1.0 + (u - 0.995) * 40.0) : s;
+                float hw = 0.173 * pow(max(1.0 - (q.y / 0.70) * (q.y / 0.70), 0.0), 0.65);
+                return smoothstep(0.0, 0.035, hw - abs(q.x)) * step(0.0, q.y);
             }
 
-            float CoverOf(float s) { float w = clamp(fwidth(s), 1e-4, 0.5) * 0.8; return 1.0 - smoothstep(1.0 - w, 1.0 + w, s); }
+            // small flame flicks rising inside the hollow (seed picks the set: the back and front layers use different ones)
+            float Flicks(float2 q, float t, float nb, float seed)
+            {
+                float2 cell = float2(0.075, 0.16);
+                float2 g = float2(q.x, q.y - t * 0.55) / cell;
+                float2 id = floor(g);
+                float hs = H21(id + seed);
+                if (hs < 0.55) return 0.0;
+                float2 f = frac(g) - 0.5;
+                f.x -= (H21(id + seed + 7.1) - 0.5) * 0.5;
+                float len = lerp(0.35, 0.8, H21(id + seed + 2.3 + floor(nb / 2.0) * 0.17));   // boils every other frame
+                float along = (f.y + 0.4) / len;                                               // 0 root .. 1 tip
+                float wid = 0.16 * (1.0 - along) * smoothstep(0.0, 0.2, along);
+                float dx = abs(f.x - 0.06 * sin(along * 3.0 + hs * 6.0));
+                return step(0.0, along) * step(along, 1.0) * smoothstep(wid, wid * 0.4, dx);
+            }
 
             float4 Frag(Varyings i) : SV_Target
             {
                 float2 p = float2((i.uv.x - 0.5) * _SpanX, i.uv.y * 1.25 - 0.04);
                 float t = _Time.y + _Seed;
-                float k = saturate((_Strength - 0.55) / 0.45);          // 0 a weak charge .. 1 Power Surge
-                float n = floor(t * 24.0);                               // drawing number (held 2-3 frames at 60 fps)
-                float tn = n / 24.0;
-                // rises as it appears, flickers a little every drawing
-                float ytop = lerp(0.86, 1.08, k) * lerp(0.6, 1.0, _Fade) * (1.0 + (H21(float2(n, 9.0)) - 0.5) * 0.05);
-                float wmax = lerp(0.17, 0.2, k), amp = lerp(0.1, 0.13, k);
-                float sway = 0.03 * sin(tn * 2.6);
+                float k = saturate((_Strength - 0.55) / 0.45);           // 0 a weak charge .. 1 Power Surge
+                float hgt = lerp(0.865, 0.996, k) * lerp(0.6, 1.0, _Fade); // the aura's height (the hollow's top just over the head)
+                float2 q = p / hgt;
+                float tn = floor(t * 24.0) / 24.0;                        // drawing time (24 a second)
+                float nb = floor(t * 12.0);                               // boil frame (12 a second)
                 float3 c = _Color.rgb;
-                // tips that reach the quad's edge thin out instead of being cut off
-                float edge = smoothstep(1.0, 0.95, i.uv.y) * smoothstep(0.0, 0.04, i.uv.x) * smoothstep(1.0, 0.96, i.uv.x);
+                // anything that reaches the quad's edge thins out instead of being cut off
+                float edge = smoothstep(1.0, 0.95, i.uv.y) * smoothstep(0.0, 0.03, i.uv.x) * smoothstep(1.0, 0.97, i.uv.x);
                 float fade = _Fade * min(_Strength * 1.25, 1.0) * edge;
-                float ground = smoothstep(-0.04, -0.01, p.y);
-                float sA = Flame(p, tn, n, ytop, wmax, amp, sway, 0.0);
-                float inA = CoverOf(sA) * ground;
-                float xn = p.x / max(Envelope(p.y, ytop, wmax), 0.015);   // across the flame, -1 .. 1: streaks converge on the peak
+                float hol = Hollow(q);
                 if (_Front > 0.5)
                 {
-                    float st = smoothstep(0.86, 0.93, VNoise(float2(xn * 6.0, p.y * 6.0 - tn * 7.0))) * inA * smoothstep(0.04, 0.16, p.y) * smoothstep(0.98, 0.6, sA);
-                    return float4(c * st * 0.9, 0.0) * fade;
+                    float fl = Flicks(q, tn, nb, 0.0) * hol * smoothstep(0.05, 0.12, q.y) * smoothstep(0.66, 0.5, q.y);
+                    return float4(c * fl * 0.85, 0.0) * fade;
                 }
-                float sB = Flame(p, tn * 1.2 + 3.7, n + 77.0, ytop * 0.8, wmax * 0.62, amp * 0.7, sway, 13.0);
-                float inB = CoverOf(sB) * ground;
-                float str = VNoise(float2(xn * 7.0, p.y * 2.2 - tn * 3.2)) * 0.7 + VNoise(float2(xn * 17.0 + 5.0, p.y * 3.6 - tn * 4.2)) * 0.3;
-                float eA = smoothstep(0.5, 1.0, sA);                     // 0 deep inside .. 1 at the rim
-                float eB = smoothstep(0.45, 1.0, sB);
-                float rimA = smoothstep(0.86, 0.985, sA) * inA;           // bright outline round every spike
-                float rimB = smoothstep(0.86, 0.985, sB) * inB;
-                float bodyA = inA * lerp(0.08, 0.85, eA * eA) * lerp(0.45, 1.35, str);       // dim see-through body, brighter to the rim
-                float bodyB = inB * 0.8 * eB * eB * eB * eB * lerp(0.55, 1.25, str);        // inner sheet: hotter, paler, mostly rim
+                float d = SdOutline(q, tn, nb);
+                float w = max(fwidth(d), 1e-4) * 0.75;
+                float inside = 1.0 - smoothstep(-w, w, d);
+                float band = inside * (1.0 - hol);
+                float str = VNoise(float2(q.x * 30.0, q.y * 2.5 - tn * 3.0)) * 0.7 + VNoise(float2(q.x * 70.0, q.y * 4.0 - tn * 4.2)) * 0.3;
+                float rim = smoothstep(-0.028, -0.004, d) * inside;      // the outline's edge is drawn brighter
+                float fl = Flicks(q, tn, nb, 31.0) * hol * inside * smoothstep(0.05, 0.12, q.y);
                 float3 hot = lerp(c, float3(1.0, 1.0, 1.0), 0.35);
-                float3 rgb = c * bodyA + hot * (bodyB * 0.5 + rimB * 0.45 + rimA * 0.55);
-                rgb += c * exp(-max(sA - 1.0, 0.0) * 16.0) * (1.0 - inA) * 0.08 * ground;   // soft glow just outside the edge
-                float a = inA * lerp(0.18, 0.7, eA) + inB * 0.1 * eB;
-                return float4(rgb, min(a, 0.9)) * fade;
+                float3 rgb = c * (band * lerp(0.7, 1.1, str) + inside * hol * 0.16 + fl * 0.8) + hot * band * rim * 0.45;
+                rgb += c * exp(-max(d, 0.0) / 0.015) * (1.0 - inside) * 0.07;   // soft glow round the outline
+                float a = band * 0.78 + inside * hol * 0.1;
+                return float4(rgb, a) * fade;
             }
             ENDHLSL
         }
