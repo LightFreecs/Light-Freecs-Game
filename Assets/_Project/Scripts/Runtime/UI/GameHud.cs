@@ -95,7 +95,7 @@ namespace LightMMORPG.UI
             // abilities
             var bc = new Vector2(0.5f, 0f);
             _abilityRow = UiKit.Rect("Abilities", _safe, bc, bc, new Vector2(0f, 30f), new Vector2(5 * 96f, 86f));
-            AddIcon(AttackKind.Heavy, "RMB\nHeavy", 0);
+            AddIcon(AttackKind.Heavy, "RMB hold\nHeavy", 0);
             AddIcon(AttackKind.Blast, "1\nBlast", 1);
             AddIcon(AttackKind.Beam, "2\nBeam", 2);
             AddIcon(AttackKind.Surge, "3\nSurge", 3);
@@ -167,10 +167,21 @@ namespace LightMMORPG.UI
                 {
                     bool charge = ic.Kind == AttackKind.Light; // "Charge energy" slot: shows charging state
                     float cd = charge ? 0f : combat.Cooldown01(ic.Kind);
+                    ic.Sweep.anchorMin = Vector2.zero;
                     ic.Sweep.anchorMax = new Vector2(1f, cd);
                     bool afford = charge || combat.CanAfford(ic.Kind);
                     bool lit = charge ? me.Motor != null && me.Motor.IsCharging : (ic.Kind == AttackKind.Surge && me.SurgeActive) || (ic.Kind == AttackKind.Beam && combat.IsChargingBeam);
                     ic.Bg.color = lit ? new Color(0.9f, 0.55f, 0.15f, 0.95f) : afford ? new Color(0.15f, 0.2f, 0.35f, 0.85f) : new Color(0.08f, 0.08f, 0.1f, 0.7f);
+                    if (ic.Kind == AttackKind.Heavy && combat.IsChargingHeavy)
+                    {
+                        // held heavy: the icon fills up from the bottom with the charge (the dark overlay shrinks to the top), then
+                        // pulses white when full
+                        float c = combat.HeavyCharge01;
+                        ic.Sweep.anchorMin = new Vector2(0f, c);
+                        ic.Sweep.anchorMax = Vector2.one;
+                        ic.Bg.color = c >= 1f ? Color.Lerp(new Color(1f, 0.6f, 0.2f, 0.95f), Color.white, 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 18f))
+                                              : Color.Lerp(new Color(0.9f, 0.55f, 0.15f, 0.95f), new Color(1f, 0.25f, 0.1f, 0.98f), c);
+                    }
                     ic.Label.color = afford ? Color.white : new Color(1f, 1f, 1f, 0.35f);
                 }
 

@@ -46,7 +46,7 @@ namespace LightMMORPG.UI
             // action cluster bottom-right: big light/heavy, ring of others
             var br = new Vector2(1f, 0f);
             Button(GameAction.Light, "LIGHT", br, new Vector2(-150f, 120f), 150f, new Color(1f, 0.55f, 0.2f), null);
-            Button(GameAction.Heavy, "HEAVY", br, new Vector2(-320f, 70f), 110f, new Color(1f, 0.35f, 0.2f), AttackKind.Heavy);
+            Button(GameAction.Heavy, "HEAVY\n(hold)", br, new Vector2(-320f, 70f), 110f, new Color(1f, 0.35f, 0.2f), AttackKind.Heavy);
             Button(GameAction.Block, "BLOCK", br, new Vector2(-300f, 220f), 100f, new Color(0.9f, 0.8f, 0.3f), null);
             Button(GameAction.Jump, "JUMP", br, new Vector2(-150f, 290f), 110f, new Color(0.5f, 0.85f, 1f), null);
             Button(GameAction.Dash, "DASH", br, new Vector2(-440f, 60f), 90f, new Color(0.6f, 0.9f, 0.7f), null);
@@ -137,7 +137,14 @@ namespace LightMMORPG.UI
                 cd = combat.Cooldown01(CooldownKind.Value);
                 afford = combat.CanAfford(CooldownKind.Value);
             }
+            Sweep.anchorMin = Vector2.zero;
             Sweep.anchorMax = new Vector2(1f, cd);
+            if (CooldownKind == AttackKind.Heavy && combat != null && combat.IsChargingHeavy)
+            {
+                // held heavy: the button fills up from the bottom with the charge
+                Sweep.anchorMin = new Vector2(0f, combat.HeavyCharge01);
+                Sweep.anchorMax = Vector2.one;
+            }
             float a = held ? 0.8f : (afford ? 0.4f : 0.15f);
             Background.color = new Color(BaseColor.r, BaseColor.g, BaseColor.b, a);
         }

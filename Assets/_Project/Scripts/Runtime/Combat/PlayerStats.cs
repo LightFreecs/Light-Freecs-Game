@@ -23,8 +23,11 @@ namespace LightMMORPG.Combat
     public sealed class PlayerStats : NetworkBehaviour
     {
         public static readonly List<PlayerStats> All = new();
-        /// <summary>Client side, every machine: (victim, attacker or null, point, health damage, blocked, guard broken, kind).</summary>
-        public static event Action<PlayerStats, PlayerStats, Vector3, float, bool, bool, HitKind> OnHitFeedback;
+        /// <summary>
+        /// Client side, every machine: (victim, attacker or null, point, health damage, blocked, guard broken, kind, impact).
+        /// Impact 0..1 = how charged a heavy was (0 for every other hit); a charged heavy sends the victim flying.
+        /// </summary>
+        public static event Action<PlayerStats, PlayerStats, Vector3, float, bool, bool, HitKind, float> OnHitFeedback;
         /// <summary>Client side, every machine: (victim, attacker or null).</summary>
         public static event Action<PlayerStats, PlayerStats> OnKnockout;
 
@@ -177,7 +180,7 @@ namespace LightMMORPG.Combat
                 if (_health.Tick(dt)) ServerRespawn();
                 else
                 {
-                    Motor.ServerApplyKnockback(Vector3.zero, _health.DownRemaining + 0.2f); // keep them on the floor
+                    Motor.ServerStun(_health.DownRemaining + 0.2f); // no input while down (a launched KO still flies and lands)
                     DownRemaining.Value = _health.DownRemaining;
                 }
                 return;
@@ -262,10 +265,13 @@ namespace LightMMORPG.Combat
         /// <summary>
         /// Server: resolve one hit on this player. Applies surge (attacker) and block (this player), guard drain/break,
         /// hitstun + knockback through the motor, KO. Returns false if the hit was ignored (already down).
+        /// <paramref name="impact"/> (0..1) = how charged a heavy was: a blocked charged heavy pushes the guard back further,
+        /// and clients scale the hit-stop, shake and launch with it.
         /// </summary>
         [Server]
-        public bool ServerApplyHit(PlayerStats attacker, float baseDamage, float hitstun, Vector3 knockback, Vector3 point, HitKind kind)
+        public bool ServerApplyHit(PlayerStats attacker, float baseDamage, float hitstun, Vector3 knockback, Vector3 point, HitKind kind, float impact = 0f)
         {
+            impact = Mathf.Clamp01(impact);
             if (_health.IsKnockedOut) return false;
             bool surging = attacker != null && attacker._surge.IsActive;
             float dmgBase = surging ? baseDamage * attacker._surgeDamageMultiplier / CombatConstants.SurgeDamageMultiplier : baseDamage;
@@ -283,8 +289,9 @@ namespace LightMMORPG.Combat
             if (blocking)
             {
                 guardBroke = _guard.Drain(r.GuardDamage);
-                if (guardBroke) Motor.ServerApplyKnockback(flat.normalized * CombatMath.BlockedPushSpeed * 1.5f, _guard.BreakStunDuration);
-                else Motor.ServerApplyKnockback(flat.normalized * CombatMath.BlockedPushSpeed, 0f);
+                float push = CombatMath.BlockedPushSpeed * (1f + 2f * impact);   // a charged heavy shoves the guard back up to 3x
+                if (guardBroke) Motor.ServerApplyKnockback(flat.normalized * push * 1.5f, _guard.BreakStunDuration);
+                else Motor.ServerApplyKnockback(flat.normalized * push, 0f);
             }
             else if (Motor != null) Motor.ServerApplyKnockback(knockback, hitstun);
 
@@ -293,11 +300,12 @@ namespace LightMMORPG.Combat
             PushAll();
 
             Debug.Log("[Combat] " + (attacker != null ? attacker.DisplayName : "?") + " hit " + DisplayName + " " + kind +
+                      (kind == HitKind.Heavy ? " charge=" + impact.ToString("F2", CultureInfo.InvariantCulture) : "") +
                       " dmg=" + r.HealthDamage.ToString("F0", CultureInfo.InvariantCulture) + (blocking ? " (blocked)" : "") +
                       (guardBroke ? " GUARD BREAK" : "") + " hp=" + _health.Current.ToString("F0", CultureInfo.InvariantCulture));
 
             byte flags = (byte)((blocking ? 1 : 0) | (guardBroke ? 2 : 0));
-            RpcHitFeedback(attacker != null ? attacker.NetworkObject : null, point, r.HealthDamage, flags, (byte)kind);
+            RpcHitFeedback(attacker != null ? attacker.NetworkObject : null, point, r.HealthDamage, flags, (byte)kind, (byte)Mathf.RoundToInt(impact * 255f));
             if (ko) ServerKnockout();
             return true;
         }
@@ -308,7 +316,7 @@ namespace LightMMORPG.Combat
             Deaths.Value++;
             PlayerStats killer = _lastAttacker;
             if (killer != null && killer != this && killer.IsSpawned) killer.Kos.Value++;
-            Motor.ServerApplyKnockback(Vector3.zero, _health.DownRemaining + 0.2f);
+            Motor.ServerStun(_health.DownRemaining + 0.2f);   // the finishing blow's knockback carries on (a heavy KO flies)
             PushAll();
             Debug.Log("[Combat] KO! " + DisplayName + " knocked out by " + (killer != null ? killer.DisplayName : "?") +
                       " — score " + (killer != null ? killer.DisplayName + " KOs=" + killer.Kos.Value + ", " : "") + DisplayName + " deaths=" + Deaths.Value);
@@ -340,10 +348,10 @@ namespace LightMMORPG.Combat
         // ---------------- observers ----------------
 
         [ObserversRpc]
-        private void RpcHitFeedback(NetworkObject attacker, Vector3 point, float damage, byte flags, byte kind)
+        private void RpcHitFeedback(NetworkObject attacker, Vector3 point, float damage, byte flags, byte kind, byte impact)
         {
             PlayerStats a = attacker != null ? attacker.GetComponent<PlayerStats>() : null;
-            OnHitFeedback?.Invoke(this, a, point, damage, (flags & 1) != 0, (flags & 2) != 0, (HitKind)kind);
+            OnHitFeedback?.Invoke(this, a, point, damage, (flags & 1) != 0, (flags & 2) != 0, (HitKind)kind, impact / 255f);
         }
 
         [ObserversRpc]

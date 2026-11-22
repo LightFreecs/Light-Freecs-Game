@@ -9,7 +9,8 @@ namespace LightMMORPG.Combat
     /// <see cref="PlayerMotor.ServerBotInput"/> for movement and <see cref="PlayerCombat"/>'s <c>Server*</c> attacks, so it
     /// plays by exactly the same rules (power level, aura reserve, energy, cooldowns).
     /// <list type="bullet">
-    /// <item><b>Spar</b> (default): fights back. Closes in, throws 2–4 hit combos (sometimes ending in a heavy), guards or
+    /// <item><b>Spar</b> (default): fights back. Closes in, throws 2–4 hit combos (sometimes ending in a charged heavy: a short
+    /// wind-up, now and then a full charge that sends you flying), guards or
     /// backs off after taking hits, fires energy blasts from range, and powers up (Charge) when it has room, so it starts
     /// weak like everyone and gets stronger. Reaction times are human-ish so it's beatable.</item>
     /// <item><b>Stand</b> / <b>Block</b>: the old punching bag (faces you, optionally holds block).</item>
@@ -51,6 +52,7 @@ namespace LightMMORPG.Combat
         // spar brain
         private PlayerMotor.ReplicateData _rd;
         private float _thinkAt, _blockUntil, _chargeUntil, _backOffUntil, _nextSwing, _nextCombo, _nextBlast;
+        private float _heavyStart, _heavyReleaseAt;
         private int _comboLeft;
         private bool _finishHeavy;
         private float _strafe = 1f, _strafeFlip;
@@ -113,7 +115,7 @@ namespace LightMMORPG.Combat
             }
 
             if (Mode == Behaviour.Spar) Spar(target, hurt);
-            else _rd.Block = Mode == Behaviour.Block;
+            else { CancelHeavy(); _rd.Block = Mode == Behaviour.Block; }
 
             if (_calm >= RecoverAfter && hp < _stats.MaxHealth - 0.01f && !InFight(target)) _stats.ServerRestore();
             Vector3 off = transform.position - _home;
@@ -139,6 +141,21 @@ namespace LightMMORPG.Combat
             _comboLeft = 0;
             _chargeUntil = _blockUntil = _backOffUntil = 0f;
             if (_combat != null && _combat.ServerBeamCharging) _combat.ServerBeamCharge(false);
+            CancelHeavy();
+        }
+
+        private void CancelHeavy()
+        {
+            if (_combat != null && _combat.ServerHeavyCharging) _combat.ServerHeavyCharge(false);
+        }
+
+        /// <summary>Winds up a heavy: mostly short holds, now and then a full charge that sends you flying.</summary>
+        private void StartHeavy(float now)
+        {
+            _combat.ServerHeavyCharge(true);
+            if (!_combat.ServerHeavyCharging) return;
+            _heavyStart = now;
+            _heavyReleaseAt = now + (Random.value < 0.25f ? CombatConstants.HeavyMaxChargeTime + 0.1f : Random.Range(0.12f, 0.9f));
         }
 
         // ---------------- sparring ----------------
@@ -153,12 +170,25 @@ namespace LightMMORPG.Combat
                 if (_stats.Power.Value < 0.5f && !_stats.AuraDepleted) _rd.Charge = true;
                 return;
             }
-            if (!_stats.ServerCanAct()) { _comboLeft = 0; return; }
+            if (!_stats.ServerCanAct()) { _comboLeft = 0; CancelHeavy(); return; }
 
             Vector3 to = target.transform.position - transform.position;
             Vector3 flat = new Vector3(to.x, 0f, to.z);
             float dist = flat.magnitude;
             Vector3 aim = to.sqrMagnitude > 1e-4f ? to.normalized : transform.forward;
+
+            // winding up a heavy: hold it (shuffling in while out of reach), let go once the planned charge is reached
+            if (_combat.ServerHeavyCharging)
+            {
+                _rd.Heavy = true;
+                if (dist > 2.1f) _rd.Move = new Vector2(0f, 1f);
+                if (now >= _heavyReleaseAt)
+                {
+                    _combat.ServerHeavyRelease(aim, now - _heavyStart);
+                    _nextCombo = now + Random.Range(0.9f, 1.6f);
+                }
+                return;
+            }
 
             // taking hits: sometimes guard up, sometimes step out
             if (hurt && _comboLeft == 0 && now >= _blockUntil)
@@ -220,7 +250,7 @@ namespace LightMMORPG.Combat
                 if (now >= _nextSwing)
                 {
                     bool last = _comboLeft == 1;
-                    if (last && _finishHeavy) _combat.ServerHeavy(aim);
+                    if (last && _finishHeavy) StartHeavy(now);
                     else _combat.ServerLight(aim);
                     _comboLeft--;
                     _nextSwing = now + 0.32f;

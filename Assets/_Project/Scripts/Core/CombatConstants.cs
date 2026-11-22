@@ -23,7 +23,14 @@ namespace LightMMORPG.Core
         public static readonly float[] LightComboDamage = { 30f, 30f, 40f, 60f };
         public const int LightComboLength = 4;
         public const float ComboWindow = 0.6f;
+        /// <summary>Heavy attack damage for a tap (no charge). Holding Heavy charges it up to <see cref="HeavyMaxDamage"/>.</summary>
         public const float HeavyDamage = 110f;
+        /// <summary>Heavy attack damage when held for the full <see cref="HeavyMaxChargeTime"/>.</summary>
+        public const float HeavyMaxDamage = 300f;
+        /// <summary>Seconds of holding Heavy for a full charge (damage, knockback and hitstun all grow until then).</summary>
+        public const float HeavyMaxChargeTime = 1.5f;
+        /// <summary>Movement speed while winding up a heavy (share of the walk / fly speed; no running).</summary>
+        public const float HeavyChargeMoveMultiplier = 0.35f;
         public const float HeavyCooldown = 1.2f;
         public const float MeleeHitRadius = 1.2f;
         public const float MeleeHitForwardOffset = 1.3f;
@@ -41,6 +48,8 @@ namespace LightMMORPG.Core
         // Hitstun
         public const float LightHitstun = 0.35f;
         public const float HeavyHitstun = 0.6f;
+        /// <summary>Hitstun of a fully charged heavy: covers the flight, so the victim can't act until it has landed.</summary>
+        public const float HeavyMaxHitstun = 1.3f;
 
         // Powers
         public const float SurgeDamageMultiplier = 1.35f;

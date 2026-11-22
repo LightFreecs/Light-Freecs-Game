@@ -1,6 +1,7 @@
 using LightMMORPG.Characters;
 using LightMMORPG.Combat;
 using LightMMORPG.Config;
+using LightMMORPG.Core;
 using LightMMORPG.VFX;
 using UnityEngine;
 
@@ -71,6 +72,22 @@ namespace LightMMORPG.Player
         private float _hrT = 9f, _hrDur = 0.4f, _hrStrength;
         private Vector3 _hrPoint, _hrPush;
 
+        // the charged heavy (the moveset's Heavy): hold = WindUp, its last pose held and coiling towards Coiled with the charge
+        // (trembling); release = Swing from the held pose. Every client: the owner from its input, the others from RPCs.
+        private enum HeavyPhase : byte { None, WindUp, Swing }
+        private HeavyPhase _heavy;
+        private float _heavyT, _heavyCharge, _heavyMaxCharge = CombatConstants.HeavyMaxChargeTime;
+        private bool _heavyFull, _heavyFlashPending;
+        private readonly AttackPose _heavyFrom = new();
+        // a pose to cross-fade from when an action ends early (a called-off wind-up, a light attack cutting into the swing)
+        private readonly AttackPose _fadeFrom = new();
+        private bool _fadeFromHeld;
+
+        // sent flying by a charged heavy: HitPoses.Launched turned to fly back along the push, held for the hang time
+        private float _launchT = 9f, _launchDur, _launchStrength, _launchYaw;
+        private readonly AttackPose _launchPose = new();
+        private const float LaunchIn = 0.08f, LaunchOut = 0.3f;
+
         /// <summary>The basic-attack moveset this fighter plays (default <see cref="BasicMovesets.DefaultId"/>; later picked from an inventory).</summary>
         public BasicMoveset Moveset => BasicMovesets.Get(_movesetId);
         public void SetMoveset(string id) => _movesetId = string.IsNullOrEmpty(id) ? BasicMovesets.DefaultId : id;
@@ -90,6 +107,7 @@ namespace LightMMORPG.Player
             if (_model != null) _baseScale = _model.localScale;
             if (_graphics != null) _lastPos = _graphics.position;
             _stats = GetComponent<PlayerStats>();
+            _heavyMaxCharge = Mathf.Max(0.01f, GameConfig.Load().heavyMaxChargeTime);
             if (_model != null) _proc = _model.GetComponent<ProceduralCharacter>();
             if (_proc != null && _graphics != null && !Application.isBatchMode && SystemInfo.graphicsDeviceType != UnityEngine.Rendering.GraphicsDeviceType.Null)
                 _speedLines = LimbSpeedLines.Create(_graphics);
@@ -116,26 +134,180 @@ namespace LightMMORPG.Player
             return go.transform;
         }
 
-        /// <summary>Procedural punch/kick/cast: light combo = jab L, jab R, kick, double-fist finisher; heavy = big swing.</summary>
+        /// <summary>
+        /// Procedural punch / cast: light = the moveset's combo hit <paramref name="index"/>; heavy = the charged swing with charge
+        /// <paramref name="index"/> / 255 (<see cref="PlayHeavySwing"/>); blast, beam, surge = the older cast poses.
+        /// </summary>
         public void PlayAttack(AttackKind kind, int index)
         {
+            if (kind == AttackKind.Heavy) { PlayHeavySwing(index / 255f); return; }
             if (kind == AttackKind.Light && _proc != null)
             {
-                // basic attack: the moveset's move for this combo hit, cross-faded from the hit before
+                // basic attack: the moveset's move for this combo hit, cross-faded from the hit before (or from the heavy it cuts into)
                 var m = Moveset.Move(index);
-                if (_move != null) { _fromMove = _move; _fromT = _moveT; _moveBlend = 0f; } else { _fromMove = null; _moveBlend = 1f; }
+                if (_heavy != HeavyPhase.None) StopHeavy(0f);
+                if (_move != null) { _fromMove = _move; _fromT = _moveT; _moveBlend = 0f; }
+                else { _fromMove = null; if (!_fadeFromHeld) _moveBlend = 1f; }
                 _move = m;
                 _moveT = 0f;
                 _attackT = 1f;
                 if (_speedLines != null) _speedLines.Begin();
                 return;
             }
-            _move = null; _fromMove = null; _moveWeight = 0f;   // any other action takes over from the basic attack
+            if (_heavy != HeavyPhase.None) { _heavy = HeavyPhase.None; SetHeavyFace(false); }
+            PlayCastPose(kind, index);
+        }
+
+        /// <summary>The older procedural poses (blast, beam, surge; every attack on a fighter without a rig).</summary>
+        private void PlayCastPose(AttackKind kind, int index)
+        {
+            _move = null; _fromMove = null; _moveWeight = 0f; _fadeFromHeld = false;   // takes over from the basic attack
             _attackKind = kind;
             _attackIndex = index;
             _attackT = 0f;
             _attackDuration = kind == AttackKind.Heavy ? 0.45f : (kind == AttackKind.Light && index == 3 ? 0.35f : 0.25f);
             PlayLunge(kind == AttackKind.Heavy ? 1f : (kind == AttackKind.Light ? 0.55f + 0.15f * index : 0.35f));
+        }
+
+        /// <summary>Winding up a heavy (the fist drawn back), on any client.</summary>
+        public bool IsWindingUpHeavy => _heavy == HeavyPhase.WindUp;
+
+        /// <summary>How charged the heavy being wound up looks (0..1, from how long it has been held); 0 otherwise. Flares the aura.</summary>
+        public float HeavyCharge01 => _heavy == HeavyPhase.WindUp ? _heavyCharge : 0f;
+
+        /// <summary>
+        /// Heavy pressed: the moveset's wind-up pulls the fist back and holds it there, coiling deeper and trembling harder as the
+        /// charge builds (full after <c>heavyMaxChargeTime</c>, marked by a flash at the fist). Gritted teeth.
+        /// </summary>
+        public void PlayHeavyWindUp()
+        {
+            if (_proc == null || Moveset.Heavy == null) return;
+            _move = null; _fromMove = null; _fadeFromHeld = false;
+            _attackT = 1f;
+            _heavy = HeavyPhase.WindUp;
+            _heavyT = 0f; _heavyCharge = 0f; _heavyFull = false;
+            SetHeavyFace(true);
+        }
+
+        /// <summary>
+        /// Heavy released with this charge (0..1): the swing, from whatever pose the wind-up was holding (barely drawn back after a
+        /// tap, fully coiled after a long hold). Without a rig: the old overhead swing.
+        /// </summary>
+        public void PlayHeavySwing(float charge01)
+        {
+            var h = Moveset.Heavy;
+            if (_proc == null || h == null)
+            {
+                _heavy = HeavyPhase.None;
+                PlayCastPose(AttackKind.Heavy, 0);
+                return;
+            }
+            charge01 = Mathf.Clamp01(charge01);
+            if (_heavy == HeavyPhase.WindUp) SampleHeavyHeld(h, _heavyFrom);
+            else
+            {
+                // the wind-up wasn't seen here (joined late): start from the drawn-back pose for this charge
+                h.WindUp.Sample(h.WindUp.Length, _heavyFrom);
+                AttackPose.Lerp(_heavyFrom, h.Coiled, AttackMove.Ease(KeyEase.Smooth, charge01), _heavyFrom);
+            }
+            _move = null; _fromMove = null; _fadeFromHeld = false;
+            _attackT = 1f;
+            _heavy = HeavyPhase.Swing;
+            _heavyT = 0f;
+            _heavyCharge = charge01;
+            SetHeavyFace(true);
+            if (_speedLines != null) _speedLines.Begin();
+        }
+
+        /// <summary>The wind-up was called off (hit, guard, power-up, refused): ease back to the stance, no swing.</summary>
+        public void CancelHeavy()
+        {
+            if (_heavy == HeavyPhase.WindUp) StopHeavy(0.15f);
+        }
+
+        /// <summary>Ends the heavy where it is, cross-fading from its current pose into whatever comes next.</summary>
+        private void StopHeavy(float guardHold)
+        {
+            var h = Moveset.Heavy;
+            if (h != null && _heavy != HeavyPhase.None)
+            {
+                SampleHeavy(h, _fadeFrom);
+                _fadeFromHeld = true;
+                _moveBlend = 0f;
+            }
+            _heavy = HeavyPhase.None;
+            _guardHold = guardHold;
+            SetHeavyFace(false);
+        }
+
+        private void SampleHeavy(HeavyAttack h, AttackPose o)
+        {
+            if (_heavy == HeavyPhase.WindUp) SampleHeavyHeld(h, o);
+            else h.Swing.SampleFrom(_heavyFrom, _heavyT, o);
+        }
+
+        /// <summary>The wind-up at its current time and charge: pulled back, coiling deeper with the charge, trembling with the strain.</summary>
+        private void SampleHeavyHeld(HeavyAttack h, AttackPose o)
+        {
+            h.WindUp.Sample(_heavyT, o);
+            float c = _heavyCharge;
+            if (c > 0f) AttackPose.Lerp(o, h.Coiled, AttackMove.Ease(KeyEase.Smooth, c), o);
+            float a = 0.003f + 0.012f * c * c, t = Time.time;
+            o.RootPos += new Vector3(Mathf.Sin(t * 53f), 0f, Mathf.Cos(t * 47f)) * a;
+            Vector3 shake = new Vector3(Mathf.Sin(t * 61f), Mathf.Cos(t * 59f), 0f) * a;
+            if (h.Limb == StrikeLimb.HandL) o.ArmL += shake; else o.ArmR += shake;
+        }
+
+        private void AdvanceHeavy(float dt)
+        {
+            _heavyT += dt;
+            _moveWeight = Mathf.Min(1f, _moveWeight + dt / 0.06f);
+            if (_heavy == HeavyPhase.WindUp)
+            {
+                _heavyCharge = CombatMath.Charge01(_heavyT, _heavyMaxCharge);
+                if (_heavyCharge >= 1f && !_heavyFull) { _heavyFull = true; _heavyFlashPending = true; }
+                return;
+            }
+            var h = Moveset.Heavy;
+            if (h == null || _heavyT >= h.Swing.Length)
+            {
+                // the swing's last key is the guard: hold it a moment, then relax (AdvanceMove)
+                _heavy = HeavyPhase.None;
+                _guardHold = 0.35f;
+                SetHeavyFace(false);
+            }
+        }
+
+        /// <summary>Gritted teeth while winding up and swinging a heavy; back to neutral after.</summary>
+        private void SetHeavyFace(bool on)
+        {
+            if (_face == null && _model != null) _face = _model.GetComponentInChildren<ToonFaceAnimator>();
+            if (_face == null) return;
+            bool angry = _face.Holding && _face.Expression == ToonExpression.Angry;
+            if (on && !angry) _face.Play(ToonExpression.Angry, true);
+            else if (!on && angry) _face.Play(ToonExpression.Neutral);
+        }
+
+        /// <summary>
+        /// Sent flying by a charged heavy (<paramref name="impact"/> 0..1 = its charge): the body folds into
+        /// <see cref="HitPoses.Launched"/>, turned to fly back along <paramref name="worldPush"/> (attacker → victim) facing the
+        /// attacker, held for that launch's hang time (<see cref="CombatMath.HeavyAirTime"/>), then eased out as the fighter lands
+        /// and skids. Ends whatever this fighter was doing.
+        /// </summary>
+        public void PlayLaunch(Vector3 worldPush, float impact)
+        {
+            if (_proc == null || _proc.Rig == null || _graphics == null) return;
+            worldPush.y = 0f;
+            Vector3 push = worldPush.sqrMagnitude > 1e-6f ? _graphics.InverseTransformDirection(worldPush.normalized) : Vector3.back;
+            push.y = 0f;
+            if (push.sqrMagnitude < 1e-6f) push = Vector3.back;
+            _launchYaw = Mathf.Atan2(-push.x, -push.z) * Mathf.Rad2Deg;
+            impact = Mathf.Clamp01(impact);
+            _launchStrength = Mathf.Lerp(0.6f, 1f, impact);
+            _launchDur = CombatMath.HeavyAirTime(impact);
+            _launchT = 0f;
+            if (_heavy != HeavyPhase.None) { _heavy = HeavyPhase.None; SetHeavyFace(false); }
+            _move = null; _fromMove = null; _fadeFromHeld = false; _moveWeight = 0f;
         }
 
         /// <summary>Freeze the pose for a moment (local visual hit-stop).</summary>
@@ -255,6 +427,7 @@ namespace LightMMORPG.Player
             AttackPoseSolver.LegTo(rig, 1, f * hs, wf, hs);
             _hs = hs;
             ApplyMove(rig, hs);
+            ApplyLaunch(rig, hs);
             ApplyHitReaction(rig, hs);
         }
 
@@ -263,12 +436,17 @@ namespace LightMMORPG.Player
         private void AdvanceMove(float dt)
         {
             bool interrupted = _blockingNow || _chargingNow || (_stats != null && _stats.IsDown.Value);
+            _moveBlend = Mathf.Min(1f, _moveBlend + dt / 0.06f);
+            if (_heavy != HeavyPhase.None)
+            {
+                if (interrupted) StopHeavy(0f);
+                else { AdvanceHeavy(dt); if (_heavy != HeavyPhase.None) return; }
+            }
             if (_move != null && interrupted) { _move = null; _fromMove = null; _guardHold = 0f; }
             if (_move != null)
             {
                 _moveT += dt;
                 if (_fromMove != null) _fromT += dt;
-                _moveBlend = Mathf.Min(1f, _moveBlend + dt / 0.06f);
                 _moveWeight = Mathf.Min(1f, _moveWeight + dt / 0.05f);
                 if (_moveT >= _move.Length) { _move = null; _fromMove = null; _guardHold = 0.35f; }
             }
@@ -290,9 +468,10 @@ namespace LightMMORPG.Player
         private void ApplyMove(CharacterRig rig, float hs)
         {
             float w = AttackMove.Ease(KeyEase.Smooth, _moveWeight);
-            if (w <= 0f) { _rootOffset = Vector3.zero; _rootTurn = Quaternion.identity; return; }
+            if (w <= 0f) { _rootOffset = Vector3.zero; _rootTurn = Quaternion.identity; _fadeFromHeld = false; return; }
             var set = Moveset;
-            if (_move != null)
+            if (_heavy != HeavyPhase.None && set.Heavy != null) SampleHeavy(set.Heavy, _pose);
+            else if (_move != null)
             {
                 _move.Sample(_moveT, _pose);
                 if (_fromMove != null && _moveBlend < 1f)
@@ -302,30 +481,65 @@ namespace LightMMORPG.Player
                 }
             }
             else AttackPose.Lerp(set.Guard, set.Guard, 0f, _pose);
+            // an action that ended early (a called-off wind-up, a heavy cut short by a jab) fades out instead of popping
+            if (_fadeFromHeld)
+            {
+                if (_moveBlend < 1f) AttackPose.Lerp(_fadeFrom, _pose, AttackMove.Ease(KeyEase.Smooth, _moveBlend), _pose);
+                else _fadeFromHeld = false;
+            }
+            BlendOverBase(rig, hs, _pose, w, w * (1f - Mathf.Max(_locoW, _flightBlend)));
+        }
 
+        /// <summary>
+        /// Blends an attack-space pose (weight <paramref name="w"/>, the legs <paramref name="legW"/>) over the base pose (stance,
+        /// walk or run, flight) in pose space: the body's turns from the base pose's own, the fists from its wrists, the feet from
+        /// its feet; then solves the rig and sets the model's root offset / turn.
+        /// </summary>
+        private void BlendOverBase(CharacterRig rig, float hs, AttackPose target, float w, float legW)
+        {
             Vector3 wristL = rig.ModelPosition(CharacterBone.LeftHand), wristR = rig.ModelPosition(CharacterBone.RightHand);
-            float legW = w * (1f - Mathf.Max(_locoW, _flightBlend));
             var bp = _basePose;
             var b = _blend;
-            AttackPose.Lerp(bp, _pose, w, b);
+            AttackPose.Lerp(bp, target, w, b);
             // locked on, the legs keep stepping towards the travel direction under the attack: the hips keep half of their turn
             // that way (the chest still strikes square), so the legs don't twist round under a pelvis facing the opponent
             float keep = 0.5f * _warpHips * w;
             b.HipsYaw += keep; b.TorsoYaw -= keep;
-            b.RootPos = _pose.RootPos * w; b.RootYaw = _pose.RootYaw * w; b.RootPitch = _pose.RootPitch * w; b.RootRoll = _pose.RootRoll * w;
+            b.RootPos = target.RootPos * w; b.RootYaw = target.RootYaw * w; b.RootPitch = target.RootPitch * w; b.RootRoll = target.RootRoll * w;
             Quaternion rq = b.RootRotation;
             Vector3 rp = b.RootPos * hs;
             Vector3 ToAttack(Vector3 m) => (rq * m + rp) / hs;
-            b.ArmL = Vector3.Lerp(ToAttack(wristL), _pose.ArmL, w);
-            b.ArmR = Vector3.Lerp(ToAttack(wristR), _pose.ArmR, w);
-            b.HipsPos = Vector3.Lerp(bp.HipsPos, _pose.HipsPos, legW);
-            b.LegL = Vector3.Lerp(ToAttack(bp.LegL * hs), _pose.LegL, legW);
-            b.LegR = Vector3.Lerp(ToAttack(bp.LegR * hs), _pose.LegR, legW);
-            b.FootYawL = Mathf.Lerp(bp.FootYawL + b.RootYaw, _pose.FootYawL, legW); b.FootPitchL = Mathf.Lerp(bp.FootPitchL, _pose.FootPitchL, legW);
-            b.FootYawR = Mathf.Lerp(bp.FootYawR + b.RootYaw, _pose.FootYawR, legW); b.FootPitchR = Mathf.Lerp(bp.FootPitchR, _pose.FootPitchR, legW);
+            b.ArmL = Vector3.Lerp(ToAttack(wristL), target.ArmL, w);
+            b.ArmR = Vector3.Lerp(ToAttack(wristR), target.ArmR, w);
+            b.HipsPos = Vector3.Lerp(bp.HipsPos, target.HipsPos, legW);
+            b.LegL = Vector3.Lerp(ToAttack(bp.LegL * hs), target.LegL, legW);
+            b.LegR = Vector3.Lerp(ToAttack(bp.LegR * hs), target.LegR, legW);
+            b.FootYawL = Mathf.Lerp(bp.FootYawL + b.RootYaw, target.FootYawL, legW); b.FootPitchL = Mathf.Lerp(bp.FootPitchL, target.FootPitchL, legW);
+            b.FootYawR = Mathf.Lerp(bp.FootYawR + b.RootYaw, target.FootYawR, legW); b.FootPitchR = Mathf.Lerp(bp.FootPitchR, target.FootPitchR, legW);
             AttackPoseSolver.Apply(rig, b, hs);
             _rootOffset = rp;
             _rootTurn = rq;
+        }
+
+        /// <summary>Sent flying (<see cref="PlayLaunch"/>): the launched pose over the base pose, legs and all, for the hang time.</summary>
+        private void ApplyLaunch(CharacterRig rig, float hs)
+        {
+            if (_launchT >= _launchDur + LaunchOut) return;
+            float w = Smooth01(0f, LaunchIn, _launchT) * (1f - Smooth01(_launchDur, _launchDur + LaunchOut, _launchT)) * _launchStrength;
+            if (w <= 0.001f) return;
+            AttackPose.Lerp(HitPoses.Launched, HitPoses.Launched, 0f, _launchPose);
+            TurnPose(_launchPose, _launchYaw);
+            BlendOverBase(rig, hs, _launchPose, w, w);
+        }
+
+        /// <summary>Turns a whole attack-space pose about the vertical through its root: limb targets, feet, head and root together.</summary>
+        private static void TurnPose(AttackPose p, float yaw)
+        {
+            if (Mathf.Abs(yaw) < 0.01f) return;
+            Quaternion q = Quaternion.AngleAxis(yaw, Vector3.up);
+            p.RootPos = q * p.RootPos; p.RootYaw += yaw; p.HeadYaw += yaw;
+            p.ArmL = q * p.ArmL; p.ArmR = q * p.ArmR; p.LegL = q * p.LegL; p.LegR = q * p.LegR;
+            p.FootYawL += yaw; p.FootYawR += yaw;
         }
 
         // ------------------------------------------------------------------ walking / running (locomotion styles)
@@ -675,6 +889,7 @@ namespace LightMMORPG.Player
             _lunge = Mathf.MoveTowards(_lunge, 0f, dt * 5f);
             _recoil = Vector3.MoveTowards(_recoil, Vector3.zero, dt * 3f);
             _hrT += dt;
+            _launchT += dt;
 
             _phase += dt * Mathf.Lerp(2.2f, 9f, Mathf.Clamp01(planar / 13f));
             UpdateLocomotion(dt, local, planar, flying, dashing, stunned);
@@ -723,7 +938,26 @@ namespace LightMMORPG.Player
             _model.localScale = Vector3.Scale(_baseScale, scale);
 
             // speed lines on the striking limb (frozen with the pose during hit-stop, since this point isn't reached then)
-            if (_speedLines != null && _proc != null && _proc.Rig != null) _speedLines.Tick(_proc.Rig, _move, _moveT, dt, _hs);
+            if (_speedLines != null && _proc != null && _proc.Rig != null)
+            {
+                bool swing = _heavy == HeavyPhase.Swing && Moveset.Heavy != null;
+                _speedLines.Tick(_proc.Rig, swing ? Moveset.Heavy.Swing : _move, swing ? _heavyT : _moveT, dt, _hs);
+            }
+
+            // full charge: a flash at the drawn-back fist, so the player knows letting go now hits hardest
+            if (_heavyFlashPending)
+            {
+                _heavyFlashPending = false;
+                var rig = _proc != null ? _proc.Rig : null;
+                var h = Moveset.Heavy;
+                if (rig != null && h != null && _heavy == HeavyPhase.WindUp)
+                {
+                    int side = h.Limb == StrikeLimb.HandL || h.Limb == StrikeLimb.FootL ? -1 : 1;
+                    Vector3 fist = rig.transform.TransformPoint(AttackPoseSolver.FistCentre(rig, side, _hs));
+                    var cfg = GameConfig.Load();
+                    CombatFx.SpawnFlash(fist, 0.55f * _hs, cfg.impactMaterial, 0.22f);
+                }
+            }
         }
     }
 }

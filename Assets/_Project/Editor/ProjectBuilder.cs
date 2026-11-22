@@ -158,11 +158,15 @@ namespace LightMMORPG.EditorTools
             to.lightComboDamage = (float[])from.lightComboDamage.Clone();
             to.comboWindow = from.comboWindow;
             to.heavyDamage = from.heavyDamage;
+            to.heavyMaxDamage = from.heavyMaxDamage;
+            to.heavyMaxChargeTime = from.heavyMaxChargeTime;
+            to.heavyChargeMoveMultiplier = from.heavyChargeMoveMultiplier;
             to.heavyCooldown = from.heavyCooldown;
             to.meleeHitRadius = from.meleeHitRadius;
             to.meleeHitForwardOffset = from.meleeHitForwardOffset;
             to.lightHitstun = from.lightHitstun;
             to.heavyHitstun = from.heavyHitstun;
+            to.heavyMaxHitstun = from.heavyMaxHitstun;
             to.blockMoveMultiplier = from.blockMoveMultiplier;
             to.blockDamageReduction = from.blockDamageReduction;
             to.guardBreakStun = from.guardBreakStun;

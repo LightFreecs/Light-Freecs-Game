@@ -33,12 +33,16 @@ namespace LightMMORPG.Config
         [Header("Melee")]
         public float[] lightComboDamage = (float[])CombatConstants.LightComboDamage.Clone();
         public float comboWindow = CombatConstants.ComboWindow;
-        public float heavyDamage = CombatConstants.HeavyDamage;
+        [Tooltip("Heavy attack damage for a tap (no charge).")] public float heavyDamage = CombatConstants.HeavyDamage;
+        [Tooltip("Heavy attack damage when held for the full charge time.")] public float heavyMaxDamage = CombatConstants.HeavyMaxDamage;
+        [Tooltip("Seconds of holding Heavy for a full charge.")] public float heavyMaxChargeTime = CombatConstants.HeavyMaxChargeTime;
+        [Tooltip("Movement speed share while winding up a heavy (no running).")] public float heavyChargeMoveMultiplier = CombatConstants.HeavyChargeMoveMultiplier;
         public float heavyCooldown = CombatConstants.HeavyCooldown;
         public float meleeHitRadius = CombatConstants.MeleeHitRadius;
         public float meleeHitForwardOffset = CombatConstants.MeleeHitForwardOffset;
         public float lightHitstun = CombatConstants.LightHitstun;
-        public float heavyHitstun = CombatConstants.HeavyHitstun;
+        [Tooltip("Hitstun of finishers, beams and a tapped heavy.")] public float heavyHitstun = CombatConstants.HeavyHitstun;
+        [Tooltip("Hitstun of a fully charged heavy (covers the flight).")] public float heavyMaxHitstun = CombatConstants.HeavyMaxHitstun;
 
         [Header("Block")]
         public float blockMoveMultiplier = CombatConstants.BlockMoveMultiplier;

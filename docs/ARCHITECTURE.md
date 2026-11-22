@@ -55,7 +55,10 @@ Later sessions add to `ProjectBuilder` rather than writing a second builder.
 - Movement: walk 2.2 m/s (default), run 8 m/s (hold Shift; was run 8 / sprint 13 until 2026-11-18), jump; flight toggle (fly up/down, no gravity, 11 m/s); dash (burst 25 m/s for 0.18 s, 0.6 s cooldown);
   flash step (instant ~7 m teleport in move dir, 2.5 s cooldown). All tick-based inside prediction.
 - Melee: 4-hit light combo (damage 30/30/40/60, combo window 0.6 s after each hit, last hit knockback), heavy attack
-  (110 dmg, launch/knockback, 1.2 s cooldown). Hit = sphere overlap 1.2 m radius at 1.3 m in front of attacker, server side.
+  = hold to charge (owner 2026-11-21), up to 1.5 s: damage 110 (tap) → 300 (full), knockback 15 → 32 m/s with lift 8 → 14
+  (a tap shoves ~5 m, a full charge sends the victim flying ~23 m, ~1 s in the air), hitstun 0.6 → 1.3 s; winding up slows
+  to 0.35× walk (no running); 1.2 s cooldown from the release; the hit lands 0.09 s after the release (when the fist
+  arrives). Hit = sphere overlap 1.2 m radius at 1.3 m in front of attacker, server side.
 - Block: hold, movement x0.35, blocks 80% damage, guard meter 100 drains by blocked damage/2, at 0 → guard break (stun 1.0 s).
 - Hitstun: 0.35 s light, 0.6 s heavy/knockback. Stunned players cannot act.
 - Powers (data-driven `AbilityDefinition` ScriptableObjects):
@@ -97,7 +100,7 @@ Later sessions add to `ProjectBuilder` rather than writing a second builder.
 ## Input
 - Built in code (no .inputactions asset needed): `InputAction`s with keyboard/mouse + gamepad bindings.
   PC: WASD move (walk), mouse look, Shift run (hold), Space jump/fly up, Ctrl fly down, F toggle flight, Q dash, E flash step,
-  LMB light, RMB heavy, R block (hold), C charge (hold), 1 Energy Blast, 2 Charged Beam (hold+release), 3 Power Surge, Tab lock-on.
+  LMB light, RMB heavy (hold+release), R block (hold), C charge (hold), 1 Energy Blast, 2 Charged Beam (hold+release), 3 Power Surge, Tab lock-on.
 - Mobile: runtime-built uGUI overlay (virtual joystick left, drag-to-look right half, action buttons) writes into a static
   `TouchInputState`; the player input reader merges it with Input System values. Shown when `Application.isMobilePlatform`
   or `Touchscreen.current != null`.
@@ -863,3 +866,38 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     five gaits (dotnet harness against the built `LightMMORPG.dll`).
   - Verified: headless compile only (owner tests by hand). Not seen in a rendered match: lock-on at network-smoothed speeds, the
     remote view of another player strafing.
+- Charged heavy attack (2026-11-21; owner: "pull back the fist and swing forward with extreme strength ... send the opponent
+  flying depending on how much the user held the key ... the more time is held the more it should damage"). Closes the "heavy
+  attack rework" left open by the basic movesets. Numbers under "Gameplay rules".
+  - Rules: `CombatConstants.HeavyMaxDamage` 300 / `HeavyMaxChargeTime` 1.5 / `HeavyMaxHitstun` 1.3 / `HeavyChargeMoveMultiplier`
+    0.35 (`HeavyDamage` 110 is now the tap); `CombatMath.Charge01`, `HeavyKnockback(dir, charge01)` (15 → 32 m/s, lift 8 → 14),
+    `HeavyAirTime` (hang time, `FighterGravity` 28 = the motor's); `DamageCalculator.HeavyDamage(chargeTime)`. GameConfig mirrors
+    them (`heavyMaxDamage`, `heavyMaxChargeTime`, `heavyMaxHitstun`, `heavyChargeMoveMultiplier`). Tests in `CombatExtrasTests`.
+  - Flow (`PlayerCombat`): press = wind-up (`CmdHeavyCharge(true)` → `ServerHeavyCharge`, observers `RpcHeavyCharge`); release =
+    `CmdHeavyRelease(aim, claimed seconds)` → `ServerHeavyRelease` validates like the beam (`ValidateCharge`), uses the cooldown
+    (server copy 0.15 s shorter as jitter slack), sends `RpcSwing(Heavy, charge × 255)` and resolves the hit
+    `Heavy.Swing.Hit` (0.09 s) later in `ServerTick` (so every client sees the impact at contact; lost if the attacker is
+    stunned / KO'd before then). Block, Charge, being hit or a menu opening calls the wind-up off; no other attack while it is
+    held; a jab can't cut the swing off for 0.3 s. `PlayerMotor.ReplicateData.Heavy` (owner: `OwnerHeavyCharging`) → slow
+    shuffle, no running (`IsChargingHeavy`). `TrainingDummy` ends 30 % of combos in a charged heavy (short holds, 25 % full).
+    `-autoattack` holds it ~1 s.
+  - Hits: `PlayerStats.ServerApplyHit(..., impact)` (impact = the heavy's charge; a blocked charged heavy pushes the guard up to
+    3×) → `RpcHitFeedback` carries it → `OnHitFeedback` has a new `float impact` argument (CombatFx, InjuryVisuals). KO paths use
+    the new `PlayerMotor.ServerStun` instead of a zero knockback, so a finishing blow's knockback carries on (a heavy KO flies).
+  - Animation (`BasicMovesets`): `BasicMoveset.Heavy` = `HeavyAttack` (WindUp move, Coiled pose, Swing move); Rush's "Charged
+    punch": the body turns away (chest ~48°, head kept on the target), right fist cocked back beside the head, left arm reaching
+    for the target with the hand half open, weight on the back leg; full charge coils deeper. Swing: hips and shoulders whip round
+    (chest -54°), the left foot drives into a lunge (root +0.42), the fist shoots at the solar plexus (1.32 of 2.3) and holds,
+    then a step back (0.62 s). `AttackMove.SampleFrom` = sample from a given start pose (the swing starts from the held pose).
+    Made on a scratch copy of the Locomotion Bench (the game's solver), checked from the side, front and game camera.
+  - `PlayerProceduralAnimator`: `PlayHeavyWindUp` / `PlayHeavySwing(charge01)` / `CancelHeavy`, `HeavyCharge01`; the held pose
+    coils towards Coiled with the charge and trembles (0.3 → 1.5 cm); Angry face while winding up / swinging; a flash at the
+    fist at full charge; speed lines on the swing; called-off wind-ups and swings cut by a jab cross-fade (`_fadeFrom`).
+    `ApplyMove`'s blend is now `BlendOverBase` (shared). Victims: `PlayLaunch(push, impact)` blends `HitPoses.Launched` (folded
+    over the blow, flying back with arms and legs trailing, hands open; turned to face back along the push) for the hang time,
+    then eases out over 0.3 s as they land and skid.
+  - Effects: `CombatFx.OnHit` — hit-stop +0.12 s, bigger recoil / reaction / camera shake and a shockwave flash (charge > 0.2),
+    all scaled by the charge; `PlayerAura` flares from a quarter charge up to near full size; HUD heavy icon and touch button
+    fill from the bottom with the charge and pulse at full; labels "RMB hold" / "HEAVY (hold)" / "Heavy attack (hold)".
+  - Verified: headless compile only (owner tests by hand). Not seen in game: the poses on the Toon Head + hair (the cocked fist
+    sits near the ear), the launch arc against walls, the remote view of a wind-up.

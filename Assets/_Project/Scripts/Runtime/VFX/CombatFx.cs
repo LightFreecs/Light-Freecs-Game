@@ -24,32 +24,38 @@ namespace LightMMORPG.VFX
             PlayerStats.OnHitFeedback += OnHit;
         }
 
-        private static void OnHit(PlayerStats victim, PlayerStats attacker, Vector3 point, float damage, bool blocked, bool guardBreak, HitKind kind)
+        private static void OnHit(PlayerStats victim, PlayerStats attacker, Vector3 point, float damage, bool blocked, bool guardBreak, HitKind kind, float impact)
         {
             bool big = kind == HitKind.Finisher || kind == HitKind.Heavy || kind == HitKind.Beam || guardBreak;
-            float stop = big ? 0.11f : 0.06f;
+            // a charged heavy (impact = its charge) hits harder everywhere: longer freeze, bigger shake, a shockwave, and it
+            // sends the victim flying
+            float charged = kind == HitKind.Heavy ? Mathf.Clamp01(impact) : 0f;
+            float stop = (big ? 0.11f : 0.06f) + 0.12f * charged;
             var victimAnim = victim != null ? victim.GetComponent<PlayerProceduralAnimator>() : null;
             var attackerAnim = attacker != null ? attacker.GetComponent<PlayerProceduralAnimator>() : null;
             if (victimAnim != null)
             {
                 victimAnim.HitStop(stop);
                 Vector3 dir = attacker != null ? victim.transform.position - attacker.transform.position : -victim.transform.forward;
-                victimAnim.PlayRecoil(dir, blocked ? 0.4f : (big ? 1.4f : 0.8f));
+                victimAnim.PlayRecoil(dir, blocked ? 0.4f + 0.4f * charged : (big ? 1.4f + 0.6f * charged : 0.8f));
                 // the body reacts where the fist / foot / blast landed (the server reports the struck spot)
-                float react = blocked ? 0.3f : kind == HitKind.Beam ? 1.8f : big ? 1.6f : kind == HitKind.Blast ? 1.2f : 1f;
+                float react = blocked ? 0.3f : kind == HitKind.Beam ? 1.8f : big ? 1.6f + 0.4f * charged : kind == HitKind.Blast ? 1.2f : 1f;
                 victimAnim.PlayHitReaction(point, dir, react, big && !blocked);
+                if (kind == HitKind.Heavy && !blocked) victimAnim.PlayLaunch(dir, charged);
             }
             if (attackerAnim != null && kind != HitKind.Blast && kind != HitKind.Beam) attackerAnim.HitStop(stop);
 
             bool localVictim = victim != null && victim.IsOwner;
             bool localAttacker = attacker != null && attacker.IsOwner;
-            if (localVictim) ThirdPersonCamera.Shake(big ? 0.35f : 0.16f, big ? 0.3f : 0.15f);
-            else if (localAttacker) ThirdPersonCamera.Shake(big ? 0.18f : 0.07f, 0.12f);
+            if (localVictim) ThirdPersonCamera.Shake(big ? 0.35f + 0.35f * charged : 0.16f, big ? 0.3f + 0.25f * charged : 0.15f);
+            else if (localAttacker) ThirdPersonCamera.Shake(big ? 0.18f + 0.22f * charged : 0.07f, 0.12f + 0.12f * charged);
 
             var cfg = GameConfig.Load();
             bool melee = kind == HitKind.Light || kind == HitKind.Finisher || kind == HitKind.Heavy;
             if (melee && !blocked) AttackFx.SpawnSpark(point, big);   // yellow spark burst (Attack Bench)
             else SpawnFlash(point, big ? 1.6f : (blocked ? 0.6f : 0.9f), blocked ? cfg.auraMaterial : cfg.impactMaterial, big ? 0.22f : 0.14f);
+            // the shockwave of a charged heavy: a bright burst that grows with the charge
+            if (charged > 0.2f) SpawnFlash(point, 1.2f + 2.4f * charged, blocked ? cfg.auraMaterial : cfg.impactMaterial, 0.18f + 0.14f * charged);
         }
 
         /// <summary>Expanding/fading sphere flash.</summary>

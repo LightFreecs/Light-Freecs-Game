@@ -63,6 +63,29 @@ namespace LightMMORPG.Tests
         }
 
         [Test]
+        public void HeavyDamageGrowsWithHoldTime()
+        {
+            Assert.AreEqual(CombatConstants.HeavyDamage, DamageCalculator.HeavyDamage(0f), 1e-3f);
+            Assert.AreEqual(CombatConstants.HeavyMaxDamage, DamageCalculator.HeavyDamage(CombatConstants.HeavyMaxChargeTime), 1e-3f);
+            Assert.AreEqual(CombatConstants.HeavyMaxDamage, DamageCalculator.HeavyDamage(9f), 1e-3f);
+            Assert.AreEqual((CombatConstants.HeavyDamage + CombatConstants.HeavyMaxDamage) * 0.5f,
+                DamageCalculator.HeavyDamage(CombatConstants.HeavyMaxChargeTime * 0.5f), 1e-3f);
+        }
+
+        [Test]
+        public void ChargedHeavySendsFlyingFurther()
+        {
+            Vector3 tap = CombatMath.HeavyKnockback(Vector3.forward, 0f), full = CombatMath.HeavyKnockback(Vector3.forward, 1f);
+            Assert.AreEqual(CombatMath.HeavyKnockbackSpeed, tap.z, 1e-4f);
+            Assert.AreEqual(CombatMath.HeavyLift, tap.y, 1e-4f);
+            Assert.AreEqual(CombatMath.HeavyMaxKnockbackSpeed, full.z, 1e-4f);
+            Assert.AreEqual(CombatMath.HeavyMaxLift, full.y, 1e-4f);
+            Assert.Greater(CombatMath.HeavyAirTime(1f), CombatMath.HeavyAirTime(0f));
+            Assert.AreEqual(1f, CombatMath.Charge01(5f, CombatConstants.HeavyMaxChargeTime), 1e-4f);
+            Assert.AreEqual(0f, CombatMath.Charge01(-1f, CombatConstants.HeavyMaxChargeTime), 1e-4f);
+        }
+
+        [Test]
         public void PickSpawnAvoidsIndexAndStaysInRange()
         {
             for (int r = 0; r <= 20; r++)

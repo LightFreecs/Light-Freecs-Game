@@ -24,6 +24,8 @@ namespace LightMMORPG.Player
             public Vector2 Move;
             public float CameraYaw;
             public bool Sprint, FlyUp, FlyDown, Block, Charge, FaceAim;
+            /// <summary>Holding Heavy (winding up a charged heavy attack): slow walk, no running.</summary>
+            public bool Heavy;
             // One-time inputs (accumulated in Update between ticks).
             public bool Jump, Dash, FlashStep, ToggleFlight;
 
@@ -70,6 +72,10 @@ namespace LightMMORPG.Player
         public bool IsFlying => _flying;
         public bool IsBlocking { get; private set; }
         public bool IsCharging { get; private set; }
+        /// <summary>Winding up a heavy attack (replicated input): moves at <c>heavyChargeMoveMultiplier</c> of the walk, no running.</summary>
+        public bool IsChargingHeavy { get; private set; }
+        /// <summary>Owner-side: PlayerCombat sets this while Heavy is held; it goes into the replicated input.</summary>
+        public bool OwnerHeavyCharging { get; set; }
         /// <summary>Running (Run / Shift held while moving); otherwise the fighter walks.</summary>
         public bool IsSprinting { get; private set; }
         public bool IsDashing => _dashTimer > 0f;
@@ -182,6 +188,7 @@ namespace LightMMORPG.Player
                 rd.Block = _input.Held(GameAction.Block);
                 rd.Charge = _input.Held(GameAction.Charge);
             }
+            rd.Heavy = OwnerHeavyCharging;
             _jumpQueued = _dashQueued = _flashQueued = _toggleFlightQueued = false;
             return rd;
         }
@@ -255,14 +262,15 @@ namespace LightMMORPG.Player
             {
                 rd.Move = Vector2.zero;
                 rd.Jump = rd.Dash = rd.FlashStep = rd.ToggleFlight = false;
-                rd.Sprint = rd.FlyUp = rd.FlyDown = rd.Block = rd.Charge = false;
+                rd.Sprint = rd.FlyUp = rd.FlyDown = rd.Block = rd.Charge = rd.Heavy = false;
                 _dashTimer = 0f;
             }
 
             bool grounded = _cc.isGrounded;
             IsBlocking = rd.Block;
             IsCharging = rd.Charge && !rd.Block;
-            IsSprinting = rd.Sprint && !IsBlocking && !IsCharging && rd.Move.sqrMagnitude > 0.01f;
+            IsChargingHeavy = rd.Heavy && !IsBlocking && !IsCharging;
+            IsSprinting = rd.Sprint && !IsBlocking && !IsCharging && !IsChargingHeavy && rd.Move.sqrMagnitude > 0.01f;
 
             if (rd.ToggleFlight && !IsCharging)
             {
@@ -277,6 +285,7 @@ namespace LightMMORPG.Player
             float speed = _flying ? _config.flySpeed : (IsSprinting ? _config.runSpeed : _config.walkSpeed);
             speed *= SpeedScale;
             if (IsBlocking) speed *= _config.blockMoveMultiplier;
+            if (IsChargingHeavy) speed *= _config.heavyChargeMoveMultiplier;   // planted for the big swing: a slow shuffle
             if (IsCharging) speed = 0f;
 
             Vector3 moveDir = wish.sqrMagnitude > 0.0001f ? wish.normalized : Forward;
@@ -301,6 +310,7 @@ namespace LightMMORPG.Player
             if (_flying)
             {
                 float v = (rd.FlyUp ? 1f : 0f) - (rd.FlyDown ? 1f : 0f);
+                if (IsChargingHeavy) v *= _config.heavyChargeMoveMultiplier;
                 _verticalVelocity = IsCharging ? 0f : v * _config.flySpeed * SpeedScale;
             }
             else
@@ -362,6 +372,17 @@ namespace LightMMORPG.Player
                 velocity.y = 0f;
             }
             _knockback = velocity;
+            _stunTimer = Mathf.Max(_stunTimer, stunSeconds);
+            _dashTimer = 0f;
+        }
+
+        /// <summary>
+        /// Server: stun (no input) for at least stunSeconds without touching the knockback, so a fighter knocked out mid-air by
+        /// a launching blow keeps flying and lands instead of stopping dead.
+        /// </summary>
+        [Server]
+        public void ServerStun(float stunSeconds)
+        {
             _stunTimer = Mathf.Max(_stunTimer, stunSeconds);
             _dashTimer = 0f;
         }

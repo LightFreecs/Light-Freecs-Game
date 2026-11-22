@@ -13,8 +13,14 @@ namespace LightMMORPG.Core
         public const float LightKnockbackSpeed = 2.5f;
         public const float FinisherKnockbackSpeed = 13f;
         public const float FinisherLift = 5f;
+        /// <summary>Knockback of a tapped heavy (no charge): a shove of ~5 m.</summary>
         public const float HeavyKnockbackSpeed = 15f;
         public const float HeavyLift = 8f;
+        /// <summary>Knockback of a fully charged heavy: sends the victim flying ~23 m, about a second in the air.</summary>
+        public const float HeavyMaxKnockbackSpeed = 32f;
+        public const float HeavyMaxLift = 14f;
+        /// <summary>Gravity on a fighter on foot (PlayerMotor's default), for the hang time of a launch.</summary>
+        public const float FighterGravity = 28f;
         public const float BlockedPushSpeed = 3f;
         public const float BlastKnockbackSpeed = 4f;
         public const float BeamKnockbackSpeed = 16f;
@@ -47,6 +53,26 @@ namespace LightMMORPG.Core
             if (direction.sqrMagnitude < 1e-6f) direction = Vector3.forward;
             return direction.normalized * speed + Vector3.up * lift;
         }
+
+        /// <summary>How charged a held attack is: 0 = a tap, 1 = held for <paramref name="maxChargeTime"/> or longer.</summary>
+        public static float Charge01(float chargeTime, float maxChargeTime) =>
+            maxChargeTime <= 0f ? 1f : Mathf.Clamp01(chargeTime / maxChargeTime);
+
+        /// <summary>
+        /// Heavy attack knockback by charge (0..1): from a shove (15 m/s, lift 8: ~5 m) to sending the victim flying
+        /// (32 m/s, lift 14: ~23 m, about a second in the air).
+        /// </summary>
+        public static Vector3 HeavyKnockback(Vector3 direction, float charge01)
+        {
+            float c = Mathf.Clamp01(charge01);
+            return Knockback(direction, Mathf.Lerp(HeavyKnockbackSpeed, HeavyMaxKnockbackSpeed, c), Mathf.Lerp(HeavyLift, HeavyMaxLift, c));
+        }
+
+        /// <summary>Seconds a fighter launched with this upward speed spends in the air (flat ground).</summary>
+        public static float AirTime(float lift) => 2f * Mathf.Max(0f, lift) / FighterGravity;
+
+        /// <summary>Seconds in the air after a heavy of this charge (0..1): ~0.57 s for a tap, 1 s at full charge.</summary>
+        public static float HeavyAirTime(float charge01) => AirTime(Mathf.Lerp(HeavyLift, HeavyMaxLift, Mathf.Clamp01(charge01)));
 
         /// <summary>Picks a spawn index from a 0..1 random value, avoiding <paramref name="avoid"/> when possible.</summary>
         public static int PickSpawn(int count, float random01, int avoid = -1)

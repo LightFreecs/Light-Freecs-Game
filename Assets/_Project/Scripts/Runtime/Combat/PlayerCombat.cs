@@ -20,7 +20,9 @@ namespace LightMMORPG.Combat
     /// <see cref="PlayerStats.ServerApplyHit"/>, and tells other clients to play the same visuals (<c>ExcludeOwner</c>).
     /// The server half of every attack is a public <c>Server*</c> method, so a server-driven fighter (the sparring
     /// <see cref="TrainingDummy"/>) attacks through exactly the same rules. Melee hits report where the striking fist / foot
-    /// really is at the move's impact frame (<see cref="StrikePoint"/>), so the victim reacts where it was hit.
+    /// really is at the move's impact frame (<see cref="StrikePoint(Vector3, AttackMove)"/>), so the victim reacts where it was hit.
+    /// The heavy is held: pressing it winds up (the fist is pulled back, movement slows), releasing it swings; damage,
+    /// knockback (up to sending the victim flying) and hitstun grow with the hold time up to <c>heavyMaxChargeTime</c>.
     /// </summary>
     public sealed class PlayerCombat : NetworkBehaviour
     {
@@ -41,6 +43,8 @@ namespace LightMMORPG.Combat
         private float _heavyReadyLocal, _blastReadyLocal, _beamReadyLocal, _surgeReadyLocal;
         private bool _beamCharging;
         private float _beamChargeStart;
+        private bool _heavyCharging;
+        private float _heavyChargeStart;
 
         // ---- server state ----
         private ComboChain _combo;
@@ -48,6 +52,13 @@ namespace LightMMORPG.Combat
         private Cooldown _heavyCd, _blastCd, _beamCd, _surgeCd;
         private bool _serverBeamCharging;
         private double _serverBeamStart;
+        private bool _serverHeavyCharging;
+        private double _serverHeavyStart;
+        // a released heavy waits for its fist to land (the swing's Hit time) before it is resolved
+        private bool _heavyPending;
+        private double _heavyHitAt;
+        private Vector3 _heavyAim;
+        private float _heavyChargeTime;
         private struct Projectile { public Vector3 Pos, Dir; public float Speed, Life, Radius, Damage; }
         private readonly List<Projectile> _projectiles = new();
         private readonly Collider[] _overlap = new Collider[16];
@@ -61,6 +72,13 @@ namespace LightMMORPG.Combat
         public bool IsChargingBeam => _beamCharging;
         public float BeamCharge01 => _beamCharging && _config.chargedBeam != null && _config.chargedBeam.maxChargeTime > 0f
             ? Mathf.Clamp01((Time.time - _beamChargeStart) / _config.chargedBeam.maxChargeTime) : 0f;
+        /// <summary>Owner: Heavy is held (winding up).</summary>
+        public bool IsChargingHeavy => _heavyCharging;
+        /// <summary>Owner: how charged the held heavy is (0 = a tap, 1 = full); 0 when not held.</summary>
+        public float HeavyCharge01 => _heavyCharging ? CombatMath.Charge01(Time.time - _heavyChargeStart, _config.heavyMaxChargeTime) : 0f;
+
+        /// <summary>The basic-attack moveset this fighter uses (its animator's; the default on a server without one).</summary>
+        private BasicMoveset Moveset => _anim != null ? _anim.Moveset : BasicMovesets.Get(BasicMovesets.DefaultId);
 
         private void Awake()
         {
@@ -71,7 +89,7 @@ namespace LightMMORPG.Combat
             _anim = GetComponent<PlayerProceduralAnimator>();
             _cc = GetComponent<CharacterController>();
             _combo = new ComboChain(_config.lightComboDamage, _config.comboWindow);
-            _heavyCd = new Cooldown(_config.heavyCooldown);
+            _heavyCd = new Cooldown(Mathf.Max(0f, _config.heavyCooldown - 0.15f)); // slack: the owner gates on the full cooldown
             _blastCd = new Cooldown(Def(AttackKind.Blast)?.cooldown ?? 0.35f);
             _beamCd = new Cooldown(Def(AttackKind.Beam)?.cooldown ?? 4f);
             _surgeCd = new Cooldown(Def(AttackKind.Surge)?.cooldown ?? 20f);
@@ -150,10 +168,13 @@ namespace LightMMORPG.Combat
             float now = Time.time;
 
             if (_beamCharging && !canAct) CancelBeam();
+            // hit, knocked out, guarding, powering up or a menu opening calls the wind-up off (no swing)
+            if (_heavyCharging && (!canAct || PlayerInputReader.MenuOpen || _input.Held(GameAction.Block) || _input.Held(GameAction.Charge)))
+                CancelHeavy();
 
             if (!canAct) return;
 
-            if (_input.Pressed(GameAction.Light) && now >= _nextLightLocal)
+            if (!_heavyCharging && _input.Pressed(GameAction.Light) && now >= _nextLightLocal)
             {
                 _nextLightLocal = now + CombatMath.LightAttackInterval;
                 if (now - _localComboTime > _config.comboWindow) _localComboIndex = 0;
@@ -164,13 +185,33 @@ namespace LightMMORPG.Combat
                 if (_anim != null) _anim.PlayAttack(AttackKind.Light, idx);
                 CmdLight(Aim());
             }
-            else if (_input.Pressed(GameAction.Heavy) && now >= _heavyReadyLocal)
+            else if (!_heavyCharging && !_beamCharging && _input.Pressed(GameAction.Heavy) && now >= _heavyReadyLocal
+                     && !_input.Held(GameAction.Block) && !_input.Held(GameAction.Charge))
             {
-                _heavyReadyLocal = now + _config.heavyCooldown;
-                _motor.FaceAimFor(0.8f);
-                if (_anim != null) _anim.PlayAttack(AttackKind.Heavy, 0);
-                CmdHeavy(Aim());
+                // hold to wind up: the fist is pulled back and the charge builds until the button is let go
+                _heavyCharging = true;
+                _heavyChargeStart = now;
+                _motor.FaceAimFor(0.3f);
+                if (_anim != null) _anim.PlayHeavyWindUp();
+                CmdHeavyCharge(true);
             }
+            if (_heavyCharging)
+            {
+                _motor.FaceAimFor(0.3f);
+                if (!_input.Held(GameAction.Heavy))
+                {
+                    // let go: swing. The charge (seconds held, capped) sets damage, knockback and hitstun on the server.
+                    float charge = Mathf.Min(now - _heavyChargeStart, _config.heavyMaxChargeTime);
+                    _heavyCharging = false;
+                    _heavyReadyLocal = now + _config.heavyCooldown;
+                    _nextLightLocal = Mathf.Max(_nextLightLocal, now + 0.3f);   // a jab can't cut the punch off before it lands
+                    _motor.FaceAimFor(0.8f);
+                    if (_anim != null) _anim.PlayHeavySwing(CombatMath.Charge01(charge, _config.heavyMaxChargeTime));
+                    CmdHeavyRelease(Aim(), charge);
+                }
+            }
+            _motor.OwnerHeavyCharging = _heavyCharging;
+            if (_heavyCharging) return;   // nothing else while the fist is drawn back
 
             if (_input.Pressed(GameAction.Blast) && now >= _blastReadyLocal && CanAfford(AttackKind.Blast))
             {
@@ -224,6 +265,14 @@ namespace LightMMORPG.Combat
             CmdBeamCharge(false);
         }
 
+        private void CancelHeavy()
+        {
+            _heavyCharging = false;
+            _motor.OwnerHeavyCharging = false;
+            if (_anim != null) _anim.CancelHeavy();
+            CmdHeavyCharge(false);
+        }
+
         private void SetChargeVisual(bool on)
         {
             if (on)
@@ -246,7 +295,8 @@ namespace LightMMORPG.Combat
         }
 
         [ServerRpc] private void CmdLight(Vector3 aim) => ServerLight(aim);
-        [ServerRpc] private void CmdHeavy(Vector3 aim) => ServerHeavy(aim);
+        [ServerRpc] private void CmdHeavyCharge(bool on) => ServerHeavyCharge(on);
+        [ServerRpc] private void CmdHeavyRelease(Vector3 aim, float claimedCharge) => ServerHeavyRelease(aim, claimedCharge);
         [ServerRpc] private void CmdBlast(Vector3 aim) => ServerBlast(aim);
         [ServerRpc] private void CmdBeamCharge(bool on) => ServerBeamCharge(on);
         [ServerRpc] private void CmdBeamFire(Vector3 aim, float claimedCharge) => ServerBeamFire(aim, claimedCharge);
@@ -270,17 +320,61 @@ namespace LightMMORPG.Combat
             return true;
         }
 
+        /// <summary>
+        /// Server: start winding up a heavy (true) or call it off (false: hit, guarding, powering up). The swing comes with
+        /// <see cref="ServerHeavyRelease"/>; meanwhile everyone else sees the fist pulled back (<see cref="RpcHeavyCharge"/>).
+        /// </summary>
         [Server]
-        public bool ServerHeavy(Vector3 aim)
+        public void ServerHeavyCharge(bool on)
         {
-            if (!_stats.ServerCanAct() || !_heavyCd.TryUse(Now)) return false;
-            aim = SafeDir(aim, _motor.Forward);
+            if (on && !_stats.ServerCanAct()) on = false;
+            if (!on && !_serverHeavyCharging) return;
+            _serverHeavyCharging = on;
+            _serverHeavyStart = Now;
+            RpcHeavyCharge(on);
+        }
+
+        /// <summary>Server: whether a heavy is being wound up (server-driven fighters).</summary>
+        public bool ServerHeavyCharging => _serverHeavyCharging;
+
+        /// <summary>
+        /// Server: let go of a wound-up heavy. The charge is the client's claim clamped to what the server measured since
+        /// <see cref="ServerHeavyCharge"/> (+ slack) and to <c>heavyMaxChargeTime</c>; damage, knockback and hitstun grow with it.
+        /// The hit is resolved when the swing's fist lands (the moveset's <c>Heavy.Swing.Hit</c> after the release), so every
+        /// client sees the impact at contact. False when refused (not wound up, can't act, cooldown).
+        /// </summary>
+        [Server]
+        public bool ServerHeavyRelease(Vector3 aim, float claimedCharge)
+        {
+            bool wasCharging = _serverHeavyCharging;
+            _serverHeavyCharging = false;
+            if (!wasCharging || !_stats.ServerCanAct() || !_heavyCd.TryUse(Now))
+            {
+                if (wasCharging) RpcHeavyCharge(false);
+                return false;
+            }
             _combo.Reset();
-            // the heavy swing lands at belly height in front (PlayerProceduralAnimator's heavy target)
-            MeleeHits(aim, _config.heavyDamage, _config.heavyHitstun,
-                CombatMath.Knockback(aim, CombatMath.HeavyKnockbackSpeed, CombatMath.HeavyLift), HitKind.Heavy, ToWorld(aim, new Vector3(0.1f, 1.1f, 1.5f)));
-            RpcSwing((byte)AttackKind.Heavy, 0);
+            _heavyAim = SafeDir(aim, _motor.Forward);
+            _heavyChargeTime = CombatMath.ValidateCharge(claimedCharge, (float)(Now - _serverHeavyStart), _config.heavyMaxChargeTime);
+            var swing = Moveset.Heavy != null ? Moveset.Heavy.Swing : null;
+            _heavyHitAt = Now + (swing != null ? swing.Hit : 0f);
+            _heavyPending = true;
+            float charge01 = CombatMath.Charge01(_heavyChargeTime, _config.heavyMaxChargeTime);
+            RpcSwing((byte)AttackKind.Heavy, (byte)Mathf.RoundToInt(charge01 * 255f));
             return true;
+        }
+
+        /// <summary>Server: the released heavy's fist lands now.</summary>
+        private void ServerHeavyHit()
+        {
+            _heavyPending = false;
+            if (!_stats.ServerCanAct()) return;   // hit or knocked out before the fist got there: the punch is lost
+            float charge01 = CombatMath.Charge01(_heavyChargeTime, _config.heavyMaxChargeTime);
+            float damage = DamageCalculator.HeavyDamage(_heavyChargeTime, _config.heavyDamage, _config.heavyMaxDamage, _config.heavyMaxChargeTime);
+            float stun = Mathf.Lerp(_config.heavyHitstun, _config.heavyMaxHitstun, charge01);
+            var swing = Moveset.Heavy != null ? Moveset.Heavy.Swing : null;
+            Vector3 strike = swing != null ? StrikePoint(_heavyAim, swing) : ToWorld(_heavyAim, new Vector3(0.02f, 1.32f, 1.30f));
+            MeleeHits(_heavyAim, damage, stun, CombatMath.HeavyKnockback(_heavyAim, charge01), HitKind.Heavy, strike, charge01);
         }
 
         /// <summary>Design height scale of this fighter (2.3 m = 1), from the capsule (set from the hero's height everywhere).</summary>
@@ -297,10 +391,11 @@ namespace LightMMORPG.Combat
         /// Where the striking fist / foot of combo hit <paramref name="comboIndex"/> is at the move's impact frame (world), from
         /// this fighter's moveset: a jab lands on the head, a body blow on the belly, a kick on the legs.
         /// </summary>
-        public Vector3 StrikePoint(Vector3 aim, int comboIndex)
+        public Vector3 StrikePoint(Vector3 aim, int comboIndex) => StrikePoint(aim, Moveset.Move(comboIndex));
+
+        /// <summary>Where the striking fist / foot of a move is at its impact frame (<see cref="AttackMove.Hit"/>), in the world.</summary>
+        public Vector3 StrikePoint(Vector3 aim, AttackMove m)
         {
-            var set = _anim != null ? _anim.Moveset : BasicMovesets.Get(BasicMovesets.DefaultId);
-            var m = set.Move(comboIndex);
             m.Sample(m.Hit, _strikePose);
             Vector3 limb = m.Limb switch
             {
@@ -312,7 +407,7 @@ namespace LightMMORPG.Combat
             return ToWorld(aim, _strikePose.RootRotation * limb + _strikePose.RootPos);
         }
 
-        private void MeleeHits(Vector3 aim, float damage, float stun, Vector3 knockback, HitKind kind, Vector3 strike)
+        private void MeleeHits(Vector3 aim, float damage, float stun, Vector3 knockback, HitKind kind, Vector3 strike, float impact = 0f)
         {
             Vector3 center = CombatMath.MeleeHitCenter(ServerChest, aim, _config.meleeHitForwardOffset, _motor.IsFlying);
             int n = Physics.OverlapSphereNonAlloc(center, _config.meleeHitRadius, _overlap, ~0, QueryTriggerInteraction.Ignore);
@@ -323,7 +418,7 @@ namespace LightMMORPG.Combat
                 if (target == null || target == _stats || !_hitSet.Add(target)) continue;
                 // the spot on the victim nearest the striking fist / foot (so the reaction matches where it landed)
                 Vector3 point = _overlap[i].ClosestPoint(strike);
-                target.ServerApplyHit(_stats, damage, stun, knockback, point, kind);
+                target.ServerApplyHit(_stats, damage, stun, knockback, point, kind, impact);
             }
         }
 
@@ -413,6 +508,7 @@ namespace LightMMORPG.Combat
 
         private void ServerTick()
         {
+            if (_heavyPending && Now >= _heavyHitAt) ServerHeavyHit();
             if (_projectiles.Count == 0) return;
             float dt = (float)TimeManager.TickDelta;
             for (int i = _projectiles.Count - 1; i >= 0; i--)
@@ -447,10 +543,20 @@ namespace LightMMORPG.Combat
 
         // ---------------- observers (other clients) ----------------
 
+        /// <summary>Everyone else: play the attack. For the heavy, index = its charge (0..255): the swing from the wind-up.</summary>
         [ObserversRpc(ExcludeOwner = true)]
         private void RpcSwing(byte kind, byte index)
         {
             if (_anim != null) _anim.PlayAttack((AttackKind)kind, index);
+        }
+
+        /// <summary>Everyone else: this fighter started (true) or called off (false) winding up a heavy.</summary>
+        [ObserversRpc(ExcludeOwner = true)]
+        private void RpcHeavyCharge(bool on)
+        {
+            if (IsOwner || _anim == null) return;
+            if (on) _anim.PlayHeavyWindUp();
+            else _anim.CancelHeavy();
         }
 
         [ObserversRpc(ExcludeOwner = true)]

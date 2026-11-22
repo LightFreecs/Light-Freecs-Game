@@ -37,6 +37,16 @@ namespace LightMMORPG.Core
             return new DamageResult(dmg - blocked, blocked, blocked * CombatConstants.GuardDrainPerBlockedDamage);
         }
 
+        /// <summary>Heavy attack damage: linear from a tap (min) to the full charge (max) over 0 → maxChargeTime seconds held (clamped).</summary>
+        public static float HeavyDamage(float chargeTime,
+            float minDamage = CombatConstants.HeavyDamage,
+            float maxDamage = CombatConstants.HeavyMaxDamage,
+            float maxChargeTime = CombatConstants.HeavyMaxChargeTime)
+        {
+            float t = maxChargeTime <= 0f ? 1f : Mathf.Clamp01(chargeTime / maxChargeTime);
+            return Mathf.Lerp(minDamage, maxDamage, t);
+        }
+
         /// <summary>Charged Beam damage: linear min → max over 0 → maxChargeTime seconds of charge (clamped).</summary>
         public static float BeamDamage(float chargeTime,
             float minDamage = CombatConstants.BeamMinDamage,

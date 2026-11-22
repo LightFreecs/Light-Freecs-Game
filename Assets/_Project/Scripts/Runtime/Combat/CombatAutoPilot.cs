@@ -7,7 +7,7 @@ namespace LightMMORPG.Combat
 {
     /// <summary>
     /// Smoke-test bot (command line <c>-autoattack</c>): drives the local player through <see cref="TouchInputState"/>
-    /// (the same path the touch overlay uses) — walk up to the nearest other player, light combo, heavy, back off,
+    /// (the same path the touch overlay uses) — walk up to the nearest other player, light combo, a charged heavy (held ~1 s), back off,
     /// three Energy Blasts, a fully charged Beam, charge energy when low — and repeats. Aims via
     /// <see cref="PlayerCombat.AimOverride"/>. Runs before the input reader so its taps land the same frame.
     /// </summary>
@@ -65,6 +65,7 @@ namespace LightMMORPG.Combat
             {
                 TouchInputState.Release(GameAction.Beam);
                 TouchInputState.Release(GameAction.Charge);
+                TouchInputState.Release(GameAction.Heavy);
                 if (_phase != Phase.Approach1) Go(Phase.Approach1);
                 return;
             }
@@ -88,8 +89,10 @@ namespace LightMMORPG.Combat
                     if (_count >= 4) Go(Phase.Approach2);
                     break;
                 case Phase.Heavy:
-                    if (act) { TouchInputState.Tap(GameAction.Heavy); _count++; _nextAction = Time.time + 0.6f; }
-                    if (_count >= 1 && t > 0.5f) Go(Phase.BackOff);
+                    // a charged heavy: hold ~1 s (most of the charge), then let go
+                    if (dist > 1.8f) Steer(to.normalized);
+                    if (t < 0.25f) TouchInputState.Press(GameAction.Heavy);
+                    else if (t > 1.25f) { TouchInputState.Release(GameAction.Heavy); if (t > 1.9f) Go(Phase.BackOff); }
                     break;
                 case Phase.BackOff:
                     if (dist < 9f && t < 2.5f) Steer(-to.normalized);

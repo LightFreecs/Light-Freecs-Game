@@ -132,16 +132,64 @@ namespace LightMMORPG.Characters
             var last = Keys[Keys.Length - 1].Pose;
             AttackPose.Lerp(last, last, 0f, o);
         }
+
+        /// <summary>
+        /// Like <see cref="Sample"/>, but the move starts from <paramref name="start"/> instead of its first key: a swing released
+        /// from wherever the wind-up was (half drawn back after a tap, fully coiled after a long hold).
+        /// </summary>
+        public void SampleFrom(AttackPose start, float t, AttackPose o)
+        {
+            if (Keys.Length < 2 || t >= Keys[1].T) { Sample(t, o); return; }
+            float u = Mathf.Clamp01(t / Mathf.Max(1e-5f, Keys[1].T));
+            AttackPose.Lerp(start, Keys[1].Pose, Ease(Keys[1].Ease, u), o);
+        }
     }
 
-    /// <summary>A basic-attack moveset: the guard plus one move per combo hit (played in order, wrapping).</summary>
+    /// <summary>
+    /// A moveset's charged heavy attack. Press: <see cref="WindUp"/> plays once (the fist is pulled back) and its last pose is held,
+    /// coiling deeper towards <see cref="Coiled"/> as the charge builds (the animator adds a tremble). Release: <see cref="Swing"/>
+    /// strikes from whatever pose the wind-up was holding; its <see cref="AttackMove.Hit"/> is when the fist lands, which is also
+    /// when the server resolves the hit.
+    /// </summary>
+    public sealed class HeavyAttack
+    {
+        public string Name;
+        public StrikeLimb Limb;
+        public AttackMove WindUp;
+        public AttackPose Coiled;
+        public AttackMove Swing;
+    }
+
+    /// <summary>A basic-attack moveset: the guard, one move per combo hit (played in order, wrapping) and the charged heavy.</summary>
     public sealed class BasicMoveset
     {
         public string Id, Name;
         public AttackPose Guard;
         public AttackMove[] Moves;
+        public HeavyAttack Heavy;
 
         public AttackMove Move(int comboIndex) => Moves[((comboIndex % Moves.Length) + Moves.Length) % Moves.Length];
+    }
+
+    /// <summary>Whole-body reactions in attack space (like the moves), played by the victim's animator.</summary>
+    public static class HitPoses
+    {
+        /// <summary>
+        /// Sent flying by a charged heavy: folded over the blow (hips leading, chest and head forward), flying backwards (-Z) with the
+        /// arms and legs trailing towards the attacker (+Z), hands open. The animator turns it to face back along the push and holds
+        /// it while the fighter is in the air.
+        /// </summary>
+        public static readonly AttackPose Launched = new()
+        {
+            RootPos = new Vector3(0f, 0.12f, 0f), RootPitch = -34f, RootRoll = 4f,
+            HipsPos = new Vector3(0f, -0.04f, -0.04f), HipsYaw = 4f, HipsPitch = 18f,
+            TorsoYaw = -6f, TorsoPitch = 44f,
+            HeadPitch = 30f,
+            ArmL = new Vector3(-0.34f, 1.56f, 0.40f), TwistL = -10f, OpenL = 0.85f,
+            ArmR = new Vector3(0.40f, 1.10f, 0.46f), TwistR = 10f, OpenR = 0.85f,
+            LegL = new Vector3(-0.14f, 0.70f, 0.30f), FootYawL = -6f, FootPitchL = 35f,
+            LegR = new Vector3(0.22f, 0.50f, 0.58f), FootYawR = 8f, FootPitchR = 30f,
+        };
     }
 
     /// <summary>
@@ -282,7 +330,101 @@ namespace LightMMORPG.Characters
                     K(0.40f, KeyEase.Smooth, P()),
                 },
             };
-            return new BasicMoveset { Id = DefaultId, Name = "Rush", Guard = guard, Moves = new[] { left, right, body, power } };
+            // the charged heavy (owner 2026-11-21: "pull back the fist and swing forward with extreme strength", the longer the hold
+            // the harder it hits and the further the opponent flies). Made on a copy of the Locomotion Bench with the game's solver.
+            // Wind-up: the body turns away (chest ~48°, the head still on the target), the right fist cocked back beside the head,
+            // the left arm reaching for the target with the hand half open, weight sinking onto the back leg. Full charge coils
+            // deeper (fist further back, lower, leaning back). Swing: the hips and shoulders whip round (chest -54°), the left foot
+            // drives forward into a lunge, the right fist shoots out at the opponent's solar plexus and holds, then a step back.
+            var pull = P(p =>
+            {
+                p.RootPos = new Vector3(0f, 0f, -0.07f); p.RootYaw = 26f; p.RootPitch = -2f;
+                p.HipsPos = new Vector3(0f, -0.15f, -0.02f); p.HipsYaw = 10f; p.HipsPitch = 2f;
+                p.TorsoYaw = 12f; p.TorsoPitch = 0f; p.TorsoRoll = -3f;
+                p.HeadPitch = -4f;
+                p.ArmR = new Vector3(0.38f, 1.58f, -0.46f); p.TwistR = 20f;
+                p.ArmL = new Vector3(-0.08f, 1.52f, 0.52f); p.TwistL = -40f; p.OpenL = 0.5f;
+                p.LegL = new Vector3(-0.22f, 0.105f, 0.38f); p.FootYawL = 20f;
+                p.LegR = new Vector3(0.26f, 0.105f, -0.34f); p.FootYawR = 50f;
+            });
+            var coiled = P(p =>
+            {
+                p.RootPos = new Vector3(0f, 0f, -0.12f); p.RootYaw = 30f; p.RootPitch = -4f;
+                p.HipsPos = new Vector3(0f, -0.22f, -0.03f); p.HipsYaw = 12f; p.HipsPitch = 0f;
+                p.TorsoYaw = 14f; p.TorsoPitch = -4f; p.TorsoRoll = -5f;
+                p.HeadPitch = -2f;
+                p.ArmR = new Vector3(0.42f, 1.62f, -0.56f); p.TwistR = 20f;
+                p.ArmL = new Vector3(-0.09f, 1.50f, 0.55f); p.TwistL = -45f; p.OpenL = 0.6f;
+                p.LegL = new Vector3(-0.24f, 0.105f, 0.42f); p.FootYawL = 22f;
+                p.LegR = new Vector3(0.28f, 0.105f, -0.38f); p.FootYawR = 52f;
+            });
+            var heavy = new HeavyAttack
+            {
+                Name = "Charged punch", Limb = StrikeLimb.HandR, Coiled = coiled,
+                WindUp = new AttackMove
+                {
+                    Name = "Charged punch wind-up", Limb = StrikeLimb.HandR, Hit = 0.22f, Streak = new Vector2(-1f, -1f), Length = 0.22f,
+                    Keys = new[]
+                    {
+                        K(0f, KeyEase.Smooth, P()),
+                        K(0.07f, KeyEase.Smooth, P(p =>
+                        {
+                            p.RootYaw = 18f; p.HipsPos = new Vector3(0f, -0.10f, 0f);
+                            p.ArmR = new Vector3(0.18f, 1.46f, 0.02f); p.TwistR = 20f; p.ArmL = new Vector3(-0.07f, 1.58f, 0.38f);
+                        })),
+                        K(0.22f, KeyEase.Smooth, pull),
+                    },
+                },
+                Swing = new AttackMove
+                {
+                    Name = "Charged punch", Limb = StrikeLimb.HandR, Hit = 0.09f, Streak = new Vector2(0.03f, 0.15f), Length = 0.62f, Big = true,
+                    Keys = new[]
+                    {
+                        K(0f, KeyEase.Smooth, pull),
+                        // the hips lead: the body starts turning and driving forward, the fist passing beside the right shoulder
+                        K(0.04f, KeyEase.In, P(p =>
+                        {
+                            p.RootPos = new Vector3(0f, 0f, 0.10f); p.RootYaw = 8f; p.RootPitch = 3f;
+                            p.HipsPos = new Vector3(0f, -0.21f, 0f); p.HipsYaw = 0f; p.HipsPitch = 6f;
+                            p.TorsoYaw = 4f; p.TorsoPitch = 8f; p.HeadPitch = -10f;
+                            p.ArmR = new Vector3(0.34f, 1.52f, 0.02f); p.TwistR = 40f; p.ArmL = new Vector3(-0.16f, 1.46f, 0.30f); p.TwistL = -35f;
+                            p.LegL = new Vector3(-0.21f, 0.16f, 0.58f); p.FootYawL = 10f;
+                            p.LegR = new Vector3(0.27f, 0.105f, -0.34f); p.FootYawR = 40f; p.FootPitchR = 15f;
+                        })),
+                        // impact: lunge, the whole body behind the fist (it overreaches, so the arm is straight), back heel up
+                        K(0.09f, KeyEase.Snap, P(p =>
+                        {
+                            p.RootPos = new Vector3(0f, 0f, 0.42f); p.RootYaw = -26f; p.RootPitch = 8f; p.RootRoll = -4f;
+                            p.HipsPos = new Vector3(0f, -0.22f, 0f); p.HipsYaw = -14f; p.HipsPitch = 12f;
+                            p.TorsoYaw = -14f; p.TorsoPitch = 18f; p.HeadPitch = -22f;
+                            p.ArmR = new Vector3(0.02f, 1.32f, 1.30f); p.TwistR = 70f; p.ArmL = new Vector3(-0.22f, 1.36f, 0.08f); p.TwistL = -30f;
+                            p.LegL = new Vector3(-0.20f, 0.105f, 0.78f); p.FootYawL = 0f;
+                            p.LegR = new Vector3(0.22f, 0.105f, -0.10f); p.FootYawR = 10f; p.FootPitchR = 35f;
+                        })),
+                        K(0.28f, KeyEase.Smooth, P(p =>
+                        {
+                            p.RootPos = new Vector3(0f, 0f, 0.44f); p.RootYaw = -25f; p.RootPitch = 8f; p.RootRoll = -4f;
+                            p.HipsPos = new Vector3(0f, -0.23f, 0f); p.HipsYaw = -14f; p.HipsPitch = 12f;
+                            p.TorsoYaw = -14f; p.TorsoPitch = 18f; p.HeadPitch = -22f;
+                            p.ArmR = new Vector3(0.03f, 1.33f, 1.24f); p.TwistR = 65f; p.ArmL = new Vector3(-0.22f, 1.36f, 0.08f); p.TwistL = -30f;
+                            p.LegL = new Vector3(-0.20f, 0.105f, 0.78f); p.FootYawL = 0f;
+                            p.LegR = new Vector3(0.22f, 0.105f, -0.10f); p.FootYawR = 10f; p.FootPitchR = 35f;
+                        })),
+                        // recovery: a step back into the guard (the lead foot lifts, so the lunge doesn't skate back)
+                        K(0.45f, KeyEase.Smooth, P(p =>
+                        {
+                            p.RootPos = new Vector3(0f, 0f, 0.20f); p.RootYaw = -6f;
+                            p.HipsPos = new Vector3(0f, -0.13f, 0f); p.HipsYaw = -4f; p.HipsPitch = 6f;
+                            p.TorsoYaw = -2f; p.TorsoPitch = 10f; p.HeadPitch = -8f;
+                            p.ArmR = new Vector3(0.10f, 1.45f, 0.55f); p.TwistR = 35f; p.ArmL = new Vector3(-0.10f, 1.50f, 0.25f); p.TwistL = -25f;
+                            p.LegL = new Vector3(-0.19f, 0.20f, 0.48f); p.FootYawL = 6f;
+                            p.LegR = new Vector3(0.22f, 0.105f, -0.20f); p.FootYawR = 28f; p.FootPitchR = 5f;
+                        })),
+                        K(0.62f, KeyEase.Smooth, P()),
+                    },
+                },
+            };
+            return new BasicMoveset { Id = DefaultId, Name = "Rush", Guard = guard, Moves = new[] { left, right, body, power }, Heavy = heavy };
         }
     }
 

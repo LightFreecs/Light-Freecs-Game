@@ -76,13 +76,14 @@ namespace LightMMORPG.VFX
             return (g != null ? g : p.transform).GetComponentInChildren<CharacterRig>();
         }
 
-        private void OnHit(PlayerStats victim, PlayerStats attacker, Vector3 point, float damage, bool blocked, bool guardBreak, HitKind kind)
+        private void OnHit(PlayerStats victim, PlayerStats attacker, Vector3 point, float damage, bool blocked, bool guardBreak, HitKind kind, float impact)
         {
             if (victim == null || blocked || damage <= 0f) return;
             var s = Get(victim);
             var rig = FindRigCached(victim, s);
             if (rig == null) return;
             float add = kind is HitKind.Light ? 0.35f : kind is HitKind.Blast ? 0.4f : 0.6f;   // finisher / heavy / beam: bigger
+            add *= 1f + 0.5f * impact;   // a charged heavy leaves a worse mark
             Vector3 local = rig.transform.InverseTransformPoint(point);
             if (local.y / Mathf.Max(0.5f, rig.Height) > 0.8f)
             {

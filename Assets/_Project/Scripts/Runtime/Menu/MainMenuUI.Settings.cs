@@ -24,7 +24,7 @@ namespace LightMMORPG.Menu
 
         private static readonly (GameAction action, string name)[] BindableActions =
         {
-            (GameAction.Light, "Light attack"), (GameAction.Heavy, "Heavy attack"), (GameAction.Block, "Block"),
+            (GameAction.Light, "Light attack"), (GameAction.Heavy, "Heavy attack (hold)"), (GameAction.Block, "Block"),
             (GameAction.Charge, "Charge energy"), (GameAction.Blast, "Energy Blast"), (GameAction.Beam, "Charged Beam"),
             (GameAction.Surge, "Power Surge"), (GameAction.Jump, "Jump / fly up"), (GameAction.FlyDown, "Fly down"),
             (GameAction.ToggleFlight, "Toggle flight"), (GameAction.Sprint, "Run (hold)"), (GameAction.Dash, "Dash"),
