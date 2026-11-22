@@ -990,3 +990,17 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     zero after rounding); the heavy's 688 values equal the bench's tables; all 42 joints match the solver copy in
     `docs/bench/heavy-windup-bench.html` within 0.001 mm; the exported heavy compiles against the game's types. Run headless on copies
     of the .blend: the live solver was driven by frame changes, not by dragging in the GUI, and nothing was played in Unity.
+- Power-up and Power Surge poses (2026-11-22; owner sent two anime stills: "lets make the pose for the charging animation ... second pose
+  is for the surge"). Posed and keyed on `PlayerRig` in Blender (actions `Rush.charge`, `Rush.surge` in `player.blend`, which now holds the
+  `c.*` controls), exported with `tools/attack_keys_blender.py` (now knows `charge` / `surge`) into `BasicMoveset.Charge` / `.Surge`.
+  - Charge: the feet hop apart and the stance lands in 0.2 s (wide, knees over the toes, head bowed, elbows down, fists out at the sides);
+    the last key is held for as long as Charge is, with the old tremble. In the air the legs keep the flight pose and the fists stay with
+    the chest.
+  - Surge: 1.12 s, once: a dip, the burst a touch past the pose, held (tall, chest out, head back, right fist by the shoulder, left fist
+    low), a hop back into the guard. It plays over a held charge and the stance comes back after it; a light attack or a block cuts it
+    off, and while moving the legs keep stepping under it.
+  - Animator: both go through the moveset layer (`StartMove`, `SetPowerUp`), cross-fading from what's on screen. The old charge arm targets
+    and, for rigged fighters, the old surge cast are gone. A blast or beam cast while powering up still reaches out of the stance.
+  - Verified: all 9 keys round-trip through Blender and the C#; all 42 joints match the Locomotion Bench's solver within 0.003 mm; no arm in
+    the torso on the new keys, no elbow or knee pops; worst upper-arm roll 76° (the charge hold). Headless compile only: nothing was played
+    in Unity, so the transitions, flight and the Toon Head on the bowed / thrown-back head are not seen in game. The face is unchanged.

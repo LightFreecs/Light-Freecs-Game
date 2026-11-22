@@ -8,7 +8,7 @@ them with a port of the game's solver, and writes a keyed action back as C# for 
     blender --background --python tools/attack_keys_blender.py -- export heavy [--blend path] [--out path]
     blender --background --python tools/attack_keys_blender.py -- check heavy [--blend path] [--dump out.json]
 
-Moves: heavy (= windup + swing + coiled), windup, swing, coiled, guard, left, right, body, power, all.
+Moves: heavy (= windup + swing + coiled), windup, swing, coiled, guard, left, right, body, power, charge, surge, all.
 `load` and `export` work on ArtSource/Player/player.blend unless --blend says otherwise; `load` saves the file and refuses to
 replace an action that already exists without --force. `export` writes ArtSource/Player/export/<move>.cs.txt (outside Assets,
 so Unity doesn't compile it) and changes nothing in the game. `check` changes no file except --dump.
@@ -352,17 +352,19 @@ def read_rush(path=MOVESETS):
     h = e["heavy"]
     single = lambda name, pose: {"Name": name, "Keys": [{"T": 0.0, "Ease": "Smooth", "Pose": pose}]}
     return {"guard": single("Guard", e["guard"]), "left": e["left"], "right": e["right"], "body": e["body"], "power": e["power"],
-            "windup": h["WindUp"], "swing": h["Swing"], "coiled": single("Charged punch coiled", h["Coiled"])}
+            "windup": h["WindUp"], "swing": h["Swing"], "coiled": single("Charged punch coiled", h["Coiled"]),
+            "charge": e["charge"], "surge": e["surge"]}
 
 
-GROUPS = {"heavy": ("windup", "swing", "coiled"), "all": ("guard", "left", "right", "body", "power", "windup", "swing", "coiled")}
+GROUPS = {"heavy": ("windup", "swing", "coiled"),
+          "all": ("guard", "left", "right", "body", "power", "windup", "swing", "coiled", "charge", "surge")}
 
 
 def move_names(arg):
     names = GROUPS.get(arg, (arg,))
     for n in names:
         if n not in GROUPS["all"]:
-            sys.exit("unknown move %r (heavy, windup, swing, coiled, guard, left, right, body, power, all)" % n)
+            sys.exit("unknown move %r (heavy, windup, swing, coiled, guard, left, right, body, power, charge, surge, all)" % n)
     return names
 
 

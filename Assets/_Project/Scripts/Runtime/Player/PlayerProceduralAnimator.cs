@@ -82,6 +82,12 @@ namespace LightMMORPG.Player
         // a pose to cross-fade from when an action ends early (a called-off wind-up, a light attack cutting into the swing)
         private readonly AttackPose _fadeFrom = new();
         private bool _fadeFromHeld;
+        private const float FadeDefault = 0.06f, FadeStanceOut = 0.2f;
+        private float _fadeTime = FadeDefault;
+
+        // holding Charge: the moveset's power-up stance (its keys drop the fighter into it, the last one is held)
+        private bool _powerUp;
+        private float _chargeT;
 
         // sent flying by a charged heavy: HitPoses.Launched turned to fly back along the push, held for the hang time
         private float _launchT = 9f, _launchDur, _launchStrength, _launchYaw;
@@ -136,7 +142,7 @@ namespace LightMMORPG.Player
 
         /// <summary>
         /// Procedural punch / cast: light = the moveset's combo hit <paramref name="index"/>; heavy = the charged swing with charge
-        /// <paramref name="index"/> / 255 (<see cref="PlayHeavySwing"/>); blast, beam, surge = the older cast poses.
+        /// <paramref name="index"/> / 255 (<see cref="PlayHeavySwing"/>); surge = the moveset's burst; blast, beam = the older cast poses.
         /// </summary>
         public void PlayAttack(AttackKind kind, int index)
         {
@@ -144,24 +150,32 @@ namespace LightMMORPG.Player
             if (kind == AttackKind.Light && _proc != null)
             {
                 // basic attack: the moveset's move for this combo hit, cross-faded from the hit before (or from the heavy it cuts into)
-                var m = Moveset.Move(index);
-                if (_heavy != HeavyPhase.None) StopHeavy(0f);
-                if (_move != null) { _fromMove = _move; _fromT = _moveT; _moveBlend = 0f; }
-                else { _fromMove = null; if (!_fadeFromHeld) _moveBlend = 1f; }
-                _move = m;
-                _moveT = 0f;
-                _attackT = 1f;
+                StartMove(Moveset.Move(index));
                 if (_speedLines != null) _speedLines.Begin();
                 return;
             }
+            if (kind == AttackKind.Surge && _proc != null && Moveset.Surge != null) { StartMove(Moveset.Surge); return; }
             if (_heavy != HeavyPhase.None) { _heavy = HeavyPhase.None; SetHeavyFace(false); }
             PlayCastPose(kind, index);
         }
 
-        /// <summary>The older procedural poses (blast, beam, surge; every attack on a fighter without a rig).</summary>
+        /// <summary>Plays a moveset move, cross-faded from the move before it (or from the heavy it cuts into).</summary>
+        private void StartMove(AttackMove m)
+        {
+            if (_heavy != HeavyPhase.None) StopHeavy(0f);
+            if (_move != null) { _fromMove = _move; _fromT = _moveT; _moveBlend = 0f; }
+            else { _fromMove = null; if (!_fadeFromHeld) _moveBlend = 1f; }
+            _fadeTime = FadeDefault;   // a strike right after letting go of the power-up doesn't wait for the slow fade
+            _move = m;
+            _moveT = 0f;
+            _attackT = 1f;
+        }
+
+        /// <summary>The older procedural poses (blast, beam; every attack on a fighter without a rig).</summary>
         private void PlayCastPose(AttackKind kind, int index)
         {
-            _move = null; _fromMove = null; _moveWeight = 0f; _fadeFromHeld = false;   // takes over from the basic attack
+            _move = null; _fromMove = null;   // takes over from the basic attack (a cast while powering up reaches out of the stance instead)
+            if (!_powerUp) { _moveWeight = 0f; _fadeFromHeld = false; }
             _attackKind = kind;
             _attackIndex = index;
             _attackT = 0f;
@@ -182,7 +196,7 @@ namespace LightMMORPG.Player
         public void PlayHeavyWindUp()
         {
             if (_proc == null || Moveset.Heavy == null) return;
-            _move = null; _fromMove = null; _fadeFromHeld = false;
+            _move = null; _fromMove = null;   // a fade still running (the power-up being let go) carries on into the wind-up
             _attackT = 1f;
             _heavy = HeavyPhase.WindUp;
             _heavyT = 0f; _heavyCharge = 0f; _heavyFull = false;
@@ -378,8 +392,8 @@ namespace LightMMORPG.Player
         }
 
         /// <summary>
-        /// The rig's pose: relaxed stance, flight tuck, the walk / run of the locomotion style, block guard, power-up stance,
-        /// two-bone IK towards the older attack targets (heavy, blast, beam, surge), then the basic-attack moveset on top.
+        /// The rig's pose: relaxed stance, flight tuck, the walk / run of the locomotion style, block guard, two-bone IK towards
+        /// the older attack targets (blast, beam), then the moveset on top (basic attacks, heavy, power-up stance, surge).
         /// </summary>
         private void PoseRig(Vector3 l, Vector3 r, Vector3 f, float wl, float wr, float wf)
         {
@@ -407,9 +421,9 @@ namespace LightMMORPG.Player
                 rig.SetFingerCurl(side, 1f);
             }
             PoseLocomotion(rig, hs);
-            // guard / power-up stances, then the older attack targets on top. Hinge IK from the posed shoulder, the collarbone
-            // following, elbows kept out of the torso (AttackPoseSolver.ArmTo); the plain two-bone IK from the bind shoulder
-            // used before twisted forearms and missed the target once the body leant or turned.
+            // the guard, then the older attack targets on top. Hinge IK from the posed shoulder, the collarbone following, elbows
+            // kept out of the torso (AttackPoseSolver.ArmTo); the plain two-bone IK from the bind shoulder used before twisted
+            // forearms and missed the target once the body leant or turned.
             if (_blockingNow)
             {
                 // cross block in front of the face, the left forearm in front of the right one (before: at chest height,
@@ -417,16 +431,17 @@ namespace LightMMORPG.Player
                 AttackPoseSolver.ArmTo(rig, -1, new Vector3(0.10f, 1.84f, 0.40f) * hs, 1f, hs);
                 AttackPoseSolver.ArmTo(rig, 1, new Vector3(-0.10f, 1.95f, 0.29f) * hs, 1f, hs);
             }
-            else if (_chargingNow)
-            {
-                AttackPoseSolver.ArmTo(rig, -1, new Vector3(-0.42f, 1.0f, 0.12f) * hs, 1f, hs);
-                AttackPoseSolver.ArmTo(rig, 1, new Vector3(0.42f, 1.0f, 0.12f) * hs, 1f, hs);
-            }
             AttackPoseSolver.ArmTo(rig, -1, l * hs, wl, hs);
             AttackPoseSolver.ArmTo(rig, 1, r * hs, wr, hs);
             AttackPoseSolver.LegTo(rig, 1, f * hs, wf, hs);
             _hs = hs;
             ApplyMove(rig, hs);
+            if (_powerUp)
+            {
+                // a blast or beam cast while powering up still reaches out of the stance
+                AttackPoseSolver.ArmTo(rig, -1, l * hs, wl, hs);
+                AttackPoseSolver.ArmTo(rig, 1, r * hs, wr, hs);
+            }
             ApplyLaunch(rig, hs);
             ApplyHitReaction(rig, hs);
         }
@@ -435,14 +450,27 @@ namespace LightMMORPG.Player
 
         private void AdvanceMove(float dt)
         {
-            bool interrupted = _blockingNow || _chargingNow || (_stats != null && _stats.IsDown.Value);
-            _moveBlend = Mathf.Min(1f, _moveBlend + dt / 0.06f);
+            var set = Moveset;
+            bool down = _stats != null && _stats.IsDown.Value;
+            bool surging = _move != null && _move == set.Surge;   // the burst plays out even over a held charge, then the stance comes back
+            bool interrupted = _blockingNow || (_chargingNow && !surging) || down;
+            _moveBlend = Mathf.Min(1f, _moveBlend + dt / _fadeTime);
+            if (_moveBlend >= 1f) _fadeTime = FadeDefault;
+            bool powerUp = _chargingNow && !down && !surging && _proc != null && set.Charge != null;
+            if (powerUp != _powerUp) SetPowerUp(powerUp);
             if (_heavy != HeavyPhase.None)
             {
-                if (interrupted) StopHeavy(0f);
+                if (_powerUp) { _heavy = HeavyPhase.None; SetHeavyFace(false); }   // the stance fades in from what's on screen
+                else if (interrupted) StopHeavy(0f);
                 else { AdvanceHeavy(dt); if (_heavy != HeavyPhase.None) return; }
             }
             if (_move != null && interrupted) { _move = null; _fromMove = null; _guardHold = 0f; }
+            if (_powerUp)
+            {
+                _chargeT += dt;
+                _moveWeight = Mathf.Min(1f, _moveWeight + dt / 0.08f);
+                return;
+            }
             if (_move != null)
             {
                 _moveT += dt;
@@ -460,6 +488,22 @@ namespace LightMMORPG.Player
         }
 
         /// <summary>
+        /// Into / out of the power-up stance: whatever is on screen cross-fades into what comes next (the stance, the surge, or on
+        /// letting go the guard on its way back to the relaxed stance, slower so the wide stance doesn't snap shut).
+        /// </summary>
+        private void SetPowerUp(bool on)
+        {
+            _powerUp = on;
+            if (on) _chargeT = 0f;
+            else _guardHold = 0.05f;
+            if (_moveWeight <= 0f) return;
+            AttackPose.Lerp(_pose, _pose, 0f, _fadeFrom);
+            _fadeFromHeld = true;
+            _moveBlend = 0f;
+            _fadeTime = !on && _move == null ? FadeStanceOut : FadeDefault;
+        }
+
+        /// <summary>
         /// Blends the current move (or the guard) over the base pose (stance, walk or run, flight), all in POSE space: the
         /// body's turns from the base pose's own, the fists from its wrists, the feet from its feet. Every in-between pose is
         /// solved and kept out of the torso (slerping arm rotations swept the fists through the body). While walking, running
@@ -470,7 +514,15 @@ namespace LightMMORPG.Player
             float w = AttackMove.Ease(KeyEase.Smooth, _moveWeight);
             if (w <= 0f) { _rootOffset = Vector3.zero; _rootTurn = Quaternion.identity; _fadeFromHeld = false; return; }
             var set = Moveset;
-            if (_heavy != HeavyPhase.None && set.Heavy != null) SampleHeavy(set.Heavy, _pose);
+            if (_powerUp && set.Charge != null)
+            {
+                set.Charge.Sample(_chargeT, _pose);
+                // in the air the legs keep the flight pose and the hips don't drop, so the fists stay with the chest
+                float airborne = Mathf.Max(_locoW, _flightBlend);
+                _pose.ArmL -= _pose.HipsPos * airborne;
+                _pose.ArmR -= _pose.HipsPos * airborne;
+            }
+            else if (_heavy != HeavyPhase.None && set.Heavy != null) SampleHeavy(set.Heavy, _pose);
             else if (_move != null)
             {
                 _move.Sample(_moveT, _pose);

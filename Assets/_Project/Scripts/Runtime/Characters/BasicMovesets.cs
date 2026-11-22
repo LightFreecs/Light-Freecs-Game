@@ -169,13 +169,17 @@ namespace LightMMORPG.Characters
         public AttackMove Swing;
     }
 
-    /// <summary>A basic-attack moveset: the guard, one move per combo hit (played in order, wrapping) and the charged heavy.</summary>
+    /// <summary>A basic-attack moveset: the guard, one move per combo hit (played in order, wrapping), the charged heavy, the power-up and the surge.</summary>
     public sealed class BasicMoveset
     {
         public string Id, Name;
         public AttackPose Guard;
         public AttackMove[] Moves;
         public HeavyAttack Heavy;
+        /// <summary>Holding Charge: the keys drop the fighter into the power-up stance and the last one is held.</summary>
+        public AttackMove Charge;
+        /// <summary>Power Surge: the burst, played once when it's activated.</summary>
+        public AttackMove Surge;
 
         public AttackMove Move(int comboIndex) => Moves[((comboIndex % Moves.Length) + Moves.Length) % Moves.Length];
     }
@@ -502,7 +506,101 @@ namespace LightMMORPG.Characters
                     },
                 },
             };
-            return new BasicMoveset { Id = DefaultId, Name = "Rush", Guard = guard, Moves = new[] { left, right, body, power }, Heavy = heavy };
+            // the power-up and Power Surge, posed and keyed in Blender from the owner's two references
+            // (ArtSource/Player/player.blend, actions Rush.charge and Rush.surge; exported with tools/attack_keys_blender.py)
+            var charge = new AttackMove
+            {
+                Name = "Power-up", Limb = StrikeLimb.HandR, Hit = 0f, Streak = new Vector2(-1f, -1f), Length = 0.20f,
+                Keys = new[]
+                {
+                    // the feet hop apart, the fists gather in front of the stomach...
+                    K(0f, KeyEase.Smooth, new AttackPose
+                    {
+                        HipsPos = new Vector3(0f, -0.1f, -0.01f), HipsPitch = 3f, TorsoPitch = 10f, HeadPitch = 14f,
+                        ArmL = new Vector3(-0.1841f, 1.3344f, 0.318f), TwistL = 20f,
+                        ElbowL = new Vector3(-0.3446f, -0.8842f, -0.3152f), ArmR = new Vector3(0.1841f, 1.3344f, 0.318f),
+                        TwistR = -20f, ElbowR = new Vector3(0.3446f, -0.8842f, -0.3152f), LegL = new Vector3(-0.31f, 0.17f, 0.02f),
+                        FootYawL = -24f, LegR = new Vector3(0.31f, 0.17f, 0.02f), FootYawR = 24f,
+                    }),
+                    // ...and the stance lands: wide, knees out, head bowed, elbows down, fists out to the sides. Held while charging.
+                    K(0.2f, KeyEase.Snap, new AttackPose
+                    {
+                        HipsPos = new Vector3(0f, -0.21f, -0.015f), HipsPitch = 6f, TorsoPitch = 22f, HeadPitch = 42f,
+                        ArmL = new Vector3(-0.4787f, 1.2284f, 0.2631f), TwistL = 50f, ElbowL = new Vector3(0.3397f, -0.9398f, 0.0372f),
+                        ArmR = new Vector3(0.4787f, 1.2284f, 0.2631f), TwistR = -50f,
+                        ElbowR = new Vector3(-0.3397f, -0.9398f, 0.0372f), LegL = new Vector3(-0.44f, 0.105f, 0.05f), FootYawL = -44f,
+                        LegR = new Vector3(0.44f, 0.105f, 0.05f), FootYawR = 44f,
+                    }),
+                },
+            };
+            var surge = new AttackMove
+            {
+                Name = "Power surge", Limb = StrikeLimb.HandR, Hit = 0f, Streak = new Vector2(-1f, -1f), Length = 1.12f,
+                Keys = new[]
+                {
+                    // a quick dip, the fists chambered low...
+                    K(0f, KeyEase.Smooth, new AttackPose
+                    {
+                        HipsPos = new Vector3(0f, -0.12f, -0.01f), HipsPitch = 4f, TorsoPitch = 12f, HeadPitch = 16f,
+                        ArmL = new Vector3(-0.2938f, 1.311f, 0.3389f), TwistL = 20f,
+                        ElbowL = new Vector3(-0.1125f, -0.9307f, -0.3481f), ArmR = new Vector3(0.2938f, 1.311f, 0.3389f),
+                        TwistR = -20f, ElbowR = new Vector3(0.1125f, -0.9307f, -0.3481f), LegL = new Vector3(-0.31f, 0.17f, -0.02f),
+                        FootYawL = -22f, LegR = new Vector3(0.3f, 0.17f, -0.02f), FootYawR = 26f,
+                    }),
+                    K(0.1f, KeyEase.Smooth, new AttackPose
+                    {
+                        HipsPos = new Vector3(0f, -0.2f, -0.02f), HipsPitch = 7f, TorsoPitch = 22f, HeadPitch = 32f,
+                        ArmL = new Vector3(-0.3977f, 1.167f, 0.3316f), TwistL = 20f, ElbowL = new Vector3(0.0912f, -0.9545f, -0.2838f),
+                        ArmR = new Vector3(0.3977f, 1.167f, 0.3316f), TwistR = -20f,
+                        ElbowR = new Vector3(-0.0912f, -0.9545f, -0.2838f), LegL = new Vector3(-0.4f, 0.105f, -0.06f), FootYawL = -30f,
+                        LegR = new Vector3(0.38f, 0.105f, -0.04f), FootYawR = 36f,
+                    }),
+                    // ...the burst, a touch past the pose...
+                    K(0.2f, KeyEase.Snap, new AttackPose
+                    {
+                        HipsPos = new Vector3(-0.05f, -0.075f, 0.04f), HipsYaw = 2f, HipsPitch = -7f, TorsoYaw = -4f,
+                        TorsoPitch = -18f, TorsoRoll = -5f, HeadYaw = -14f, HeadPitch = -30f,
+                        ArmL = new Vector3(-0.4822f, 1.3022f, 0.0938f), TwistL = 30f,
+                        ElbowL = new Vector3(0.2913f, -0.556f, -0.7784f), ArmR = new Vector3(0.3762f, 1.4929f, -0.0393f),
+                        TwistR = -40f, ElbowR = new Vector3(0.0072f, -0.8441f, -0.5362f), LegL = new Vector3(-0.4f, 0.105f, -0.06f),
+                        FootYawL = -30f, LegR = new Vector3(0.38f, 0.105f, -0.04f), FootYawR = 36f,
+                    }),
+                    // ...and the pose, held: standing tall, chest out, head thrown back, one fist by the shoulder and the other low
+                    K(0.38f, KeyEase.Smooth, new AttackPose
+                    {
+                        HipsPos = new Vector3(-0.06f, -0.08f, 0.03f), HipsYaw = 2f, HipsPitch = -5f, TorsoYaw = -4f, TorsoPitch = -14f,
+                        TorsoRoll = -5f, HeadYaw = -14f, HeadPitch = -25f, ArmL = new Vector3(-0.4822f, 1.3022f, 0.0938f),
+                        TwistL = 30f, ElbowL = new Vector3(0.2913f, -0.556f, -0.7784f),
+                        ArmR = new Vector3(0.3762f, 1.4929f, -0.0393f), TwistR = -40f,
+                        ElbowR = new Vector3(0.0072f, -0.8441f, -0.5362f), LegL = new Vector3(-0.4f, 0.105f, -0.06f), FootYawL = -30f,
+                        LegR = new Vector3(0.38f, 0.105f, -0.04f), FootYawR = 36f,
+                    }),
+                    K(0.88f, KeyEase.Smooth, new AttackPose
+                    {
+                        HipsPos = new Vector3(-0.06f, -0.08f, 0.03f), HipsYaw = 2f, HipsPitch = -5f, TorsoYaw = -4f, TorsoPitch = -14f,
+                        TorsoRoll = -5f, HeadYaw = -14f, HeadPitch = -25f, ArmL = new Vector3(-0.4822f, 1.3022f, 0.0938f),
+                        TwistL = 30f, ElbowL = new Vector3(0.2913f, -0.556f, -0.7784f),
+                        ArmR = new Vector3(0.3762f, 1.4929f, -0.0393f), TwistR = -40f,
+                        ElbowR = new Vector3(0.0072f, -0.8441f, -0.5362f), LegL = new Vector3(-0.4f, 0.105f, -0.06f), FootYawL = -30f,
+                        LegR = new Vector3(0.38f, 0.105f, -0.04f), FootYawR = 36f,
+                    }),
+                    // the feet hop back in, into the guard
+                    K(1f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 6.6f, HipsPos = new Vector3(-0.027f, -0.069f, 0.0135f), HipsYaw = 4.2f, HipsPitch = -0.6f,
+                        TorsoYaw = 0.4f, TorsoPitch = -3f, TorsoRoll = -2.25f, HeadYaw = -6.3f, HeadPitch = -14.55f,
+                        ArmL = new Vector3(-0.2555f, 1.4385f, 0.2182f), TwistL = 2.5f,
+                        ElbowL = new Vector3(0.1311f, -0.2502f, -0.3503f), ArmR = new Vector3(0.2353f, 1.4913f, 0.0923f), TwistR = -7f,
+                        ElbowR = new Vector3(0.0032f, -0.3798f, -0.2413f), LegL = new Vector3(-0.29f, 0.17f, 0.08f), FootYawL = -5.8f,
+                        LegR = new Vector3(0.3f, 0.17f, -0.13f), FootYawR = 34.9f,
+                    }),
+                    K(1.12f, KeyEase.Smooth, P()),
+                },
+            };
+            return new BasicMoveset
+            {
+                Id = DefaultId, Name = "Rush", Guard = guard, Moves = new[] { left, right, body, power }, Heavy = heavy, Charge = charge, Surge = surge,
+            };
         }
     }
 
