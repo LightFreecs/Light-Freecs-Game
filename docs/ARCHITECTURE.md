@@ -725,13 +725,15 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
   - Verified: headless compile only (owner tests by hand).
 - Charge aura + aura colour (2026-11-19; owner: the classic anime flame aura from a reference clip, "1:1", lightning left out;
   players pick their aura colour).
-  - `Resources/VFX/AnimeAura.shader` (bench `docs/bench/aura-bench.html`, same code in GLSL; keep the two in step): an
-    egg-shaped body with straight sharp triangle spikes (SDF union) pointing out and up, flat out at the feet and straight up
-    at the crown (one or two tall crown spikes); the side spikes slide up the flanks; redrawn 20×/s like anime frames (held
-    3 frames at 60 fps); spikes solid, the body's inside fades to a dark haze; thin hooks / lines rise inside. Premultiplied
-    (HDR rgb for Bloom, a little alpha so it reads on bright skies). `_Front = 1` draws only the rising strokes.
-  - `VFX.AnimeAura`: two camera-facing (about the vertical) quads at the feet, flame 0.18 h behind the fighter, strokes
-    0.16 h in front; quad 1.855 × the fighter's height; flares up when it appears, shrinks away when it stops; per-fighter
+  - `Resources/VFX/AnimeAura.shader` (bench `docs/bench/aura-bench.html`, same code in GLSL; keep the two in step).
+    Flowing-flame rewrite 2026-11-21 (owner: the old spiky egg was "not dynamic enough"; goal = the classic power-up clip
+    with the hero in it): polar fan from the feet (`FAN_O`); the edge is rows of needle tongues (5.5 and ~12.6 per radian)
+    whose lengths come from value noise scrolling outward, so tongues pump, sway (fbm warp) and tear off (fbm licks) as
+    they flow up / out; streak texture along the fan; outer sheet (dim see-through body, bright rim) + a paler inner
+    sheet; redrawn 24×/s (held 2-3 frames at 60 fps); tips fade at the quad edges. Premultiplied (HDR rgb for Bloom, a
+    little alpha so it reads on bright skies). `_Front = 1` draws only bright dashes flying up the fan.
+  - `VFX.AnimeAura`: two camera-facing (about the vertical) quads at the feet, flame 0.18 h behind the fighter, dashes
+    0.16 h in front; quad 1.855 × the fighter's height, `Aspect` 1.4 (wide for the fan); flares up when it appears, shrinks away when it stops; per-fighter
     time offset. `PlayerAura` uses it (charging: size 0.85, Power Surge: 1) in the rig's aura colour; the old capsule shell
     is gone from the game (the menu keeps its soft shell outside the Body tab).
   - Aura colour: `FaceCustomization.auraColor` → `PlayerAppearance.AuraColors` (Gold, Flame, Crimson, Rose, Violet, Blue,

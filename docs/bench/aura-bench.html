@@ -7,12 +7,12 @@
   @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg: #f1f1ee; --panel: #ffffff; --fg: #17181d; --dim: #5d6170; --line: #d9d9d3; --accent: #b08d00; color-scheme: light; } }
   :root[data-theme="light"] { --bg: #f1f1ee; --panel: #ffffff; --fg: #17181d; --dim: #5d6170; --line: #d9d9d3; --accent: #b08d00; color-scheme: light; }
   body { background: var(--bg); color: var(--fg); font: 15px/1.5 Inter, system-ui, sans-serif; }
-  .wrap { max-width: 980px; margin: 0 auto; padding-block: 24px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding-block: 24px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   h1 { font: 44px/1 "Bebas Neue", Impact, sans-serif; letter-spacing: .04em; margin: 0 0 4px; text-wrap: balance; }
   p.lede { color: var(--dim); margin: 0 0 18px; max-width: 65ch; }
-  .stage { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 18px; }
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 18px; }
   @media (max-width: 760px) { .stage { grid-template-columns: minmax(0, 1fr); } }
-  canvas { width: 100%; aspect-ratio: 3 / 4; max-width: min(100%, 58vh); display: block; border-radius: 10px; background: #000; }
+  canvas { width: 100%; aspect-ratio: 980 / 805; max-width: 100%; display: block; border-radius: 10px; background: #000; }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; min-width: 0; }
   .label { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); margin: 0 0 8px; font-weight: 600; }
   .swatches { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 16px; }
@@ -28,9 +28,9 @@
 
 <div class="wrap">
   <h1>Charge Aura</h1>
-  <p class="lede">The flame aura shown while charging (hold Charge) and, bigger, during Power Surge. It is drawn flat, facing the camera, in two layers: the flame behind the fighter and faint rising streaks in front. The drawing changes 20 times a second, like hand-drawn anime frames. Pick a colour to preview the Customize choices.</p>
+  <p class="lede">The flame aura shown while charging (hold Charge) and, bigger, during Power Surge. A fan of long streaky tongues bursts out of the ground round the feet, out and up at the sides and straight up over the head, and keeps flowing outward: tongues pump, sway and tear off. It is drawn flat, facing the camera: the flame behind the fighter and bright dashes flying up in front. The drawing changes 24 times a second, like hand-drawn anime frames. Pick a colour to preview the Customize choices.</p>
   <div class="stage">
-    <canvas id="c" width="600" height="800"></canvas>
+    <canvas id="c" width="980" height="805"></canvas>
     <div class="panel">
       <p class="label">Aura colour</p>
       <div class="swatches" id="sw"></div>
@@ -49,7 +49,7 @@
         <button data-v="1" aria-pressed="true">Shown</button>
         <button data-v="0">Hidden</button>
       </div>
-      <p class="note">Lightning from the reference clip is left out on purpose.</p>
+      <p class="note">Goal: the classic anime power-up flame. Lightning is left out on purpose.</p>
     </div>
   </div>
 </div>
@@ -86,94 +86,59 @@ out vec4 o;
 uniform float uTime, uStrength, uBg, uFig, uAspect;
 uniform vec3 uColor;
 
-// Aura space: x right, y up, feet at 0, the crown tip near 1. The aura is an egg-shaped body round the fighter with
-// straight sharp flame spikes on it that point out and up (flat out at the feet, straight up at the crown), redrawn
-// 20 times a second like hand-drawn anime frames; thin strokes rise inside.
+// Aura space: x right, y up, feet at 0, the fighter's head top near 0.62. The flame is a fan of long streaky tongues
+// that shoot out of the ground round the feet: out and up at the sides, straight up over the head. Everything flows
+// outward along the fan all the time (tongues pump, sway, tear off), redrawn 24 times a second like anime frames.
+// Two nested sheets: the big outer flame and a hotter, paler inner one; bright rims, a dim see-through body.
 float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float vnoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+float fbm(vec2 p) { return vnoise(p) * 0.57 + vnoise(p * 2.03 + 17.1) * 0.29 + vnoise(p * 4.1 + 31.7) * 0.14; }
 
-const vec2 EGG_C = vec2(0.0, 0.28);
-const float EGG_W = 0.21, EGG_TOP = 0.44, EGG_BOT = 0.28, EGG_WB = 0.21;
+const vec2 FAN_O = vec2(0.0, -0.01);   // the fan's origin, at the feet
 
-float sdEgg(vec2 p) {
-  vec2 q = p - EGG_C;
-  vec2 r = q.y > 0.0 ? vec2(EGG_W, EGG_TOP) : vec2(EGG_WB, EGG_BOT);
-  float k0 = length(q / r), k1 = length(q / (r * r));
-  return k0 * (k0 - 1.0) / max(k1, 1e-4);
+// one row of tongues across the fan: k = fan angle * count; each tongue is a needle whose length flows outward over time
+float tongues(float k, float r, float t, float seed) {
+  float id = floor(k), f = fract(k);
+  float tri = 1.0 - abs(2.0 * f - 1.0);
+  float h = vnoise(vec2(id * 1.73 + seed, r * 1.4 - t * 2.4));
+  h = smoothstep(0.1, 0.9, h);
+  return pow(tri, 1.35) * h;
 }
 
-// isosceles triangle, apex at the origin, base (half width q.x) at y = q.y
-float sdTri(vec2 p, vec2 q) {
-  p.x = abs(p.x);
-  vec2 a = p - q * clamp(dot(p, q) / dot(q, q), 0.0, 1.0);
-  vec2 b = p - q * vec2(clamp(p.x / q.x, 0.0, 1.0), 1.0);
-  float s = -sign(q.y);
-  vec2 d = min(vec2(dot(a, a), s * (p.x * q.y - p.y * q.x)), vec2(dot(b, b), s * (p.y - q.y)));
-  return -sqrt(d.x) * sign(d.y);
+// flame shape: < 1 inside, 1 on the edge. q = point in aura space, t = drawing time
+float flame(vec2 q, float t, float seed, float spread) {
+  vec2 d = q - FAN_O;
+  float r = length(d);
+  float a = atan(d.x, d.y);                                   // 0 straight up, +-1.57 flat out
+  float base = mix(0.34, 1.0, pow(max(cos(a * spread), 0.0), 1.3)) * 0.98;
+  float warp = (fbm(vec2(a * 2.2 + seed, r * 1.8 - t * 2.8)) - 0.5) * 1.1;      // tongues sway and lean as they rise
+  float k = a * 5.5 + warp;
+  float tg = max(tongues(k, r, t, seed), tongues(k * 2.3 + 0.37, r * 1.2, t * 1.25, seed + 31.0) * 0.75);
+  float R = base * (0.68 + 0.5 * tg);
+  float s = r / max(R, 1e-3);
+  // licks that tear off the edge and rise away
+  s += (fbm(vec2(a * 8.0 + seed, r * 3.2 - t * 4.2)) - 0.5) * 0.32 * smoothstep(0.55, 1.0, s);
+  return s;
 }
 
-// one spike: base centred on the egg at angle th (0 = top, + = right side), pointing at angle phi from straight up
-float sdSpike(vec2 p, float th, float phi, float len, float halfW) {
-  float c = cos(th);
-  vec2 base = EGG_C + vec2(sin(th) * (c > 0.0 ? EGG_W : EGG_WB), c * (c > 0.0 ? EGG_TOP : EGG_BOT)) * 0.86;
-  vec2 dir = vec2(sin(phi), cos(phi));
-  vec2 d = p - (base + dir * len);
-  return sdTri(vec2(dot(d, vec2(dir.y, -dir.x)), -dot(d, dir)), vec2(halfW, len + 0.05));
+// the streak texture running along the fan (motion-blurred brush strokes)
+float streaks(vec2 q, float t, float seed) {
+  vec2 d = q - FAN_O;
+  float r = length(d), a = atan(d.x, d.y);
+  return vnoise(vec2(a * 24.0 + seed, r * 1.3 - t * 3.2)) * 0.7 + vnoise(vec2(a * 60.0 + seed * 2.0, r * 2.2 - t * 4.0)) * 0.3;
 }
 
-float smin(float a, float b, float k) { float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0); return mix(b, a, h) - k * h * (1.0 - h); }
+float coverOf(float s) { float w = max(fwidth(s), 1e-4) * 0.8; return 1.0 - smoothstep(1.0 - w, 1.0 + w, s); }
 
-const int SIDE_SPIKES = 6;
-
-// distance to the whole silhouette (negative inside) for drawing number n
-float sdAura(vec2 p, float n, float rise) {
-  float d = sdEgg(p);
-  float sp = 1e3;
-  // crown: one or two tall spikes and two shorter ones beside them
-  float twin = step(0.6, h21(vec2(n, 11.0)));
-  float c0 = (h21(vec2(n, 1.0)) - 0.5) * 0.12;
-  sp = min(sp, sdSpike(p, c0 - twin * 0.07, c0 * 0.6 - twin * 0.05, mix(0.25, 0.31, h21(vec2(n, 2.0))), 0.042));
-  if (twin > 0.5) sp = min(sp, sdSpike(p, c0 + 0.08, c0 * 0.6 + 0.06, mix(0.22, 0.29, h21(vec2(n, 3.0))), 0.04));
-  for (int k = 0; k < 2; k++) {
-    float sgn = k == 0 ? -1.0 : 1.0;
-    sp = min(sp, sdSpike(p, sgn * mix(0.42, 0.55, h21(vec2(n, 4.0 + float(k)))), sgn * mix(0.18, 0.3, h21(vec2(n, 6.0 + float(k)))),
-                          mix(0.18, 0.26, h21(vec2(n, 8.0 + float(k)))), 0.036));
-  }
-  // flanks: spikes slide up each side, leaning further out the lower they sit
-  for (int k = 0; k < 2; k++) {
-    float sgn = k == 0 ? -1.0 : 1.0;
-    for (int i = 0; i < SIDE_SPIKES; i++) {
-      float u = (float(i) + 0.5 + float(k) * 0.5) / float(SIDE_SPIKES) - rise;
-      float cyc = floor(u);
-      u -= cyc;
-      float id = float(i) - cyc * float(SIDE_SPIKES) + float(k) * 100.0;
-      u += (h21(vec2(id, n)) - 0.5) * 0.05;                 // each drawing wobbles a little
-      float s = mix(0.22, 0.93, u);                        // 0 top .. 1 feet
-      float th = sgn * s * 3.14159265;
-      float phi = sgn * mix(0.45, 1.45, s);      // ~25 deg from vertical up top, ~80 at the feet
-      float len = mix(0.16, 0.26, h21(vec2(id, 21.0))) * mix(0.85, 1.12, h21(vec2(id, n + 40.0)));
-      len *= smoothstep(0.0, 0.12, u) * smoothstep(1.0, 0.93, u);
-      sp = min(sp, sdSpike(p, th, phi, len, len * 0.2 + 0.012));
-    }
-  }
-  return smin(d, sp, 0.016);
-}
-
-// rising strokes inside the aura: hooks / arcs and thin vertical lines
-float strokes(vec2 p, float t) {
-  vec2 cell = vec2(1.0 / 8.0, 1.0 / 5.0);
-  vec2 g = vec2(p.x, p.y - t * 0.9) / cell;
-  vec2 id = floor(g);
-  float hs = h21(id + 0.37);
-  if (hs < 0.45) return 0.0;
-  vec2 q = (fract(g) - 0.5 - (vec2(h21(id + 7.1), h21(id + 3.3)) - 0.5) * 0.3) * cell;
-  if (hs < 0.8) {
-    float rad = mix(0.016, 0.028, h21(id + 1.9));
-    float a = atan(q.x, q.y) - (h21(id + 5.5) - 0.5) * 2.0;   // arcs open downwards, tilted
-    float d = abs(length(q) - rad);
-    return smoothstep(0.004, 0.0012, d) * step(abs(a), 1.35);
-  }
-  float len = mix(0.025, 0.06, h21(id + 2.7));
-  return smoothstep(0.0032, 0.001, abs(q.x - q.y * 0.15)) * step(abs(q.y), len);
+// rising strokes inside the aura (front layer): short bright dashes flying up the fan
+float strokes(vec2 q, float t) {
+  vec2 d = q - FAN_O;
+  float r = length(d), a = atan(d.x, d.y);
+  return smoothstep(0.86, 0.93, vnoise(vec2(a * 34.0, r * 5.0 - t * 7.0)));
 }
 
 float sdCap(vec2 p, vec2 a, vec2 b, float r) { vec2 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0); return length(pa - ba * h) - r; }
@@ -189,38 +154,47 @@ float figure(vec2 p) {   // stand-in fighter (bench only)
   return d;
 }
 
-// one aura layer, premultiplied (rgb added, a covers). front = 1: only the strokes (drawn over the fighter)
-vec4 aura(vec2 p, float t, float front) {
+// one aura layer, premultiplied (rgb added, a covers). front = 1: only the rising strokes (drawn over the fighter)
+vec4 aura(vec2 p, vec2 uv, float t, float front) {
   p /= uStrength;                         // smaller while charging, full size in Power Surge
-  float n = floor(t * 20.0);              // drawing number (held 3 frames at 60 fps)
-  float tn = n / 20.0;
+  float tn = floor(t * 24.0) / 24.0;      // drawing time (held 2-3 frames at 60 fps)
   vec3 c = uColor;
-  float egg = sdEgg(p);
-  float st = strokes(p, tn) * smoothstep(0.0, -0.03, egg) * smoothstep(0.03, 0.14, p.y);
-  if (front > 0.5) return vec4(c * st * 1.1, 0.0) * min(uStrength * 1.25, 1.0);
-  float d = sdAura(p, n, fract(tn * 1.6));
-  float soft = 0.004;
-  float inside = 1.0 - smoothstep(-soft, soft, d);
-  float fill = inside * pow(smoothstep(-0.07, 0.01, egg), 2.0);            // spikes solid, the body fades to dark inside
-  float tipDim = 1.0 - 0.25 * smoothstep(0.02, 0.2, egg);           // tips a touch deeper
-  float halo = exp(-max(d, 0.0) / 0.03) * (1.0 - inside) * 0.2 + (1.0 - inside) * exp(-max(egg, 0.0) / 0.07) * 0.07;
-  float haze = inside * (1.0 - fill) * 0.04;                        // dim haze in the body
-  vec3 rgb = c * (fill * tipDim + halo + haze + st * 1.2);
-  float a = inside * mix(0.3, 0.85, fill);
-  return vec4(rgb, a) * min(uStrength * 1.25, 1.0);
+  float ground = smoothstep(-0.03, 0.02, p.y);
+  float sA = flame(p, tn, 0.0, 1.0);
+  float inA = coverOf(sA) * ground;
+  // tongue tips that reach the quad's edge thin out instead of being cut off
+  float edge = smoothstep(1.0, 0.9, uv.y) * smoothstep(0.0, 0.05, uv.x) * smoothstep(1.0, 0.95, uv.x);
+  float fade = min(uStrength * 1.25, 1.0) * edge;
+  if (front > 0.5) {
+    float st = strokes(p, tn) * inA * smoothstep(0.04, 0.16, p.y) * smoothstep(0.98, 0.6, sA);
+    return vec4(c * st * 0.9, 0.0) * fade;
+  }
+  float sB = flame(p / 0.74 + vec2(0.0, 0.03), tn * 1.15 + 3.7, 57.0, 1.08);
+  float inB = coverOf(sB) * ground;
+  float str = streaks(p, tn, 0.0);
+  float eA = smoothstep(0.5, 1.0, sA);                  // 0 deep inside .. 1 at the rim
+  float eB = smoothstep(0.45, 1.0, sB);
+  float rimA = smoothstep(0.86, 0.985, sA) * inA;        // bright outline round every tongue
+  float bodyA = inA * mix(0.08, 0.85, eA * eA) * mix(0.45, 1.35, str);   // dim see-through body, brighter to the rim
+  float bodyB = inB * mix(0.04, 0.95, eB * eB * eB) * mix(0.55, 1.25, str);   // inner sheet: hotter, paler
+  vec3 hot = mix(c, vec3(1.0), 0.5);
+  vec3 rgb = c * bodyA + hot * (bodyB * 0.6 + rimA * 0.55);
+  rgb += c * exp(-max(sA - 1.0, 0.0) * 16.0) * (1.0 - inA) * 0.08 * ground;   // soft glow just outside the edge
+  float a = inA * mix(0.18, 0.7, eA) + inB * 0.1 * eB;
+  return vec4(rgb, min(a, 0.9)) * fade;
 }
 
 void main() {
   vec2 p = vec2((vUv.x - 0.5) * uAspect, vUv.y * 1.15 - 0.04);
   float t = uTime;
   vec3 bg = uBg > 0.5 ? mix(vec3(0.62, 0.78, 0.95), vec3(0.95, 0.9, 0.8), smoothstep(0.6, 0.0, vUv.y)) : vec3(0.0);
-  if (uBg > 0.5 && vUv.y < 0.05) bg = vec3(0.45, 0.6, 0.35);
-  vec4 back = aura(p, t, 0.0);
+  if (uBg > 0.5 && vUv.y < 0.035) bg = vec3(0.45, 0.6, 0.35);
+  vec4 back = aura(p, vUv, t, 0.0);
   vec3 col = bg * (1.0 - back.a) + back.rgb;
   if (uFig > 0.5) {
     float m = 1.0 - smoothstep(-0.002, 0.002, figure(p));
     col = mix(col, vec3(0.16, 0.13, 0.12) + vec3(0.06) * smoothstep(0.1, 0.6, p.y), m);
-    vec4 fr = aura(p, t, 1.0);
+    vec4 fr = aura(p, vUv, t, 1.0);
     col = col * (1.0 - fr.a) + fr.rgb;
   }
   o = vec4(pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2)), 1.0);

@@ -1,8 +1,10 @@
 // LightMMORPG/AnimeAura - the hand-drawn anime flame aura (charging, Power Surge), drawn on a camera-facing quad.
-// 1:1 port of docs/bench/aura-bench.html (keep the two in step). Aura space: x right, y up, feet at 0, crown tip near 1:
-// an egg-shaped body round the fighter with straight sharp spikes on it that point out and up (flat out at the feet,
-// straight up at the crown), redrawn 20 times a second like anime frames; thin strokes rise inside.
-// Two layers: _Front = 0 is the flame (behind the fighter), _Front = 1 only the rising strokes (in front of the fighter).
+// 1:1 port of docs/bench/aura-bench.html (keep the two in step). Aura space: x right, y up, feet at 0, the fighter's head
+// top near 0.62. The flame is a fan of long streaky tongues that shoot out of the ground round the feet: out and up at
+// the sides, straight up over the head. Everything flows outward along the fan all the time (tongues pump, sway, tear
+// off), redrawn 24 times a second like anime frames. Two nested sheets: the big outer flame and a hotter, paler inner
+// one; bright rims, a dim see-through body.
+// Two layers: _Front = 0 is the flame (behind the fighter), _Front = 1 only the rising dashes (in front of the fighter).
 // Premultiplied output: rgb adds (HDR, feeds Bloom), alpha darkens what is behind a little so the aura reads on bright skies.
 // Lives in Resources so builds include it (AnimeAura.cs loads it by name).
 Shader "LightMMORPG/AnimeAura"
@@ -10,10 +12,10 @@ Shader "LightMMORPG/AnimeAura"
     Properties
     {
         [HDR] _Color ("Aura Color (HDR)", Color) = (1.3, 1.1, 0.13, 1)
-        _Strength ("Size (0.85 charging, 1 surge)", Range(0.3, 1.2)) = 1
+        _Strength ("Size (charging 0.72-0.92, surge 1)", Range(0.3, 1.2)) = 1
         _Fade ("Fade", Range(0, 1)) = 1
-        _Front ("Front layer (strokes only)", Float) = 0
-        _Aspect ("Quad width / height * 1.15", Float) = 1
+        _Front ("Front layer (dashes only)", Float) = 0
+        _Aspect ("Quad width / height * 1.15", Float) = 1.4
         _Seed ("Time offset (per fighter)", Float) = 0
     }
 
@@ -58,99 +60,60 @@ Shader "LightMMORPG/AnimeAura"
 
             float H21(float2 p) { p = frac(p * float2(123.34, 456.21)); p += dot(p, p + 45.32); return frac(p.x * p.y); }
 
-            static const float2 EGG_C = float2(0.0, 0.28);
-            static const float EGG_W = 0.21, EGG_TOP = 0.44, EGG_BOT = 0.28;
-            static const float PI_F = 3.14159265;
-
-            float SdEgg(float2 p)
+            float VNoise(float2 p)
             {
-                float2 q = p - EGG_C;
-                float2 r = float2(EGG_W, q.y > 0.0 ? EGG_TOP : EGG_BOT);
-                float k0 = length(q / r), k1 = length(q / (r * r));
-                return k0 * (k0 - 1.0) / max(k1, 1e-4);
+                float2 i = floor(p), f = frac(p);
+                f = f * f * (3.0 - 2.0 * f);
+                return lerp(lerp(H21(i), H21(i + float2(1.0, 0.0)), f.x), lerp(H21(i + float2(0.0, 1.0)), H21(i + float2(1.0, 1.0)), f.x), f.y);
             }
 
-            // isosceles triangle, apex at the origin, base (half width q.x) at y = q.y
-            float SdTri(float2 p, float2 q)
+            float Fbm(float2 p) { return VNoise(p) * 0.57 + VNoise(p * 2.03 + 17.1) * 0.29 + VNoise(p * 4.1 + 31.7) * 0.14; }
+
+            static const float2 FAN_O = float2(0.0, -0.01);   // the fan's origin, at the feet
+
+            // one row of tongues across the fan: k = fan angle * count; each tongue is a needle whose length flows outward
+            float Tongues(float k, float r, float t, float seed)
             {
-                p.x = abs(p.x);
-                float2 a = p - q * saturate(dot(p, q) / dot(q, q));
-                float2 b = p - q * float2(saturate(p.x / q.x), 1.0);
-                float s = -sign(q.y);
-                float2 d = min(float2(dot(a, a), s * (p.x * q.y - p.y * q.x)), float2(dot(b, b), s * (p.y - q.y)));
-                return -sqrt(d.x) * sign(d.y);
+                float id = floor(k), f = frac(k);
+                float tri = 1.0 - abs(2.0 * f - 1.0);
+                float h = VNoise(float2(id * 1.73 + seed, r * 1.4 - t * 2.4));
+                h = smoothstep(0.1, 0.9, h);
+                return pow(tri, 1.35) * h;
             }
 
-            // one spike: base centred on the egg at angle th (0 = top, + = right side), pointing at angle phi from straight up
-            float SdSpike(float2 p, float th, float phi, float len, float halfW)
+            // flame shape: < 1 inside, 1 on the edge. q = point in aura space, t = drawing time
+            float Flame(float2 q, float t, float seed, float spread)
             {
-                float c = cos(th);
-                float2 bse = EGG_C + float2(sin(th) * EGG_W, c * (c > 0.0 ? EGG_TOP : EGG_BOT)) * 0.86;
-                float2 dir = float2(sin(phi), cos(phi));
-                float2 d = p - (bse + dir * len);
-                return SdTri(float2(dot(d, float2(dir.y, -dir.x)), -dot(d, dir)), float2(halfW, len + 0.05));
+                float2 d = q - FAN_O;
+                float r = length(d);
+                float a = atan2(d.x, d.y);                                                // 0 straight up, +-1.57 flat out
+                float base = lerp(0.34, 1.0, pow(max(cos(a * spread), 0.0), 1.3)) * 0.98;
+                float warp = (Fbm(float2(a * 2.2 + seed, r * 1.8 - t * 2.8)) - 0.5) * 1.1;   // tongues sway and lean as they rise
+                float k = a * 5.5 + warp;
+                float tg = max(Tongues(k, r, t, seed), Tongues(k * 2.3 + 0.37, r * 1.2, t * 1.25, seed + 31.0) * 0.75);
+                float R = base * (0.68 + 0.5 * tg);
+                float s = r / max(R, 1e-3);
+                // licks that tear off the edge and rise away
+                s += (Fbm(float2(a * 8.0 + seed, r * 3.2 - t * 4.2)) - 0.5) * 0.32 * smoothstep(0.55, 1.0, s);
+                return s;
             }
 
-            float SMin(float a, float b, float k) { float h = saturate(0.5 + 0.5 * (b - a) / k); return lerp(b, a, h) - k * h * (1.0 - h); }
-
-            #define SIDE_SPIKES 6
-
-            // distance to the whole silhouette (negative inside) for drawing number n
-            float SdAura(float2 p, float n, float rise)
+            // the streak texture running along the fan (motion-blurred brush strokes)
+            float Streaks(float2 q, float t, float seed)
             {
-                float d = SdEgg(p);
-                float sp = 1e3;
-                // crown: one or two tall spikes and two shorter ones beside them
-                float twin = step(0.6, H21(float2(n, 11.0)));
-                float c0 = (H21(float2(n, 1.0)) - 0.5) * 0.12;
-                sp = min(sp, SdSpike(p, c0 - twin * 0.07, c0 * 0.6 - twin * 0.05, lerp(0.25, 0.31, H21(float2(n, 2.0))), 0.042));
-                if (twin > 0.5) sp = min(sp, SdSpike(p, c0 + 0.08, c0 * 0.6 + 0.06, lerp(0.22, 0.29, H21(float2(n, 3.0))), 0.04));
-                [unroll] for (int k = 0; k < 2; k++)
-                {
-                    float sgn = k == 0 ? -1.0 : 1.0;
-                    sp = min(sp, SdSpike(p, sgn * lerp(0.42, 0.55, H21(float2(n, 4.0 + k))), sgn * lerp(0.18, 0.3, H21(float2(n, 6.0 + k))),
-                                         lerp(0.18, 0.26, H21(float2(n, 8.0 + k))), 0.036));
-                }
-                // flanks: spikes slide up each side, leaning further out the lower they sit
-                [unroll] for (int side = 0; side < 2; side++)
-                {
-                    float sgn = side == 0 ? -1.0 : 1.0;
-                    [unroll] for (int i = 0; i < SIDE_SPIKES; i++)
-                    {
-                        float u = (i + 0.5 + side * 0.5) / SIDE_SPIKES - rise;
-                        float cyc = floor(u);
-                        u -= cyc;
-                        float id = i - cyc * SIDE_SPIKES + side * 100.0;
-                        u += (H21(float2(id, n)) - 0.5) * 0.05;               // each drawing wobbles a little
-                        float s = lerp(0.22, 0.93, u);                        // 0 top .. 1 feet
-                        float th = sgn * s * PI_F;
-                        float phi = sgn * lerp(0.45, 1.45, s);                // ~25 deg from vertical up top, ~83 at the feet
-                        float len = lerp(0.16, 0.26, H21(float2(id, 21.0))) * lerp(0.85, 1.12, H21(float2(id, n + 40.0)));
-                        len *= smoothstep(0.0, 0.12, u) * smoothstep(1.0, 0.93, u);
-                        sp = min(sp, SdSpike(p, th, phi, len, len * 0.2 + 0.012));
-                    }
-                }
-                return SMin(d, sp, 0.016);
+                float2 d = q - FAN_O;
+                float r = length(d), a = atan2(d.x, d.y);
+                return VNoise(float2(a * 24.0 + seed, r * 1.3 - t * 3.2)) * 0.7 + VNoise(float2(a * 60.0 + seed * 2.0, r * 2.2 - t * 4.0)) * 0.3;
             }
 
-            // rising strokes inside the aura: hooks / arcs and thin vertical lines
-            float Strokes(float2 p, float t)
+            float CoverOf(float s) { float w = max(fwidth(s), 1e-4) * 0.8; return 1.0 - smoothstep(1.0 - w, 1.0 + w, s); }
+
+            // rising dashes inside the aura (front layer): short bright strokes flying up the fan
+            float Strokes(float2 q, float t)
             {
-                float2 cell = float2(1.0 / 8.0, 1.0 / 5.0);
-                float2 g = float2(p.x, p.y - t * 0.9) / cell;
-                float2 id = floor(g);
-                float hs = H21(id + 0.37);
-                if (hs < 0.45) return 0.0;
-                float2 q = (frac(g) - 0.5 - (float2(H21(id + 7.1), H21(id + 3.3)) - 0.5) * 0.3) * cell;
-                if (hs < 0.8)
-                {
-                    float rad = lerp(0.016, 0.028, H21(id + 1.9));
-                    float a = atan2(q.x, q.y) - (H21(id + 5.5) - 0.5) * 2.0;   // arcs open downwards, tilted
-                    float d = abs(length(q) - rad);
-                    return smoothstep(0.004, 0.0012, d) * step(abs(a), 1.35);
-                }
-                float len = lerp(0.025, 0.06, H21(id + 2.7));
-                return smoothstep(0.0032, 0.001, abs(q.x - q.y * 0.15)) * step(abs(q.y), len);
+                float2 d = q - FAN_O;
+                float r = length(d), a = atan2(d.x, d.y);
+                return smoothstep(0.86, 0.93, VNoise(float2(a * 34.0, r * 5.0 - t * 7.0)));
             }
 
             float4 Frag(Varyings i) : SV_Target
@@ -158,23 +121,32 @@ Shader "LightMMORPG/AnimeAura"
                 float2 p = float2((i.uv.x - 0.5) * _Aspect, i.uv.y * 1.15 - 0.04);
                 p /= max(_Strength, 0.05);                 // smaller while charging, full size in Power Surge
                 float t = _Time.y + _Seed;
-                float n = floor(t * 20.0);                 // drawing number (held 3 frames at 60 fps)
-                float tn = n / 20.0;
+                float tn = floor(t * 24.0) / 24.0;         // drawing time (held 2-3 frames at 60 fps)
                 float3 c = _Color.rgb;
-                float fade = _Fade * min(_Strength * 1.25, 1.0);
-                float egg = SdEgg(p);
-                float st = Strokes(p, tn) * smoothstep(0.0, -0.03, egg) * smoothstep(0.03, 0.14, p.y);
-                if (_Front > 0.5) return float4(c * st * 1.1, 0.0) * fade;
-                float d = SdAura(p, n, frac(tn * 1.6));
-                const float soft = 0.004;
-                float inside = 1.0 - smoothstep(-soft, soft, d);
-                float fill = inside * pow(smoothstep(-0.07, 0.01, egg), 2.0);     // spikes solid, the body fades to dark inside
-                float tipDim = 1.0 - 0.25 * smoothstep(0.02, 0.2, egg);           // tips a touch deeper
-                float halo = exp(-max(d, 0.0) / 0.03) * (1.0 - inside) * 0.2 + (1.0 - inside) * exp(-max(egg, 0.0) / 0.07) * 0.07;
-                float haze = inside * (1.0 - fill) * 0.04;                        // dim haze in the body
-                float3 rgb = c * (fill * tipDim + halo + haze + st * 1.2);
-                float a = inside * lerp(0.3, 0.85, fill);
-                return float4(rgb, a) * fade;
+                // tongue tips that reach the quad's edge thin out instead of being cut off
+                float edge = smoothstep(1.0, 0.9, i.uv.y) * smoothstep(0.0, 0.05, i.uv.x) * smoothstep(1.0, 0.95, i.uv.x);
+                float fade = _Fade * min(_Strength * 1.25, 1.0) * edge;
+                float ground = smoothstep(-0.03, 0.02, p.y);
+                float sA = Flame(p, tn, 0.0, 1.0);
+                float inA = CoverOf(sA) * ground;
+                if (_Front > 0.5)
+                {
+                    float st = Strokes(p, tn) * inA * smoothstep(0.04, 0.16, p.y) * smoothstep(0.98, 0.6, sA);
+                    return float4(c * st * 0.9, 0.0) * fade;
+                }
+                float sB = Flame(p / 0.74 + float2(0.0, 0.03), tn * 1.15 + 3.7, 57.0, 1.08);
+                float inB = CoverOf(sB) * ground;
+                float str = Streaks(p, tn, 0.0);
+                float eA = smoothstep(0.5, 1.0, sA);                                   // 0 deep inside .. 1 at the rim
+                float eB = smoothstep(0.45, 1.0, sB);
+                float rimA = smoothstep(0.86, 0.985, sA) * inA;                         // bright outline round every tongue
+                float bodyA = inA * lerp(0.08, 0.85, eA * eA) * lerp(0.45, 1.35, str);       // dim see-through body, brighter to the rim
+                float bodyB = inB * lerp(0.04, 0.95, eB * eB * eB) * lerp(0.55, 1.25, str);  // inner sheet: hotter, paler
+                float3 hot = lerp(c, float3(1.0, 1.0, 1.0), 0.5);
+                float3 rgb = c * bodyA + hot * (bodyB * 0.6 + rimA * 0.55);
+                rgb += c * exp(-max(sA - 1.0, 0.0) * 16.0) * (1.0 - inA) * 0.08 * ground;   // soft glow just outside the edge
+                float a = inA * lerp(0.18, 0.7, eA) + inB * 0.1 * eB;
+                return float4(rgb, min(a, 0.9)) * fade;
             }
             ENDHLSL
         }

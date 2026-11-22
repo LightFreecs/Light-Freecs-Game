@@ -4,8 +4,9 @@ using UnityEngine.Rendering;
 namespace LightMMORPG.VFX
 {
     /// <summary>
-    /// The hand-drawn anime flame aura (shader <c>LightMMORPG/AnimeAura</c>, bench <c>docs/bench/aura-bench.html</c>): two
-    /// camera-facing quads at the fighter's feet, the flame just behind the fighter and the rising strokes just in front.
+    /// The hand-drawn anime flame aura (shader <c>LightMMORPG/AnimeAura</c>, bench <c>docs/bench/aura-bench.html</c>): a fan
+    /// of streaky flame tongues that keeps flowing out of the ground round the feet. Two camera-facing quads at the
+    /// fighter's feet, the flame just behind the fighter and the rising dashes just in front.
     /// Set <see cref="Visible"/>, <see cref="Size"/> (0.85 charging, 1 Power Surge), <see cref="Color"/> and
     /// <see cref="Height"/> (the fighter's height); it flares up when it appears and shrinks away when it stops.
     /// </summary>
@@ -15,8 +16,9 @@ namespace LightMMORPG.VFX
         /// <summary>How bright the aura colour is drawn (HDR, so the spikes catch Bloom).</summary>
         public const float Intensity = 1.35f;
 
-        // quad = 1.855 x fighter height tall (the crown tip clears the head like in the reference), feet 3.5 % up from its bottom
-        private const float HeightPerFighter = 1.15f / 0.62f, FeetUv = 0.04f / 1.15f, Aspect = 1f;
+        // quad = 1.855 x fighter height tall (the crown towers well over the head like in the reference), feet 3.5 % up
+        // from its bottom; 1.4 x as wide as the aura space is tall / 1.15 so the fan's side tongues fit
+        private const float HeightPerFighter = 1.15f / 0.62f, FeetUv = 0.04f / 1.15f, Aspect = 1.4f;
 
         public bool Visible { get; set; }
         public float Size { get; set; } = 0.85f;
