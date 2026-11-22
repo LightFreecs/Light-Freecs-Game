@@ -44,6 +44,7 @@ namespace LightMMORPG.VFX
             {
                 _aura.Color = _rig.AuraColor;
                 _aura.Height = _rig.Height;
+                _aura.Body = _rig;     // the flame bends along this body's spine
             }
             // a heavy held past a quarter charge: the aura flares up with the charge (tapped heavies show nothing)
             float heavy = _anim != null && !down ? Mathf.InverseLerp(0.25f, 1f, _anim.HeavyCharge01) : 0f;

@@ -223,6 +223,7 @@ namespace LightMMORPG.Menu
                 _flame.Visible = ShowAura;
                 _flame.Size = 0.85f;
                 _flame.Height = _height;
+                _flame.Body = _rig;     // the flame bends along the hero's spine (the rig is replaced when the looks change)
             }
             if (_aura != null)
             {

@@ -761,6 +761,28 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     the menu fighter shows the flame aura while the Body tab is open and recolours it without rebuilding the hero.
   - Verified: headless compile only (owner tests by hand). Rising tiers: headless compile, the AnimeAura pass compiled in
     batchmode (Direct3D11, 0 messages) and the bench's GLSL links; not yet seen in game.
+  - **3D aura (2026-11-22; owner: "the shape is good but it looks too flat", and a leaning fighter left the aura behind).** This
+    replaces the two camera-facing quads above; `TIP` / `NOTCH`, the rise and its timing are unchanged.
+    - Modelled in Blender: `tools/aura_blender.py` (`poses`, `build`, `check`, `export`) → `ArtSource/Aura/aura.blend` →
+      `Resources/VFX/AuraFlame.bytes` + the data embedded in `docs/bench/aura-bench.html`. Eight drawings `Aura.d0..7` (same topology, keyed on the
+      timeline at 80 fps = 9 frames each): 8 rings on a conveyor × 7 blades whose (radius, height) profile is that tier's
+      root → tip → notch, over an inner skin of wider tongues, a 3-blade spire and rising flicks. Edit a drawing's vertices by
+      hand and run `export`, or change the numbers and run `build` (which overwrites hand edits). `check` compares the
+      silhouette with the traced outline from 18 yaws on 2 drawings (IoU: mean 0.90, worst 0.89).
+    - `VFX.AnimeAura` swaps the drawing's mesh and draws it twice with `Graphics.RenderMesh` (no GameObjects, so the model's
+      dash stretch and tilt can't shear it): the far half of the ring, then the near half (queue +1). The vertex shader
+      picks the half per blade (`az` against the camera) and collapses the others, so blending is right from every side.
+    - Follows the body: `Body` (the `CharacterRig`) gives feet, hips and head top; a parabola through them bends the flame
+      **sideways only** (it keeps rising), each point with a little lag. Above the head the slope fades out and only the tip
+      drags behind a moving fighter (0.05 s of speed, 0.55 m at most; a jump over 4 m in one frame is a flash step and snaps).
+      In the keyed poses the head top is 0.50 m forward (charge) and 0.37 m back (surge) of the feet's axis.
+    - Look: bright rim only where the flame turns away at its outline (inner blades stay calm, so it keeps the outline's
+      bold read), the far side is a darker wall, the near side clears the see-through arch (measured where the view ray
+      crosses the fighter's plane; its edge is ragged per blade). No MSAA in the project: blade edges are antialiased in the
+      shader from the `edge` attribute.
+    - Verified: headless compile, the AnimeAura pass compiled in batchmode (Direct3D11, 0 messages), and the bench (same shader
+      in GLSL) on the real charge / surge poses from every side and from the game's camera. In those poses the head was
+      58-67 % inside the arch in the worst (side) view before and is 100 % inside from every yaw now. Not played in Unity yet.
 - Power level + aura reserve (2026-11-19; owner: battles start at 10 % strength with a full aura reserve that never
   recovers, charge up to 100 %, high strength and energy attacks exhaust it, then strength and defence dip): rules under
   "Gameplay rules". `Core/AuraReserve` (pure, `Tests/EditMode/AuraReserveTests`), `PlayerStats` SyncVars `Power`, `Aura`,
