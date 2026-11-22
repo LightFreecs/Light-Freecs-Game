@@ -636,14 +636,17 @@ function sampleMove(move, t) {
 // ================================================================== the solver (AttackPoseSolver.Apply). Writes every bone's model rotation.
 const rootQ = P => mul(AA(P.root.yaw, UP), AA(P.root.pitch, RIGHT), AA(P.root.roll, FWD));
 const TORSO_SIDE = 0.19, TORSO_FRONT = 0.135, TORSO_BACK = 0.12, FIST_ROOM = 0.07;
+// NEW (AttackPoseSolver.Girth): the cylinder's girth fades out over the first 10 % (hips) and the last 15 % (neck); it used to
+// stop dead at the neck, so the run's fist at chin height was shoved sideways one frame and left alone the next
+const girth = u => smoothstep(0, 0.1, u) * smoothstep(1, 0.85, u);
 function keepOutOfTorso(rig, target) {
   const a = rig.modelPos(B.Hips), b = rig.modelPos(B.Neck), axis = b.clone().sub(a);
   const len2 = axis.lengthSq(); if (len2 < 1e-6) return target;
   const u = target.clone().sub(a).dot(axis) / len2;
-  if (u < 0 || u > 1) return target;
+  const g = girth(u); if (g <= 0) return target;
   const c = a.clone().add(axis.clone().multiplyScalar(u)), chest = rig.model[B.Chest];
   const o = rot(chest.clone().invert(), target.clone().sub(c));
-  const rx = TORSO_SIDE + FIST_ROOM, rz = (o.z >= 0 ? TORSO_FRONT : TORSO_BACK) + FIST_ROOM;
+  const rx = (TORSO_SIDE + FIST_ROOM) * g, rz = ((o.z >= 0 ? TORSO_FRONT : TORSO_BACK) + FIST_ROOM) * g;
   const k = (o.x / rx) ** 2 + (o.z / rz) ** 2;
   if (k >= 1) return target;
   if (k < 1e-6) o.set(0, o.y, rz); else { const s = 1 / Math.sqrt(k); o.x *= s; o.z *= s; }
@@ -653,10 +656,10 @@ function keepOutOfTorso(rig, target) {
 function insideTorso(rig, p, room) {
   const a = rig.modelPos(B.Hips), b = rig.modelPos(B.Neck), axis = b.clone().sub(a);
   const u = p.clone().sub(a).dot(axis) / axis.lengthSq();
-  if (u < -0.05 || u > 1.05) return false;
+  const g = smoothstep(-0.05, 0.05, u) * smoothstep(1.05, 0.9, u); if (g <= 0) return false;
   const c = a.clone().add(axis.clone().multiplyScalar(u));
   const o = rot(rig.model[B.Chest].clone().invert(), p.clone().sub(c));
-  return (o.x / (TORSO_SIDE + room)) ** 2 + (o.z / ((o.z >= 0 ? TORSO_FRONT : TORSO_BACK) + room)) ** 2 < 1;
+  return (o.x / ((TORSO_SIDE + room) * g)) ** 2 + (o.z / (((o.z >= 0 ? TORSO_FRONT : TORSO_BACK) + room) * g)) ** 2 < 1;
 }
 // NEW (AttackPoseSolver.ElbowPole): the elbow keeps the rest stance's aim carried along with the arm's swing (so a swinging
 // arm doesn't roll about itself and wring the shoulder); for big raises (guard, fist at the chin) it blends to down, out and a
@@ -673,19 +676,30 @@ function elbowPole(rig, side, shoulder, fist, chest, ua, hint) {
   let base = carried.clone().lerp(chestPole, smoothstep(70, 120, swing)).normalize();
   // AttackPose.ElbowL / ElbowR: the pose's own elbow aim in the chest's frame (+x right, +y up, +z forward); its length (0..1) is
   // how much it overrides the solver's pole. The charged heavy's cocked haymaker (elbow up and back) needs it.
+  // NEW (AttackPoseSolver.TurnTowards): turn a towards b round the shoulder→wrist line (both perpendicular to it), an even
+  // swing; a lerp between far-apart aims barely moved and then flipped through the middle in a frame. Almost opposite, it
+  // goes round the outside of the arm, not through the body.
+  const turnTo = (a, b, t) => {
+    let ang = Math.atan2(dir.dot(a.clone().cross(b)), clamp(a.dot(b), -1, 1));
+    if (Math.abs(ang) > 150 * Math.PI / 180) {
+      const alt = ang - Math.sign(ang) * 2 * Math.PI;
+      if (rot(AA(alt * 90 / Math.PI, dir), a).dot(out) > rot(AA(ang * 90 / Math.PI, dir), a).dot(out)) ang = alt;
+    }
+    return rot(AA(ang * t * 180 / Math.PI, dir), a).normalize();
+  };
   if (hint) {
     const hl = Math.hypot(hint[0], hint[1], hint[2]);
     const h = hl > 1e-4 ? perp(rot(chest, V(hint[0], hint[1], hint[2]))) : null;
-    if (h) { const p = base.clone().lerp(h, Math.min(1, hl)); if (p.lengthSq() > 1e-8) base = p.normalize(); }
+    if (h) base = turnTo(base, h, Math.min(1, hl));
   }
   const angA = Math.acos(clamp((l1 * l1 + dist * dist - l2 * l2) / (2 * l1 * dist), -1, 1));
-  let d = base;
-  for (let t = 0; t <= 1.0001; t += 0.1) {
-    d = base.clone().lerp(out, t).normalize();
-    const elbow = shoulder.clone().add(dir.clone().multiplyScalar(Math.cos(angA) * l1)).add(d.clone().multiplyScalar(Math.sin(angA) * l1));
-    if (!insideTorso(rig, elbow, 0.05)) break;
-  }
-  return shoulder.clone().add(d);
+  // out of the torso: round to the outside just far enough to clear it (in tenths, then halved down to the edge), so the
+  // elbow slides along the body instead of stepping
+  const sinks = t => insideTorso(rig, shoulder.clone().add(dir.clone().multiplyScalar(Math.cos(angA) * l1)).add(turnTo(base, out, t).multiplyScalar(Math.sin(angA) * l1)), 0.05);
+  let lo = 0, hi = -1;
+  for (let i = 0; i <= 10; i++) { const t = i / 10; if (!sinks(t)) { hi = t; break; } lo = t; }
+  if (hi > 0) for (let k = 0; k < 6; k++) { const m = (lo + hi) / 2; if (sinks(m)) lo = m; else hi = m; }
+  return shoulder.clone().add(turnTo(base, out, hi < 0 ? 1 : hi));
 }
 // NEW (AttackPoseSolver.FistClearance): the fist (its centre 7 cm past the wrist, 5.5 cm round) must stay out of the torso
 // cylinder and of the shoulder girdle (an ellipsoid round the posed shoulders and upper chest, which the torso cylinder is too
@@ -702,18 +716,24 @@ function fistClearance(rig, c) {
   const ax = 0.27 + FIST_R, ay = 0.14 + FIST_R, az = (o.z >= 0 ? 0.14 : 0.13) + FIST_R;
   const s = (o.x / ax) ** 2 + (o.y / ay) ** 2 + (o.z / az) ** 2;
   let push = V(0, 0, 0);
-  // out through the front (or the back, if it's behind): a guard stays in front of the chest instead of flying out wide
-  if (s < 1) { const zs = Math.sqrt(Math.max(0, 1 - (o.x / ax) ** 2 - (o.y / ay) ** 2)) * az; push = rot(chest, V(0, 0, (o.z >= 0 ? zs : -zs) - o.z)); }
+  // out through the front, so a guard stays in front of the chest instead of flying out wide; only well behind the shoulders'
+  // plane out along the ellipsoid's radius (back / up / out), blended in between. NEW: the plain front-or-back choice flipped
+  // the run's fist at the chin (over the top of the leaning shoulders) to behind the neck and back every stride.
+  if (s < 1) {
+    const front = V(0, 0, Math.sqrt(Math.max(0, 1 - (o.x / ax) ** 2 - (o.y / ay) ** 2)) * (0.14 + FIST_R) - o.z);
+    const radial = o.clone().multiplyScalar(1 / Math.sqrt(Math.max(s, 1e-6)) - 1);
+    push = rot(chest, radial.lerp(front, smoothstep(-0.6 * az, -0.2 * az, o.z)));
+  }
   const t = keepOutOfTorsoRoom(rig, c.clone().add(push), FIST_R);
   return push.add(t.sub(c.clone().add(push)));
 }
 function keepOutOfTorsoRoom(rig, target, room) {
   const a = rig.modelPos(B.Hips), b = rig.modelPos(B.Neck), axis = b.clone().sub(a);
   const u = target.clone().sub(a).dot(axis) / axis.lengthSq();
-  if (u < 0 || u > 1) return target.clone();
+  const g = girth(u); if (g <= 0) return target.clone();
   const c = a.clone().add(axis.clone().multiplyScalar(u)), chest = rig.model[B.Chest];
   const o = rot(chest.clone().invert(), target.clone().sub(c));
-  const rx = TORSO_SIDE + room, rz = (o.z >= 0 ? TORSO_FRONT : TORSO_BACK) + room;
+  const rx = (TORSO_SIDE + room) * g, rz = ((o.z >= 0 ? TORSO_FRONT : TORSO_BACK) + room) * g;
   const k = (o.x / rx) ** 2 + (o.z / rz) ** 2;
   if (k >= 1) return target.clone();
   if (k < 1e-6) o.set(0, o.y, rz); else { const s = 1 / Math.sqrt(k); o.x *= s; o.z *= s; }
@@ -1234,5 +1254,42 @@ window.__bench = {
   merge, GUARD,
   atk(p) { window.__atk = p ? merge(GUARD, p) : null; this.settle(0.05); },
   joints() { const o = {}; for (const n of ["Hips", "LeftUpperArm", "LeftHand", "RightHand", "LeftUpperLeg", "LeftFoot", "RightFoot", "Head", "Neck", "UpperChest"]) { const p = rig.modelPos(B[n]); o[n] = [+p.x.toFixed(3), +p.y.toFixed(3), +p.z.toFixed(3)]; } return o; },
+  // limb check (2026-11-22) of the pose on the rig now: per arm the elbow's bend (0 straight .. 180 folded shut), the upper arm's
+  // roll about itself against the collarbone (past ~90° the skin wrings round the shoulder: the old cocked heavy was 160°+) and
+  // how deep the arm sinks into the torso (cm); per leg the knee's bend
+  limbs() {
+    const o = {}, D = 180 / Math.PI;
+    for (const side of [-1, 1]) {
+      const sh = sideBone(B.LeftShoulder, side), ua = sh + 1, S = rig.modelPos(ua), E = rig.modelPos(ua + 1), W = rig.modelPos(ua + 2);
+      const q = rig.model[sh].clone().invert().multiply(rig.model[ua]), ax = rig.bindLocal[ua + 1].clone().normalize();
+      let roll = 2 * Math.atan2(q.x * ax.x + q.y * ax.y + q.z * ax.z, q.w) * D; roll = ((roll + 540) % 360) - 180;
+      let sink = 0;
+      for (let k = 1; k <= 8; k++) for (const p of [S.clone().lerp(E, k / 8), E.clone().lerp(W, k / 8)])
+        for (let r = 0.035; r > 0.0049 && insideTorso(rig, p, r); r -= 0.005) sink = Math.max(sink, 0.04 - r);
+      const ul = sideBone(B.LeftUpperLeg, side), Hp = rig.modelPos(ul), Kn = rig.modelPos(ul + 1), An = rig.modelPos(ul + 2);
+      o[side < 0 ? "L" : "R"] = { bend: +(E.clone().sub(S).angleTo(W.clone().sub(E)) * D).toFixed(1), roll: +roll.toFixed(1),
+        inTorsoCm: +(sink * 100).toFixed(1), knee: +(Kn.clone().sub(Hp).angleTo(An.clone().sub(Kn)) * D).toFixed(1), elbow: E, wrist: W };
+    }
+    return o;
+  },
+  // walks a gait cycle in fine phase steps and reports the worst roll and the biggest single-step elbow pop (cm the elbow moves
+  // beyond the wrist in one 0.0025-phase step; smooth motion stays well under 1). The run used to pop 25 cm once a stride.
+  scan(gait, shift, dir) {
+    this.set(gait, shift); this.dir(dir); this.hold(null); this.settle(2.5);
+    const p0 = phase, w = { rollL: 0, rollR: 0, popL: 0, popR: 0, bendL: 0, bendR: 0 };
+    let prev = null;
+    for (let i = 0; i <= 800; i++) {
+      this.hold((p0 + i * 0.0025) % 2); step(1 / 60);
+      const m = this.limbs();
+      for (const n of ["L", "R"]) {
+        w["roll" + n] = Math.max(w["roll" + n], Math.abs(m[n].roll)); w["bend" + n] = Math.max(w["bend" + n], m[n].bend);
+        if (prev) w["pop" + n] = Math.max(w["pop" + n], (m[n].elbow.distanceTo(prev[n].elbow) - m[n].wrist.distanceTo(prev[n].wrist)) * 100);
+      }
+      prev = m;
+    }
+    this.hold(null);
+    for (const k of Object.keys(w)) w[k] = +w[k].toFixed(1);
+    return { gait: gait + (shift ? "+shift" : ""), dir, ...w };
+  },
 };
 </script>

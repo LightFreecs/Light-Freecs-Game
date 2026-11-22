@@ -909,7 +909,7 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     side by side with the frame, then timed as a game move. The clip's wind-up shot is mirrored (its punch is a right), so the
     whole attack is right-handed. The face close-ups (attacker yelling, victim's face) were left out as asked.
   - Rush's "Charged punch": WindUp 0.30 s (0.10 the fist up beside the cheek, elbow out; 0.30 cocked: elbow up and back, fist at
-    the shoulder, chest 48° away and leaning 30°+ in, head on the target, left arm hanging loose); Coiled = deeper (elbow
+    the shoulder — re-aimed to beside the head the same day, see the limb audit below — chest 48° away and leaning 30°+ in, head on the target, left arm hanging loose); Coiled = deeper (elbow
     higher, 10 cm lower, more lean). Swing 1.02 s, `Hit` 0.10 (was 0.09): 0.05 the elbow leads round at shoulder height, 0.10
     the fist on the face (1.92 of 2.3, arm straight, head thrown back, left arm out low, lunge +0.40), 0.16 sweeping up and to
     the left, 0.24-0.52 the follow-through held (arm straight across the face and over to the left, chest arched and leaning
@@ -924,3 +924,38 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
     attack pose through the attack layer, root offset included).
   - Verified: headless compile only (owner tests by hand). Not seen in game: the poses on the Toon Head + hair, the swing on a
     moving fighter (the legs keep walking under it), the remote view.
+- Limb audit + heavy arm fix (2026-11-22; owner, with a screenshot of the charge hold from the game camera: "the elbow bends weird
+  and the arm ends up looking terrible ... run a check make sure the limbs dont rubberband and look weird at certain scenes").
+  - Method: a scratch Locomotion Bench with the game's Rush numbers ported (C# field names), the animator's held wind-up / swing,
+    and per-frame measures: elbow bend, the upper arm's roll about itself against the collarbone (swing-twist about its bind
+    axis), arm segments inside the torso / through the head, and continuity (the elbow moving further than the wrist in one
+    step, the elbow's aim turning, sampled at 1/600 s for moves and 0.0025 phase for gaits). Covered: guard, the four lights,
+    the combo chained, the heavy wind-up / hold (0-1 charge) / swing (tap, half, full), cancels, a jab cutting into the swing,
+    the launched pose, walk / run in every direction, attacks and the heavy hold while walking / running, the guard relaxing,
+    block / power-up / beam (`ArmTo`) standing and walking. Legs were fine everywhere (knees always forward, bend ≤ 135°).
+  - Found: (1) the cocked heavy arm was folded shut (bend 147-157°, fist 12-15 cm from the shoulder) with the upper arm rolled
+    160-170°, the skin wrung round the shoulder (the screenshot); (2) the run (default style) flipped an arm behind the neck for
+    a frame every stride: roll 125-158°, the elbow jumping 25-50 cm; (3) the guard relaxing into a run after a combo flipped both
+    arms (roll 158-170°, 25 cm pops); (4) the heavy's elbow whipped up from the guard in one frame; (5) the swing's arm folded
+    into the stomach (2.6 cm into the chest) on its way from over the head to the slump; plus 3-4 cm steps in the punches.
+  - Solver fixes (`AttackPoseSolver`, the bench has the same): `FistClearance` lets a fist out of the shoulder girdle through its
+    front unless it is well behind the shoulders' plane (then along the ellipsoid's radius, blended), instead of front-or-back
+    by the sign, which flipped the run's chin fist (over the top of the leaning shoulders) to behind the neck; the torso
+    cylinder's girth (`Girth`: `KeepOutOfTorso`, `KeepOutOfTorsoRoom`, `InsideTorso`) fades out at the hips and the neck instead
+    of stopping dead (a chin-height fist was shoved sideways one frame, not the next); `ElbowPole` turns its pole round the arm
+    (`TurnTowards`, the long way round by the outside when almost opposite) instead of lerping (which stalled, then flipped),
+    for the pose's elbow hint and for swinging the elbow out of the torso, found in tenths then halved down to the edge, so it
+    slides instead of stepping. `KeepOutOfTorso` = `KeepOutOfTorsoRoom` with the fist's room.
+  - After (same scans): run forward roll ≤ 20°, worst single-step pop 0.4 cm (was 27), elbow aim ≤ 2° a step (was 94); the
+    guard relaxing into a run: roll ≤ 23°, pops ≤ 3 cm; walks unchanged; punches' rolls unchanged (≤ 59°), their steps smaller.
+  - Heavy poses: raise / cock / Coiled re-aimed (placed from the posed shoulder in the chest's frame: elbow up, out and back,
+    bent ~105-115°, the forearm up the chest to the fist beside the head; roll ~80-87°, a thrower's cocked arm) — from the
+    game camera the elbow sticks up beside the head with the fist loaded out to the side. With a 52-60° forward lean a fist
+    raised beside the head in world terms needs a 140-160° roll, so the forearm points up the chest instead. New swing key
+    0.57 (In) between the held follow-through and the slump (0.70, now Snap; speeds matched): the arm drops in an arc out in
+    front. Body, timing, `Hit` and the hold's coil / tremble unchanged.
+  - Bench: `__bench.limbs()` (bend / roll / arm in torso per arm, knee bend) and `__bench.scan(gait, shift, dir)` (worst roll
+    and single-step elbow pop over a gait cycle) for checking new poses.
+  - Not changed: the block's arms are nearly straight and roll ~95° while walking (no pops); a jab pressed within 0.05 s of a
+    heavy's release passes the left fist near the shoulder for a frame of the 0.06 s cross-fade.
+  - Verified: headless compile only (owner tests by hand).

@@ -343,18 +343,23 @@ namespace LightMMORPG.Characters
             // left out): a cocked haymaker to the face that launches the opponent, a long follow-through, then a slump. Traced on a
             // copy of the Locomotion Bench with the game's solver, each key rendered beside its frame from a matching camera.
             // The clip's wind-up shot is mirrored (the punch itself is a right), so it is done here with the right hand.
-            // Hold: the fist comes up beside the cheek and clenches, then the elbow swings up and back, the fist at the shoulder,
-            // the chest turned 48° away and leaning in, the head on the target, the left arm hanging loose. Full charge coils
-            // deeper (elbow higher, lower, more lean). Release: the elbow leads round at shoulder height, the fist lands on the
+            // Hold: the fist comes up beside the cheek and clenches, then the elbow swings up and back, the fist cocked beside the
+            // head, the chest turned 48° away and leaning in, the head on the target, the left arm hanging loose. Full charge coils
+            // deeper (elbow further back, lower, more lean). Release: the elbow leads round at shoulder height, the fist lands on the
             // opponent's face with the head thrown back, sweeps on up and across the face to the left (the clip's long held
-            // follow-through: arm straight over the head, left arm out low, chest arched and leaning left), then the fighter slumps
-            // forward, arms hanging, and steps back into the guard.
+            // follow-through: arm straight over the head, left arm out low, chest arched and leaning left), then the arm drops in
+            // an arc out in front, the fighter slumps forward, arms hanging, and steps back into the guard.
+            // The cocked arm (owner 2026-11-22: "the elbow bends weird and the arm ends up looking terrible"): it was folded shut
+            // (elbow 150°) with the fist on top of the shoulder, which the hinge IK can only reach by rolling the upper arm 160°+
+            // about itself; the skin wrung round the shoulder. Now the elbow is bent ~105-115° and the forearm points up the chest
+            // to the fist beside the head (the upper arm rolls ~85°, a thrower's cocked arm), placed from the posed shoulder in the
+            // chest's frame on a scratch bench and checked from the game camera (limb audit, 2026-11-22).
             var raise = P(p =>
             {
                 p.RootPos = new Vector3(0f, 0f, -0.02f); p.RootYaw = 18f; p.RootPitch = 2f; p.RootRoll = 0f;
                 p.HipsPos = new Vector3(0f, -0.10f, -0.01f); p.HipsYaw = 6f; p.HipsPitch = 5f; p.HipsRoll = 0f;
                 p.TorsoYaw = 8f; p.TorsoPitch = 12f; p.TorsoRoll = -2f; p.HeadYaw = 0f; p.HeadPitch = 0f;
-                p.ArmR = new Vector3(0.224f, 1.725f, 0.051f); p.TwistR = 20f; p.OpenR = 0f; p.ElbowR = new Vector3(0.984f, 0.165f, -0.018f);
+                p.ArmR = new Vector3(0.314f, 1.811f, 0.09f); p.TwistR = 20f; p.OpenR = 0f; p.ElbowR = new Vector3(0.72f, 0.643f, -0.262f);
                 p.ArmL = new Vector3(-0.12f, 1.28f, 0.32f); p.TwistL = -15f; p.OpenL = 0.1f;
                 // the lead foot steps out a little (lifted mid-step); the back foot stays where the guard has it
                 p.LegL = new Vector3(-0.19f, 0.15f, 0.30f); p.FootYawL = 16f; p.FootPitchL = 0f;
@@ -365,7 +370,7 @@ namespace LightMMORPG.Characters
                 p.RootPos = new Vector3(0f, 0f, -0.06f); p.RootYaw = 28f; p.RootPitch = 8f; p.RootRoll = 0f;
                 p.HipsPos = new Vector3(0f, -0.15f, -0.04f); p.HipsYaw = 8f; p.HipsPitch = 12f; p.HipsRoll = 0f;
                 p.TorsoYaw = 12f; p.TorsoPitch = 32f; p.TorsoRoll = -4f; p.HeadYaw = 0f; p.HeadPitch = 0f;
-                p.ArmR = new Vector3(0.326f, 1.568f, 0.089f); p.TwistR = 20f; p.OpenR = 0f; p.ElbowR = new Vector3(0.909f, 0.075f, -0.40f);
+                p.ArmR = new Vector3(0.557f, 1.654f, 0.248f); p.TwistR = 20f; p.OpenR = 0f; p.ElbowR = new Vector3(0.587f, 0.643f, -0.492f);
                 p.ArmL = new Vector3(-0.06f, 1.02f, 0.36f); p.TwistL = -10f; p.OpenL = 0.15f;
                 p.LegL = new Vector3(-0.20f, 0.105f, 0.36f); p.FootYawL = 18f; p.FootPitchL = 0f;
                 p.LegR = new Vector3(0.22f, 0.105f, -0.22f); p.FootYawR = 40f; p.FootPitchR = 0f;
@@ -375,7 +380,7 @@ namespace LightMMORPG.Characters
                 p.RootPos = new Vector3(0f, 0f, -0.10f); p.RootYaw = 33f; p.RootPitch = 10f; p.RootRoll = 0f;
                 p.HipsPos = new Vector3(0f, -0.22f, -0.06f); p.HipsYaw = 10f; p.HipsPitch = 14f; p.HipsRoll = 0f;
                 p.TorsoYaw = 13f; p.TorsoPitch = 36f; p.TorsoRoll = -5f; p.HeadYaw = 0f; p.HeadPitch = -2f;
-                p.ArmR = new Vector3(0.366f, 1.495f, 0.007f); p.TwistR = 20f; p.OpenR = 0f; p.ElbowR = new Vector3(0.873f, 0.246f, -0.419f);
+                p.ArmR = new Vector3(0.646f, 1.519f, 0.174f); p.TwistR = 20f; p.OpenR = 0f; p.ElbowR = new Vector3(0.383f, 0.643f, -0.663f);
                 p.ArmL = new Vector3(-0.05f, 0.98f, 0.38f); p.TwistL = -10f; p.OpenL = 0.15f;
                 p.LegL = new Vector3(-0.22f, 0.105f, 0.42f); p.FootYawL = 20f; p.FootPitchL = 0f;
                 p.LegR = new Vector3(0.24f, 0.105f, -0.26f); p.FootYawR = 44f; p.FootPitchR = 0f;
@@ -403,6 +408,13 @@ namespace LightMMORPG.Characters
                 p.LegL = new Vector3(-0.24f, 0.105f, 0.80f); p.FootYawL = 0f; p.FootPitchL = 0f;
                 p.LegR = new Vector3(0.30f, 0.105f, -0.02f); p.FootYawR = 14f; p.FootPitchR = 10f;
             });
+            var held = Follow(-12f, 20f, -45f, -34f, new Vector3(-0.323f, 1.797f, 0.30f));
+            var slump = Slump(-0.27f, 22f, 40f, 40f, new Vector3(0.121f, 0.673f, 1.01f), new Vector3(-0.366f, 0.695f, 0.825f));
+            // the arm drops from over the head in an arc out in front (straight across to the slump it folded into the stomach and
+            // grazed the chest); the body halfway. Eased in then out (In, Snap) at matched speeds, so it doesn't stall at this key.
+            var drop = new AttackPose();
+            AttackPose.Lerp(held, slump, 0.5f, drop);
+            drop.ArmR = new Vector3(-0.048f, 1.407f, 1.169f);
             var heavy = new HeavyAttack
             {
                 Name = "Charged punch", Limb = StrikeLimb.HandR, Coiled = coiled,
@@ -460,9 +472,10 @@ namespace LightMMORPG.Characters
                         })),
                         // the follow-through: the arm straight across the face and over to the left, held while the opponent flies
                         K(0.24f, KeyEase.Smooth, Follow(-14f, 22f, -50f, -40f, new Vector3(-0.343f, 1.847f, 0.28f))),
-                        K(0.52f, KeyEase.Smooth, Follow(-12f, 20f, -45f, -34f, new Vector3(-0.323f, 1.797f, 0.30f))),
-                        // the slump
-                        K(0.70f, KeyEase.Smooth, Slump(-0.27f, 22f, 40f, 40f, new Vector3(0.121f, 0.673f, 1.01f), new Vector3(-0.366f, 0.695f, 0.825f))),
+                        K(0.52f, KeyEase.Smooth, held),
+                        // the arm drops in an arc out in front, then the slump
+                        K(0.57f, KeyEase.In, drop),
+                        K(0.70f, KeyEase.Snap, slump),
                         K(0.82f, KeyEase.Smooth, Slump(-0.29f, 24f, 43f, 44f, new Vector3(0.116f, 0.629f, 1.027f), new Vector3(-0.372f, 0.652f, 0.842f))),
                         // back into the guard in two steps, so the lunge doesn't skate: the lead foot lifts and comes back...
                         K(0.92f, KeyEase.Smooth, P(p =>
@@ -500,27 +513,24 @@ namespace LightMMORPG.Characters
         // the base body's torso round the spine (measured, 2.3 m design metres) plus room for the fist beyond the wrist
         private const float TorsoSide = 0.19f, TorsoFront = 0.135f, TorsoBack = 0.12f, FistRoom = 0.07f;
 
+        private static float Smooth(float a, float b, float x)
+        {
+            float t = Mathf.Clamp01((x - a) / (b - a));
+            return t * t * (3f - 2f * t);
+        }
+
+        /// <summary>
+        /// How much of the torso's girth there is at u along the spine (0 hips → 1 neck): full in between, fading to nothing over the
+        /// first 10 % and the last 15 %. The cylinder used to stop dead at the neck, so a fist at chin height (the run's) was shoved
+        /// sideways one frame and left alone the next, and the elbow jumped with it.
+        /// </summary>
+        private static float Girth(float u) => Smooth(0f, 0.1f, u) * Smooth(1f, 0.85f, u);
+
         /// <summary>
         /// Moves a wrist target out of the torso: an elliptic cylinder round the posed spine (hips → neck) in the chest's frame.
         /// Every pose and every blend between poses goes through this, so a fist can never sink into the chest or stomach.
         /// </summary>
-        public static Vector3 KeepOutOfTorso(CharacterRig rig, Vector3 target, float hs)
-        {
-            Vector3 a = rig.ModelPosition(CharacterBone.Hips), b = rig.ModelPosition(CharacterBone.Neck), axis = b - a;
-            float len2 = axis.sqrMagnitude;
-            if (len2 < 1e-6f) return target;
-            float u = Vector3.Dot(target - a, axis) / len2;
-            if (u < 0f || u > 1f) return target;
-            Vector3 c = a + axis * u;
-            Quaternion chest = rig.GetModelRotation(CharacterBone.Chest);
-            Vector3 o = Quaternion.Inverse(chest) * (target - c);
-            float rx = (TorsoSide + FistRoom) * hs, rz = ((o.z >= 0f ? TorsoFront : TorsoBack) + FistRoom) * hs;
-            float k = (o.x / rx) * (o.x / rx) + (o.z / rz) * (o.z / rz);
-            if (k >= 1f) return target;
-            if (k < 1e-6f) o = new Vector3(0f, o.y, rz);
-            else { float s = 1f / Mathf.Sqrt(k); o.x *= s; o.z *= s; }
-            return c + chest * o;
-        }
+        public static Vector3 KeepOutOfTorso(CharacterRig rig, Vector3 target, float hs) => KeepOutOfTorsoRoom(rig, target, FistRoom, hs);
 
         /// <summary>Is p inside the torso (the elliptic cylinder of <see cref="KeepOutOfTorso"/>) grown by room (design metres)?</summary>
         public static bool InsideTorso(CharacterRig rig, Vector3 p, float room, float hs)
@@ -529,10 +539,28 @@ namespace LightMMORPG.Characters
             float len2 = axis.sqrMagnitude;
             if (len2 < 1e-6f) return false;
             float u = Vector3.Dot(p - a, axis) / len2;
-            if (u < -0.05f || u > 1.05f) return false;
+            // the girth fades out just past the hips and the neck (an edge here made the elbow step)
+            float g = Smooth(-0.05f, 0.05f, u) * Smooth(1.05f, 0.9f, u);
+            if (g <= 0f) return false;
             Vector3 o = Quaternion.Inverse(rig.GetModelRotation(CharacterBone.Chest)) * (p - (a + axis * u));
-            float rx = (TorsoSide + room) * hs, rz = ((o.z >= 0f ? TorsoFront : TorsoBack) + room) * hs;
+            float rx = (TorsoSide + room) * hs * g, rz = ((o.z >= 0f ? TorsoFront : TorsoBack) + room) * hs * g;
             return (o.x / rx) * (o.x / rx) + (o.z / rz) * (o.z / rz) < 1f;
+        }
+
+        /// <summary>
+        /// Turns a towards b round <paramref name="axis"/> (both perpendicular to it) by t: an even swing. A plain lerp between two
+        /// far-apart aims barely moves and then flips through the middle in a frame (the heavy's elbow whipped up from the guard).
+        /// Almost opposite, it goes round by <paramref name="outside"/> (the outside of the arm), not through the body.
+        /// </summary>
+        private static Vector3 TurnTowards(Vector3 a, Vector3 b, float t, Vector3 axis, Vector3 outside)
+        {
+            float ang = Mathf.Atan2(Vector3.Dot(axis, Vector3.Cross(a, b)), Mathf.Clamp(Vector3.Dot(a, b), -1f, 1f)) * Mathf.Rad2Deg;
+            if (Mathf.Abs(ang) > 150f)
+            {
+                float alt = ang - Mathf.Sign(ang) * 360f;
+                if (Vector3.Dot(Quaternion.AngleAxis(alt * 0.5f, axis) * a, outside) > Vector3.Dot(Quaternion.AngleAxis(ang * 0.5f, axis) * a, outside)) ang = alt;
+            }
+            return (Quaternion.AngleAxis(ang * t, axis) * a).normalized;
         }
 
         /// <summary>
@@ -540,8 +568,9 @@ namespace LightMMORPG.Characters
         /// (<see cref="CharacterRig.RestArm"/>), so a swinging arm doesn't roll about itself and wring the shoulder; for big
         /// raises (70°-120° from rest and beyond: guard, fist at the chin) it blends to down, out and a little back in the chest's
         /// frame. A pose's own elbow aim (<paramref name="hint"/>, <see cref="AttackPose.ElbowL"/> / <see cref="AttackPose.ElbowR"/>
-        /// in the chest's frame, its length the weight) overrides that. If the elbow would sink into the torso (the run's fist under
-        /// the chin with the body leant far forward), it swings out to the side, step by step, until it clears.
+        /// in the chest's frame, its length the weight) overrides that, turned to round the arm (<see cref="TurnTowards"/>). If the
+        /// elbow would sink into the torso (the run's fist under the chin with the body leant far forward), it swings round to the
+        /// outside just far enough to clear it (found in tenths, then halved down to the edge, so it slides instead of stepping).
         /// </summary>
         public static Vector3 ElbowPole(CharacterRig rig, int side, Vector3 shoulder, Vector3 fist, Quaternion chest, float hs, Vector3 hint = default)
         {
@@ -567,21 +596,26 @@ namespace LightMMORPG.Characters
             if (hw > 1e-4f)
             {
                 Vector3 aim = Perp(chest * hint);
-                if (aim != Vector3.zero)
-                {
-                    Vector3 p = Vector3.Lerp(basePole, aim, Mathf.Min(1f, hw)).normalized;
-                    if (p != Vector3.zero) basePole = p;
-                }
+                if (aim != Vector3.zero) basePole = TurnTowards(basePole, aim, Mathf.Min(1f, hw), dir, outward);
             }
             float angA = Mathf.Acos(Mathf.Clamp((l1 * l1 + dist * dist - l2 * l2) / (2f * l1 * dist), -1f, 1f));
-            Vector3 d = basePole;
+            Vector3 along = dir * (Mathf.Cos(angA) * l1);
+            float off = Mathf.Sin(angA) * l1;
+            bool Sinks(float t) => InsideTorso(rig, shoulder + along + TurnTowards(basePole, outward, t, dir, outward) * off, 0.05f, hs);
+            float lo = 0f, hi = -1f;
             for (int i = 0; i <= 10; i++)
             {
-                d = Vector3.Lerp(basePole, outward, i / 10f).normalized;
-                Vector3 elbow = shoulder + dir * (Mathf.Cos(angA) * l1) + d * (Mathf.Sin(angA) * l1);
-                if (!InsideTorso(rig, elbow, 0.05f, hs)) break;
+                float t = i / 10f;
+                if (!Sinks(t)) { hi = t; break; }
+                lo = t;
             }
-            return shoulder + d * hs;
+            if (hi > 0f)
+                for (int k = 0; k < 6; k++)
+                {
+                    float m = (lo + hi) * 0.5f;
+                    if (Sinks(m)) lo = m; else hi = m;
+                }
+            return shoulder + TurnTowards(basePole, outward, hi < 0f ? 1f : hi, dir, outward) * hs;
         }
 
         // the fist, measured on the base body: centre 7 cm past the wrist joint in the hand's frame, ~5.5 cm round (+1 cm margin)
@@ -597,9 +631,12 @@ namespace LightMMORPG.Characters
 
         /// <summary>
         /// How far a fist centre must move to clear the body: the shoulder girdle (an ellipsoid round the posed shoulders and upper
-        /// chest, 0.27 wide, 0.14 high, 0.14 / 0.13 deep, which the torso cylinder is too narrow for; left out through its front or
-        /// back so a guard stays in front of the chest) and the torso cylinder. Zero when clear. The guard fist used to sink up to
-        /// 5 cm into the front of its own shoulder during punches.
+        /// chest, 0.27 wide, 0.14 high, 0.14 / 0.13 deep, which the torso cylinder is too narrow for) and the torso cylinder. Zero
+        /// when clear. The guard fist used to sink up to 5 cm into the front of its own shoulder during punches. A fist is let out
+        /// through the girdle's front, so a guard stays in front of the chest instead of flying out wide; only well behind the
+        /// shoulders' plane does it go out along the ellipsoid's radius (back / up / out), blended in between. The plain
+        /// front-or-back choice flipped the run's fist at the chin (over the top of the leaning shoulders) to behind the neck and
+        /// back every stride, the arm wringing round with it.
         /// </summary>
         public static Vector3 FistClearance(CharacterRig rig, Vector3 c, float hs)
         {
@@ -612,8 +649,9 @@ namespace LightMMORPG.Characters
             Vector3 push = Vector3.zero;
             if (s < 1f)
             {
-                float zs = Mathf.Sqrt(Mathf.Max(0f, 1f - (o.x / ax) * (o.x / ax) - (o.y / ay) * (o.y / ay))) * az;
-                push = chest * new Vector3(0f, 0f, (o.z >= 0f ? zs : -zs) - o.z);
+                float zFront = Mathf.Sqrt(Mathf.Max(0f, 1f - (o.x / ax) * (o.x / ax) - (o.y / ay) * (o.y / ay))) * (0.14f + FistRadius) * hs;
+                Vector3 front = new Vector3(0f, 0f, zFront - o.z), radial = o * (1f / Mathf.Sqrt(Mathf.Max(s, 1e-6f)) - 1f);
+                push = chest * Vector3.Lerp(radial, front, Smooth(-0.6f * az, -0.2f * az, o.z));
             }
             Vector3 p = c + push;
             return push + (KeepOutOfTorsoRoom(rig, p, FistRadius, hs) - p);
@@ -625,11 +663,12 @@ namespace LightMMORPG.Characters
             float len2 = axis.sqrMagnitude;
             if (len2 < 1e-6f) return target;
             float u = Vector3.Dot(target - a, axis) / len2;
-            if (u < 0f || u > 1f) return target;
+            float g = Girth(u);
+            if (g <= 0f) return target;
             Vector3 c = a + axis * u;
             Quaternion chest = rig.GetModelRotation(CharacterBone.Chest);
             Vector3 o = Quaternion.Inverse(chest) * (target - c);
-            float rx = (TorsoSide + room) * hs, rz = ((o.z >= 0f ? TorsoFront : TorsoBack) + room) * hs;
+            float rx = (TorsoSide + room) * hs * g, rz = ((o.z >= 0f ? TorsoFront : TorsoBack) + room) * hs * g;
             float k = (o.x / rx) * (o.x / rx) + (o.z / rz) * (o.z / rz);
             if (k >= 1f) return target;
             if (k < 1e-6f) o = new Vector3(0f, o.y, rz);
