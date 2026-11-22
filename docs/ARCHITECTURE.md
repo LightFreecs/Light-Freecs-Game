@@ -969,3 +969,24 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
   - New rule from the owner (`CLAUDE.md`): every animation is made in Blender. This wind-up predates the rule and was accepted
     "for now". Nothing moves keys between Blender and `BasicMovesets` yet.
   - Verified: headless compile only (owner tests by hand). Not seen in game on the Toon Head + hair.
+- Blender key bridge (2026-11-22): `tools/attack_keys_blender.py` moves player attacks between `BuildRush` and `PlayerRig`.
+  No game code or animation changed.
+  - Workflow: `blender --background --python tools/attack_keys_blender.py -- load heavy` adds the control bones and one action
+    per move (`Rush.windup`, `Rush.swing`, `Rush.coiled`; one keyframe per `AttackKey`, 100 fps) to `ArtSource/Player/player.blend`.
+    Open the file, run the script from the Text Editor (installs the live solver), and key the `c.*` bones. `-- export heavy` writes
+    `ArtSource/Player/export/heavy.cs.txt`, C# to paste into `BuildRush`; update `Hit`, `Streak` and `Length` by hand if the timing
+    changed (export warns when the last key no longer matches `Length`). `-- check <move>` is the round-trip test and saves nothing.
+  - Controls hold the game's own numbers in armature space (the rig's display turn stays on the object): `c.Root`, `c.Hips`,
+    `c.Torso`, `c.Head`, fist targets `c.ArmL/R` (custom properties `Twist`, `Open`), elbow aims `c.ElbowL/R` (chest frame, from the
+    shoulder, length = weight), foot targets `c.LegL/R` (pitch, yaw). Body bones are solved, never keyed. `AttackPose` has no knee
+    value: the knee follows the foot's yaw.
+  - Eases are Blender's exact curves on the key before the segment: Smooth = Sine in-out, Snap = Quintic out, In = Quadratic in.
+  - `load` refuses to replace an existing action without `--force`. `basebody_blender.py import` rebuilds `player.blend` from
+    scratch and would delete the actions and controls, so export first.
+  - The game's solver keeps state between frames: the left fist's clearance reads the right collarbone from the previous frame, which
+    moved the left elbow up to 4 cm on some keys depending on what came before. The tool solves each pose until it settles (a held
+    frame); a fast transition in game can differ from it by up to that much.
+  - Verified on all 37 Rush keys: values round-trip through Blender and the exported C# within 0.0001 m / 0.001° (tolerance; measured
+    zero after rounding); the heavy's 688 values equal the bench's tables; all 42 joints match the solver copy in
+    `docs/bench/heavy-windup-bench.html` within 0.001 mm; the exported heavy compiles against the game's types. Run headless on copies
+    of the .blend: the live solver was driven by frame changes, not by dragging in the GUI, and nothing was played in Unity.
