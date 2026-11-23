@@ -1,7 +1,8 @@
 // LightMMORPG/AnimeAura - the anime flame aura (charging, Power Surge), a real 3D flame round the fighter.
 // The shape is modelled in Blender (tools/aura_blender.py, ArtSource/Aura/aura.blend) and baked to Resources/VFX/AuraFlame.bytes:
 // rings of flame blades over an inner skin, whose silhouette from any side is the owner's traced "pine tree" outline. It rises as
-// eight hand-drawn drawings (AnimeAura.cs swaps the mesh, 4 drawings lift every ring one tier in 0.45 s, like the reference clip).
+// eight Blender keys (4 keys lift every ring one tier in 0.45 s, like the reference clip); each mesh also holds the next key and
+// the vertex shader glides between them (_Morph), so the rise is smooth at any frame rate.
 // Keep in step with docs/bench/aura-bench.html (same code in GLSL).
 // Mesh space ("aura units"): x right, y up, z forward, feet at 0, the outline's peak at y = 1.
 // The vertex shader bends the flame along the fighter's spine (sideways only, so it keeps rising) and sorts it: _Front = 0 draws
@@ -16,6 +17,7 @@ Shader "LightMMORPG/AnimeAura"
         _Strength ("Size (charging 0.72-0.92, surge 1)", Range(0.3, 1.2)) = 1
         _Fade ("Fade", Range(0, 1)) = 1
         _Front ("Layer: 0 far side, 1 near side", Float) = 0
+        _Morph ("Blend to the next key", Range(0, 1)) = 0
         _BendA ("Spine offset (x, z)", Vector) = (0, 0, 0, 0)
         _BendB ("Spine slope (x, z)", Vector) = (0, 0, 0, 0)
         _BendC ("Spine curve (x, z)", Vector) = (0, 0, 0, 0)
@@ -48,6 +50,7 @@ Shader "LightMMORPG/AnimeAura"
                 float _Strength;
                 float _Fade;
                 float _Front;
+                float _Morph;
                 float4 _BendA;
                 float4 _BendB;
                 float4 _BendC;
@@ -62,6 +65,8 @@ Shader "LightMMORPG/AnimeAura"
                 float3 normalOS : NORMAL;
                 float4 data : TEXCOORD0;    // across, along, edge, rnd
                 float2 misc : TEXCOORD1;    // az (the blade's direction from the axis), kind (0 blade, 1 skin, 2 flick)
+                float4 next : TEXCOORD2;    // this vertex in the next key: x, y, z, edge
+                float3 nextNormal : TEXCOORD3;
             };
 
             struct Varyings
@@ -109,13 +114,16 @@ Shader "LightMMORPG/AnimeAura"
                     return o;
                 }
                 float2 slope;
-                float2 b = Bend(v.positionOS.y, slope);
-                float3 p = v.positionOS + float3(b.x, 0.0, b.y);
-                o.normal = float3(v.normalOS.x, v.normalOS.y - slope.x * v.normalOS.x - slope.y * v.normalOS.z, v.normalOS.z);
+                float3 base = lerp(v.positionOS, v.next.xyz, _Morph);
+                float3 nor = lerp(v.normalOS, v.nextNormal, _Morph);
+                float2 b = Bend(base.y, slope);
+                float3 p = base + float3(b.x, 0.0, b.y);
+                o.normal = float3(nor.x, nor.y - slope.x * nor.x - slope.y * nor.z, nor.z);
                 o.data = v.data;
+                o.data.z = lerp(v.data.z, v.next.w, _Morph);
                 o.kind = v.misc.y;
                 o.view = camOS - p;
-                o.depth = dot(v.positionOS.xz, toCam) / max(length(v.positionOS.xz), 0.04);
+                o.depth = dot(base.xz, toCam) / max(length(base.xz), 0.04);
                 // where the view ray through this point crosses the plane through the fighter: the see-through arch is measured there
                 float3 nPlane = float3(toCam.x, 0.0, toCam.y);
                 float3 d = p - camOS;
@@ -163,7 +171,7 @@ Shader "LightMMORPG/AnimeAura"
                 float3 N = normalize(i.normal), V = normalize(i.view);
                 if (dot(N, V) < 0.0) N = -N;
                 float t = _Time.y + _Seed;
-                float tn = floor(t * 24.0) / 24.0;
+                float tn = t;
                 float str = VNoise(float2(across * 2.2 + rnd * 17.0, along * 2.4 - tn * 3.0)) * 0.7
                           + VNoise(float2(across * 5.0 + rnd * 31.0, along * 4.0 - tn * 4.2)) * 0.3;
                 float limb = 1.0 - abs(i.depth);                                    // 1 where the flame turns away at its outline, 0 facing the camera

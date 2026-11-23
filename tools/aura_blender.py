@@ -9,9 +9,10 @@ The aura keeps the owner's traced outline (TIP / NOTCH, the numbers the flat sha
 that flame "pine tree". What's new is that it is a real shape: rings of flame blades (one ring per traced tier, each blade's
 profile is that tier's root -> tip -> notch) over an inner skin of wider tongues, wrapped round the fighter.
 
-It animates like the reference clip, as hand-drawn drawings: 4 drawings lift every ring one tier (0.45 s), the bottom ring grows
-out of the base and the top one melts into the spire. Eight drawings (two tiers) make the loop, and each one is a mesh of its own
-(Aura.d0 .. Aura.d7, same topology), keyed on the timeline: scrub it, or edit a drawing by hand and run `export`.
+It rises like the reference clip: 4 keys lift every ring one tier (0.45 s), the bottom ring grows out of the base and the top one
+melts into the spire. Eight keys (two tiers) make the loop, each a mesh of its own (Aura.d0 .. Aura.d7, same topology, keyed on the
+timeline), and Aura.d8 closes it. The game blends smoothly from each key to the next (owner 2026-11-22: stepped drawings weren't
+smooth). Scrub them, or edit a key by hand and run `export`; if you edit d0, make the same edit in d8's matching ring.
 
 Mesh space ("aura units"): the game's axes (x right, y up, z forward), feet at 0, the outline's peak at y = 1. The game scales it
 to the fighter and bends it along the spine in the vertex shader (Resources/VFX/AnimeAura.shader). Per-vertex attributes:
@@ -215,8 +216,17 @@ def boil(drawing, ident, i, size=0.014):
     return ((hash01(drawing, ident, i, 11) - 0.5) * size, (hash01(drawing, ident, i, 12) - 0.5) * size)
 
 
+def collapse(g, start):
+    """A blade that isn't alive in this key becomes one point, so blending to its next place can't draw a sliver across the aura."""
+    for i in range(start, len(g.co)):
+        g.co[i] = g.co[start]
+        g.edge[i] = 0.0
+
+
 def build_drawing(d):
+    """Key d of the loop. Key 8 is key 0 with every ring two places on: the same picture, but each vertex carries on from key 7."""
     g = Geo()
+    look = d % DRAWINGS                          # the boil and flicker repeat with the loop
     pitch = TAU / BLADES
     order = list(reversed(range(RINGS)))         # the higher rings first: each lower ring's tips lie over the one above
     # inner skin
@@ -227,7 +237,10 @@ def build_drawing(d):
         for k in range(BLADES):
             rnd = hash01(5, cls, k)
             phi = pitch * (k + 0.5 * cls + 0.5) + SWIRL * tau + (hash01(6, cls, k) - 0.5) * 0.16
+            start = len(g.co)
             add_skin(g, min(tau, 7.0), amp, phi, pitch * (0.60 + 0.14 * rnd), rnd)
+            if amp <= 0.0:
+                collapse(g, start)
     # the flame blades: the traced tiers
     for ring in order:
         tau = ring_place(ring, d)
@@ -242,21 +255,24 @@ def build_drawing(d):
                 root = tip = notch = TIP[7]
             reach = (1.0 + (hash01(3, cls, k) - 0.5) * 0.2 * amp) * (1.0 + (REACH - 1.0) * amp)
             tip = (root[0] + (tip[0] - root[0]) * reach, root[1] + (tip[1] - root[1]) * reach)
-            bt, bn = boil(d, ident, 1), boil(d, ident, 2)
+            bt, bn = boil(look, ident, 1), boil(look, ident, 2)
             tip = (tip[0] + bt[0] * amp, tip[1] + bt[1] * amp)
             notch = (notch[0] + bn[0] * amp, notch[1] + bn[1] * amp)
             curl = (hash01(4, cls, k) - 0.3) * 0.5
+            start = len(g.co)
             add_blade(g, root, tip, notch, phi, pitch * (0.34 + 0.14 * rnd) * max(amp, 0.0), curl, 0.3, rnd)
+            if amp <= 0.0:
+                collapse(g, start)
     # the spire: three thin blades meeting at the one peak, which flickers (+-3 %) from drawing to drawing
-    peak = 1.0 + (hash01(d, 99) - 0.5) * 0.06
+    peak = 1.0 + (hash01(look, 99) - 0.5) * 0.06
     for i in range(3):
         rnd = hash01(20, i)
-        b = boil(d, 300 + i, 1)
-        phi = TAU * i / 3.0 + 0.4 + SWIRL * d / 4.0
+        b = boil(look, 300 + i, 1)
+        phi = TAU * i / 3.0 + 0.4 + 0.12 * math.sin(TAU * d / DRAWINGS)
         add_blade(g, (0.088, 0.800), (0.006 + b[0] * 0.4, peak), (0.046, 0.872), phi, 0.75, 0.3, 0.25, rnd)
-    # flicks rising inside: each is born, climbs and dies once a loop, so the loop closes
+    # flicks rising inside: each is born (size 0), climbs and dies (size 0) over the loop's keys, so it never visibly jumps back
     for i in range(FLICKS):
-        u = (d / float(DRAWINGS) + hash01(30, i)) % 1.0
+        u = ((look + int(hash01(30, i) * DRAWINGS)) % DRAWINGS) / (DRAWINGS - 1.0)
         size = math.sin(math.pi * u)
         az = TAU * hash01(31, i)
         r = 0.05 + 0.17 * hash01(32, i)
@@ -347,7 +363,7 @@ def build():
     root.matrix_world = DISPLAY @ Matrix.Scale(PREVIEW_SCALE, 4)
     root.empty_display_size = 0.1
     counts = set()
-    for d in range(DRAWINGS):
+    for d in range(DRAWINGS + 1):        # + the closing key (Aura.d8, never shown: where each vertex of d7 is heading)
         name = "Aura.d%d" % d
         g = build_drawing(d)
         counts.add((len(g.co), len(g.tris)))
@@ -360,7 +376,11 @@ def build():
         fill_mesh(ob.data, g)
         if mat.name not in [m.name for m in ob.data.materials if m]:
             ob.data.materials.append(mat)
-        key_visibility(ob, d)
+        if d < DRAWINGS:
+            key_visibility(ob, d)
+        else:
+            ob.animation_data_clear()
+            ob.hide_viewport = ob.hide_render = True
     if len(counts) != 1:
         sys.exit("the drawings don't share a topology: %s" % counts)
     scene = bpy.context.scene
@@ -538,8 +558,8 @@ def attr(me, name):
 
 
 def export():
-    """File (little endian): 'AUR1', int drawings, vertices, indices; ushort indices (padded to 4 bytes); per vertex 4 bytes shared
-    by all drawings (across, along, rnd as unorm8, kind); then per drawing, per vertex 12 bytes: x, y, z, edge (snorm16, /2 = aura
+    """File (little endian): 'AUR2', int drawings, vertices, indices; ushort indices (padded to 4 bytes); per vertex 4 bytes shared
+    by all drawings (across, along, rnd as unorm8, kind); then per key (drawings + 1: the last closes the loop), per vertex 12 bytes: x, y, z, edge (snorm16, /2 = aura
     units doubled so the range fits), nx, ny, nz (snorm8), az (snorm8, x pi)."""
     first = bpy.data.objects["Aura.d0"].data
     n_v = len(first.vertices)
@@ -548,14 +568,14 @@ def export():
     if n_v > 65535:
         sys.exit("too many vertices")
     across, along, rnd, kind = attr(first, "across"), attr(first, "along"), attr(first, "rnd"), attr(first, "kind")
-    blob = bytearray(b"AUR1")
+    blob = bytearray(b"AUR2")
     blob += struct.pack("<iii", DRAWINGS, n_v, len(indices))
     blob += struct.pack("<%dH" % len(indices), *indices)
     while len(blob) % 4:
         blob += b"\0"
     for i in range(n_v):
         blob += bytes((un8(across[i] * 0.5 + 0.5), un8(along[i]), un8(rnd[i]), int(kind[i])))
-    for d in range(DRAWINGS):
+    for d in range(DRAWINGS + 1):
         me = bpy.data.objects["Aura.d%d" % d].data
         if len(me.vertices) != n_v or [tuple(p.vertices) for p in me.polygons] != tris:
             sys.exit("Aura.d%d no longer has the same topology as Aura.d0: move vertices only" % d)

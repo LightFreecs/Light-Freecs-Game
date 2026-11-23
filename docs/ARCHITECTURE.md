@@ -780,6 +780,10 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
       bold read), the far side is a darker wall, the near side clears the see-through arch (measured where the view ray
       crosses the fighter's plane; its edge is ragged per blade). No MSAA in the project: blade edges are antialiased in the
       shader from the `edge` attribute.
+    - Smooth rise + upright charge (2026-11-22, owner: the stepped motion "doesn't look smooth", and no forward bend while
+      charging). The rise speed is unchanged, but each mesh now also holds the next key (`Aura.d8` closes the loop: d0 with
+      every ring two places on) and the vertex shader blends them (`_Morph`); rings that aren't alive collapse to one point so
+      they can't streak across. `AnimeAura.Lean` scales the spine bend; `PlayerAura` sets 0 while charging, 1 otherwise.
     - Verified: headless compile, the AnimeAura pass compiled in batchmode (Direct3D11, 0 messages), and the bench (same shader
       in GLSL) on the real charge / surge poses from every side and from the game's camera. In those poses the head was
       58-67 % inside the arch in the worst (side) view before and is 100 % inside from every yaw now. Not played in Unity yet.

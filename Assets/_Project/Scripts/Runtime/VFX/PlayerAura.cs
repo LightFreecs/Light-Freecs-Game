@@ -55,6 +55,7 @@ namespace LightMMORPG.VFX
             float size = surge ? 1f : charging ? Mathf.Lerp(0.72f, 0.92f, power) : 0f;
             if (heavy > 0f) size = Mathf.Max(size, Mathf.Lerp(0.62f, 0.95f, heavy));
             _aura.Size = size;
+            _aura.Lean = charging ? 0f : 1f;   // the charge stance bows forward: the flame stays upright round it
         }
     }
 }
