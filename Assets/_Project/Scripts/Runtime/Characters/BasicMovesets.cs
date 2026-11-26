@@ -17,6 +17,11 @@ namespace LightMMORPG.Characters
         public float TorsoYaw, TorsoPitch, TorsoRoll;
         public float HeadYaw, HeadPitch;
         public Vector3 ArmL, ArmR; public float TwistL, TwistR;
+        /// <summary>
+        /// The wrist bent sideways, degrees: + towards the little finger (a held sword's blade swings forward, into line with the
+        /// forearm), − towards the thumb. Zero = straight (every fist move). Applied after the fist roll (<see cref="AttackPoseSolver.Apply"/>).
+        /// </summary>
+        public float WristL, WristR;
         /// <summary>Hands: 0 = fist (every attack), 1 = open flat hand (the run's arm thrown back).</summary>
         public float OpenL, OpenR;
         /// <summary>
@@ -41,6 +46,7 @@ namespace LightMMORPG.Characters
             o.HeadYaw = L(a.HeadYaw, b.HeadYaw); o.HeadPitch = L(a.HeadPitch, b.HeadPitch);
             o.ArmL = Vector3.LerpUnclamped(a.ArmL, b.ArmL, t); o.ArmR = Vector3.LerpUnclamped(a.ArmR, b.ArmR, t);
             o.TwistL = L(a.TwistL, b.TwistL); o.TwistR = L(a.TwistR, b.TwistR);
+            o.WristL = L(a.WristL, b.WristL); o.WristR = L(a.WristR, b.WristR);
             o.OpenL = L(a.OpenL, b.OpenL); o.OpenR = L(a.OpenR, b.OpenR);
             o.ElbowL = Vector3.LerpUnclamped(a.ElbowL, b.ElbowL, t); o.ElbowR = Vector3.LerpUnclamped(a.ElbowR, b.ElbowR, t);
             o.LegL = Vector3.LerpUnclamped(a.LegL, b.LegL, t); o.LegR = Vector3.LerpUnclamped(a.LegR, b.LegR, t);
@@ -63,6 +69,7 @@ namespace LightMMORPG.Characters
             o.HeadYaw = S(a.HeadYaw, b.HeadYaw, c.HeadYaw, d.HeadYaw); o.HeadPitch = S(a.HeadPitch, b.HeadPitch, c.HeadPitch, d.HeadPitch);
             o.ArmL = a.ArmL * wa + b.ArmL * wb + c.ArmL * wc + d.ArmL * wd; o.ArmR = a.ArmR * wa + b.ArmR * wb + c.ArmR * wc + d.ArmR * wd;
             o.TwistL = S(a.TwistL, b.TwistL, c.TwistL, d.TwistL); o.TwistR = S(a.TwistR, b.TwistR, c.TwistR, d.TwistR);
+            o.WristL = S(a.WristL, b.WristL, c.WristL, d.WristL); o.WristR = S(a.WristR, b.WristR, c.WristR, d.WristR);
             o.OpenL = S(a.OpenL, b.OpenL, c.OpenL, d.OpenL); o.OpenR = S(a.OpenR, b.OpenR, c.OpenR, d.OpenR);
             o.ElbowL = a.ElbowL * wa + b.ElbowL * wb + c.ElbowL * wc + d.ElbowL * wd; o.ElbowR = a.ElbowR * wa + b.ElbowR * wb + c.ElbowR * wc + d.ElbowR * wd;
             o.LegL = a.LegL * wa + b.LegL * wb + c.LegL * wc + d.LegL * wd; o.LegR = a.LegR * wa + b.LegR * wb + c.LegR * wc + d.LegR * wd;
@@ -88,6 +95,7 @@ namespace LightMMORPG.Characters
             o.TorsoYaw = -a.TorsoYaw; o.TorsoPitch = a.TorsoPitch; o.TorsoRoll = -a.TorsoRoll;
             o.HeadYaw = -a.HeadYaw; o.HeadPitch = a.HeadPitch;
             o.ArmL = M(a.ArmR); o.ArmR = M(a.ArmL); o.TwistL = -a.TwistR; o.TwistR = -a.TwistL; o.OpenL = a.OpenR; o.OpenR = a.OpenL;
+            o.WristL = a.WristR; o.WristR = a.WristL;   // anatomical (towards the little finger on either hand), so no sign flip
             o.ElbowL = M(a.ElbowR); o.ElbowR = M(a.ElbowL);
             o.LegL = M(a.LegR); o.LegR = M(a.LegL); o.FootYawL = -a.FootYawR; o.FootYawR = -a.FootYawL; o.FootPitchL = a.FootPitchR; o.FootPitchR = a.FootPitchL;
         }
@@ -180,6 +188,11 @@ namespace LightMMORPG.Characters
         public AttackMove Charge;
         /// <summary>Power Surge: the burst, played once when it's activated.</summary>
         public AttackMove Surge;
+        /// <summary>
+        /// Sword skills' strikes (the sword stance's set; null elsewhere): <c>Combat/SwordSkills</c> plays them by index, one per strike,
+        /// each started on the skill's schedule and cross-faded from the strike before.
+        /// </summary>
+        public AttackMove[] Skills;
 
         public AttackMove Move(int comboIndex) => Moves[((comboIndex % Moves.Length) + Moves.Length) % Moves.Length];
     }
@@ -207,12 +220,14 @@ namespace LightMMORPG.Characters
 
     /// <summary>
     /// The basic-attack movesets. Built so fighters can later equip one from an inventory: everything that plays a basic
-    /// attack asks for a set by id (<see cref="Get"/>), and adding a set is adding an entry to <see cref="All"/>. Today there is
-    /// one, <see cref="Rush"/>, the default for every fighter.
+    /// attack asks for a set by id (<see cref="Get"/>), and adding a set is adding an entry to <see cref="All"/>. Today there are
+    /// two: <see cref="Rush"/>, the default for every fighter, and <see cref="Sword"/>, played while the sword is drawn.
     /// </summary>
     public static class BasicMovesets
     {
         public const string DefaultId = "rush";
+        /// <summary>The sword stance's set (<c>PlayerCombat</c> switches a fighter's animator to it while the sword is drawn).</summary>
+        public const string SwordId = "sword";
 
         /// <summary>
         /// "Rush", from the owner's reference clip (a straight-punch rush): left straight, right straight, left body blow,
@@ -222,7 +237,10 @@ namespace LightMMORPG.Characters
         /// </summary>
         public static readonly BasicMoveset Rush = BuildRush();
 
-        public static readonly IReadOnlyList<BasicMoveset> All = new[] { Rush };
+        /// <summary>The sword stance: slashes, a thrust, the sword skills' pre-motion and strikes (<see cref="BuildSword"/>).</summary>
+        public static readonly BasicMoveset Sword = BuildSword(Rush);
+
+        public static readonly IReadOnlyList<BasicMoveset> All = new[] { Rush, Sword };
 
         private static readonly Dictionary<string, BasicMoveset> ById = BuildIndex();
 
@@ -602,6 +620,679 @@ namespace LightMMORPG.Characters
                 Id = DefaultId, Name = "Rush", Guard = guard, Moves = new[] { left, right, body, power }, Heavy = heavy, Charge = charge, Surge = surge,
             };
         }
+
+        /// <summary>
+        /// "Sword", the sword stance (docs/COMBAT_PLAN.md phase 2, 2026-11-26): posed and keyed in Blender on PlayerRig
+        /// (ArtSource/Player/player.blend, actions Sword.*), exported with tools/attack_keys_blender.py (<c>-- export sword</c>) and checked on
+        /// the game's solver (docs/bench/sword-bench.html). The blade is VFX/SwordVisual's, in the right fist on the thumb side; every key
+        /// bends the wrist (<see cref="AttackPose.WristR"/>) and rolls the fist (<see cref="AttackPose.TwistR"/>) so the blade points where
+        /// the cut needs it and travels edge first (at each hit the fist is still on the side the cut comes from, the blade reaching
+        /// across the target). Light combo: diagonal slash down-right, rising slash back, horizontal sweep, thrust (finisher). Heavy = the
+        /// sword skills' pre-motion (low stance, blade drawn back at the hip, tip forward); its Swing, when there's no energy for a skill,
+        /// is the Comet Thrust. <see cref="BasicMoveset.Skills"/> = the strikes of <c>Combat/SwordSkills</c>. Charge and Surge are Rush's.
+        /// </summary>
+        private static BasicMoveset BuildSword(BasicMoveset rush)
+        {
+            AttackKey K(float t, KeyEase e, AttackPose p) => new() { T = t, Ease = e, Pose = p };
+
+            // the guard between combo hits: the fist low at the right hip, the blade angled up at the opponent, the left hand open
+            var guard = new AttackPose
+            {
+                RootYaw = 16f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 6f, HipsPitch = 4f, TorsoYaw = 4f,
+                TorsoPitch = 8f, HeadPitch = -4f, ArmL = new Vector3(-0.16f, 1.36f, 0.36f), TwistL = -10f, OpenL = 0.6f,
+                ArmR = new Vector3(0.333f, 1.1f, 0.1174f), TwistR = -1.19f, WristR = -3.86f,
+                ElbowR = new Vector3(0.2734f, -0.5991f, -0.7525f), LegL = new Vector3(-0.19f, 0.105f, 0.26f), FootYawL = 12f,
+                LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+            };
+            // the pre-motion held at full charge: lower, the hand drawn further back, the tip a touch higher
+            var coiled = new AttackPose
+            {
+                RootPos = new Vector3(0f, 0f, -0.08f), RootYaw = 26f, HipsPos = new Vector3(0f, -0.34f, 0f), HipsYaw = 6.5f,
+                HipsPitch = 12f, TorsoYaw = 8f, TorsoPitch = 30f, HeadPitch = -18f, ArmL = new Vector3(-0.3f, 1.3f, 0.7f),
+                TwistL = -40f, OpenL = 0.95f, ArmR = new Vector3(0.3317f, 0.8475f, 0.0056f), TwistR = 1.15f, WristR = 15.79f,
+                ElbowR = new Vector3(0.556f, -0.6859f, -0.4695f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+            };
+            // diagonal slash down-right: a backhand from over the left shoulder down across to the right hip
+            var slash1 = new AttackMove
+            {
+                Name = "Diagonal slash", Limb = StrikeLimb.HandR, Hit = 0.1f, Streak = new Vector2(0.05f, 0.21f), Length = 0.4f,
+                Keys = new[]
+                {
+                    K(0f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 16f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 6f, HipsPitch = 4f, TorsoYaw = 4f,
+                        TorsoPitch = 8f, HeadPitch = -4f, ArmL = new Vector3(-0.16f, 1.36f, 0.36f), TwistL = -10f, OpenL = 0.6f,
+                        ArmR = new Vector3(0.333f, 1.1f, 0.1174f), TwistR = -1.19f, WristR = -3.86f,
+                        ElbowR = new Vector3(0.2734f, -0.5991f, -0.7525f), LegL = new Vector3(-0.19f, 0.105f, 0.26f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                    K(0.05f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = -30f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = -7.5f, HipsPitch = 4f, TorsoYaw = -18f,
+                        TorsoPitch = 2f, HeadPitch = -8f, ArmL = new Vector3(-0.1f, 1.3f, 0.3f), TwistL = -20f, OpenL = 0.5f,
+                        ArmR = new Vector3(-0.2006f, 1.7086f, 0.4275f), TwistR = -63.24f, WristR = 29.5f,
+                        ElbowR = new Vector3(0.8223f, -0.5033f, 0.2656f), LegL = new Vector3(-0.19f, 0.105f, 0.26f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                    K(0.1f, KeyEase.In, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.1f), RootYaw = 4f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 1f,
+                        HipsPitch = 4f, TorsoYaw = 1.2f, TorsoPitch = 12f, HeadPitch = -4f, ArmL = new Vector3(-0.32f, 1.22f, 0.05f),
+                        TwistL = -25f, OpenL = 0.75f, ArmR = new Vector3(0.284f, 1.4885f, 0.6578f), TwistR = -157.2f, WristR = 35.76f,
+                        ElbowR = new Vector3(-0.0011f, -0.9849f, 0.1731f), LegL = new Vector3(-0.19f, 0.105f, 0.34f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                    K(0.21f, KeyEase.Snap, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.12f), RootYaw = 24f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 6f,
+                        HipsPitch = 4f, TorsoYaw = 10f, TorsoPitch = 16f, HeadPitch = -4f, ArmL = new Vector3(-0.34f, 1.3f, 0.2f),
+                        TwistL = -25f, OpenL = 0.75f, ArmR = new Vector3(0.4969f, 1.1772f, 0.2443f), TwistR = -133.2f, WristR = 22.83f,
+                        ElbowR = new Vector3(-0.2918f, -0.88f, -0.3748f), LegL = new Vector3(-0.19f, 0.105f, 0.34f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                    K(0.4f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 16f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 6f, HipsPitch = 4f, TorsoYaw = 4f,
+                        TorsoPitch = 8f, HeadPitch = -4f, ArmL = new Vector3(-0.16f, 1.36f, 0.36f), TwistL = -10f, OpenL = 0.6f,
+                        ArmR = new Vector3(0.333f, 1.1f, 0.1174f), TwistR = -1.19f, WristR = -3.86f,
+                        ElbowR = new Vector3(0.2734f, -0.5991f, -0.7525f), LegL = new Vector3(-0.19f, 0.105f, 0.26f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                },
+            };
+            // rising slash back: a forehand from low on the right up across to above the left shoulder, then the blade comes back down in front
+            var slash2 = new AttackMove
+            {
+                Name = "Rising slash", Limb = StrikeLimb.HandR, Hit = 0.1f, Streak = new Vector2(0.045f, 0.21f), Length = 0.42f,
+                Keys = new[]
+                {
+                    K(0f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 16f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 6f, HipsPitch = 4f, TorsoYaw = 4f,
+                        TorsoPitch = 8f, HeadPitch = -4f, ArmL = new Vector3(-0.16f, 1.36f, 0.36f), TwistL = -10f, OpenL = 0.6f,
+                        ArmR = new Vector3(0.333f, 1.1f, 0.1174f), TwistR = -1.19f, WristR = -3.86f,
+                        ElbowR = new Vector3(0.2734f, -0.5991f, -0.7525f), LegL = new Vector3(-0.19f, 0.105f, 0.26f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                    K(0.045f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 30f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 7.5f, HipsPitch = 4f, TorsoYaw = 12f,
+                        TorsoPitch = 14f, HeadPitch = -4f, ArmL = new Vector3(-0.28f, 1.28f, 0.26f), TwistL = -20f, OpenL = 0.7f,
+                        ArmR = new Vector3(0.4485f, 1.1874f, 0.0858f), TwistR = -123.62f, WristR = 2.29f,
+                        ElbowR = new Vector3(-0.9296f, -0.3335f, -0.1571f), LegL = new Vector3(-0.19f, 0.105f, 0.26f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                    K(0.1f, KeyEase.In, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.1f), RootYaw = -6f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = -1.5f,
+                        HipsPitch = 4f, TorsoYaw = -1.8f, TorsoPitch = 6f, HeadPitch = -4f, ArmL = new Vector3(-0.3f, 1.18f, 0.12f),
+                        TwistL = -25f, OpenL = 0.75f, ArmR = new Vector3(0.1783f, 1.5642f, 0.6955f), TwistR = -80f, WristR = 50f,
+                        ElbowR = new Vector3(0.9751f, -0.217f, -0.0462f), LegL = new Vector3(-0.19f, 0.105f, 0.34f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                    K(0.21f, KeyEase.Snap, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.12f), RootYaw = -26f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = -6.5f,
+                        HipsPitch = 4f, TorsoYaw = -12f, HeadPitch = -8f, ArmL = new Vector3(-0.2f, 1.05f, 0.3f), TwistL = -20f,
+                        OpenL = 0.7f, ArmR = new Vector3(-0.1055f, 1.879f, 0.5106f), TwistR = -47.65f, WristR = 50f,
+                        ElbowR = new Vector3(0.9624f, -0.1244f, 0.2416f), LegL = new Vector3(-0.19f, 0.105f, 0.34f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                    K(0.31f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.06f), RootYaw = -8f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = -2f,
+                        HipsPitch = 4f, TorsoYaw = -2.4f, TorsoPitch = 6f, HeadPitch = -4f, ArmL = new Vector3(-0.2f, 1.2f, 0.3f),
+                        TwistL = -15f, OpenL = 0.7f, ArmR = new Vector3(0.1635f, 1.3415f, 0.5753f), TwistR = -47.39f, WristR = 32.72f,
+                        ElbowR = new Vector3(0.3652f, -0.8927f, -0.2642f), LegL = new Vector3(-0.19f, 0.105f, 0.34f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                    K(0.42f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 16f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 6f, HipsPitch = 4f, TorsoYaw = 4f,
+                        TorsoPitch = 8f, HeadPitch = -4f, ArmL = new Vector3(-0.16f, 1.36f, 0.36f), TwistL = -10f, OpenL = 0.6f,
+                        ArmR = new Vector3(0.333f, 1.1f, 0.1174f), TwistR = -1.19f, WristR = -3.86f,
+                        ElbowR = new Vector3(0.2734f, -0.5991f, -0.7525f), LegL = new Vector3(-0.19f, 0.105f, 0.26f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                },
+            };
+            // horizontal sweep: a backhand at chest height from the left across to the right
+            var slash3 = new AttackMove
+            {
+                Name = "Horizontal sweep", Limb = StrikeLimb.HandR, Hit = 0.1f, Streak = new Vector2(0.05f, 0.21f), Length = 0.4f,
+                Keys = new[]
+                {
+                    K(0f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 16f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 6f, HipsPitch = 4f, TorsoYaw = 4f,
+                        TorsoPitch = 8f, HeadPitch = -4f, ArmL = new Vector3(-0.16f, 1.36f, 0.36f), TwistL = -10f, OpenL = 0.6f,
+                        ArmR = new Vector3(0.333f, 1.1f, 0.1174f), TwistR = -1.19f, WristR = -3.86f,
+                        ElbowR = new Vector3(0.2734f, -0.5991f, -0.7525f), LegL = new Vector3(-0.19f, 0.105f, 0.26f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                    K(0.05f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = -30f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = -7.5f, HipsPitch = 4f, TorsoYaw = -14f,
+                        TorsoPitch = 8f, HeadPitch = -4f, ArmL = new Vector3(-0.12f, 1.2f, 0.36f), TwistL = -15f, OpenL = 0.6f,
+                        ArmR = new Vector3(-0.1781f, 1.4658f, 0.3932f), TwistR = -40.39f, WristR = 48.35f,
+                        ElbowR = new Vector3(0.9837f, 0.1441f, 0.1078f), LegL = new Vector3(-0.19f, 0.105f, 0.26f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                    K(0.1f, KeyEase.In, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.12f), RootYaw = 2f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 0.5f,
+                        HipsPitch = 4f, TorsoYaw = 0.6f, TorsoPitch = 10f, HeadPitch = -4f, ArmL = new Vector3(-0.36f, 1.3f, -0.02f),
+                        TwistL = -30f, OpenL = 0.8f, ArmR = new Vector3(0.2277f, 1.4499f, 0.6833f), TwistR = -144.33f, WristR = 47.85f,
+                        ElbowR = new Vector3(0.6746f, -0.733f, 0.0869f), LegL = new Vector3(-0.19f, 0.105f, 0.36f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                    K(0.21f, KeyEase.Snap, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.12f), RootYaw = 30f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 7.5f,
+                        HipsPitch = 4f, TorsoYaw = 12f, TorsoPitch = 12f, HeadPitch = -4f, ArmL = new Vector3(-0.4f, 1.32f, 0.1f),
+                        TwistL = -30f, OpenL = 0.8f, ArmR = new Vector3(0.6181f, 1.458f, 0.2305f), TwistR = -128.28f, WristR = 0.31f,
+                        ElbowR = new Vector3(0.2521f, -0.967f, 0.0378f), LegL = new Vector3(-0.19f, 0.105f, 0.36f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                    K(0.4f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 16f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 6f, HipsPitch = 4f, TorsoYaw = 4f,
+                        TorsoPitch = 8f, HeadPitch = -4f, ArmL = new Vector3(-0.16f, 1.36f, 0.36f), TwistL = -10f, OpenL = 0.6f,
+                        ArmR = new Vector3(0.333f, 1.1f, 0.1174f), TwistR = -1.19f, WristR = -3.86f,
+                        ElbowR = new Vector3(0.2734f, -0.5991f, -0.7525f), LegL = new Vector3(-0.19f, 0.105f, 0.26f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                },
+            };
+            // thrust (finisher): drawn back to the right hip with the tip forward, then a lunge (the lead foot steps in) and the blade drives at the chest
+            var thrust = new AttackMove
+            {
+                Name = "Thrust", Limb = StrikeLimb.HandR, Hit = 0.13f, Streak = new Vector2(0.06f, 0.17f), Length = 0.48f, Big = true,
+                Keys = new[]
+                {
+                    K(0f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 16f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 6f, HipsPitch = 4f, TorsoYaw = 4f,
+                        TorsoPitch = 8f, HeadPitch = -4f, ArmL = new Vector3(-0.16f, 1.36f, 0.36f), TwistL = -10f, OpenL = 0.6f,
+                        ArmR = new Vector3(0.333f, 1.1f, 0.1174f), TwistR = -1.19f, WristR = -3.86f,
+                        ElbowR = new Vector3(0.2734f, -0.5991f, -0.7525f), LegL = new Vector3(-0.19f, 0.105f, 0.26f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                    K(0.06f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, -0.04f), RootYaw = 28f, HipsPos = new Vector3(0f, -0.16f, 0f), HipsYaw = 7f,
+                        HipsPitch = 4f, TorsoYaw = 10f, TorsoPitch = 10f, HeadPitch = -4f, ArmL = new Vector3(-0.1f, 1.32f, 0.4f),
+                        TwistL = -10f, OpenL = 0.85f, ArmR = new Vector3(0.248f, 1.0649f, -0.0579f), TwistR = -29.53f, WristR = 22.03f,
+                        ElbowR = new Vector3(0.8912f, -0.2859f, -0.3521f), LegL = new Vector3(-0.19f, 0.105f, 0.26f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                    K(0.1f, KeyEase.In, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.213f), RootYaw = 6f, HipsPos = new Vector3(0f, -0.193f, 0f), HipsYaw = 1.5f,
+                        HipsPitch = 6.2f, TorsoYaw = 2.52f, TorsoPitch = 14.4f, HeadPitch = -8.4f,
+                        ArmL = new Vector3(-0.276f, 1.243f, 0.07f), TwistL = -23.75f, OpenL = 0.8775f,
+                        ArmR = new Vector3(0.1873f, 1.1521f, 0.5852f), TwistR = -51.64f, WristR = 37.414f,
+                        ElbowR = new Vector3(0.6301f, -0.6286f, -0.1673f), LegL = new Vector3(-0.2f, 0.2f, 0.52f), FootYawL = 7.6f,
+                        LegR = new Vector3(0.25f, 0.105f, -0.22f), FootYawR = 30.5f, FootPitchR = 15.4f,
+                    }),
+                    K(0.13f, KeyEase.Snap, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.42f), RootYaw = -12f, HipsPos = new Vector3(0f, -0.22f, 0f), HipsYaw = -3f,
+                        HipsPitch = 8f, TorsoYaw = -3.6f, TorsoPitch = 18f, HeadPitch = -12f, ArmL = new Vector3(-0.42f, 1.18f, -0.2f),
+                        TwistL = -35f, OpenL = 0.9f, ArmR = new Vector3(0.1377f, 1.2235f, 1.1114f), TwistR = -69.73f, WristR = 50f,
+                        ElbowR = new Vector3(0.4164f, -0.909f, -0.0161f), LegL = new Vector3(-0.21f, 0.105f, 0.78f), FootYawL = 4f,
+                        LegR = new Vector3(0.25f, 0.105f, -0.22f), FootYawR = 26f, FootPitchR = 28f,
+                    }),
+                    K(0.26f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.42f), RootYaw = -12f, HipsPos = new Vector3(0f, -0.22f, 0f), HipsYaw = -3f,
+                        HipsPitch = 8f, TorsoYaw = -3.6f, TorsoPitch = 18f, HeadPitch = -12f, ArmL = new Vector3(-0.42f, 1.18f, -0.2f),
+                        TwistL = -35f, OpenL = 0.9f, ArmR = new Vector3(0.1377f, 1.2235f, 1.1114f), TwistR = -69.73f, WristR = 50f,
+                        ElbowR = new Vector3(0.4164f, -0.909f, -0.0161f), LegL = new Vector3(-0.21f, 0.105f, 0.78f), FootYawL = 4f,
+                        LegR = new Vector3(0.25f, 0.105f, -0.22f), FootYawR = 26f, FootPitchR = 28f,
+                    }),
+                    K(0.38f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.21f), RootYaw = 2f, HipsPos = new Vector3(0f, -0.16f, 0f), HipsYaw = 1.5f,
+                        HipsPitch = 6f, TorsoYaw = 0.2f, TorsoPitch = 13f, HeadPitch = -8f, ArmL = new Vector3(-0.29f, 1.27f, 0.08f),
+                        TwistL = -22.5f, OpenL = 0.75f, ArmR = new Vector3(0.2353f, 1.1617f, 0.6144f), TwistR = -35.46f,
+                        WristR = 23.07f, ElbowR = new Vector3(0.3449f, -0.7541f, -0.3843f), LegL = new Vector3(-0.2f, 0.22f, 0.48f),
+                        FootYawL = 8f, LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 31f, FootPitchR = 14f,
+                    }),
+                    K(0.48f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 16f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 6f, HipsPitch = 4f, TorsoYaw = 4f,
+                        TorsoPitch = 8f, HeadPitch = -4f, ArmL = new Vector3(-0.16f, 1.36f, 0.36f), TwistL = -10f, OpenL = 0.6f,
+                        ArmR = new Vector3(0.333f, 1.1f, 0.1174f), TwistR = -1.19f, WristR = -3.86f,
+                        ElbowR = new Vector3(0.2734f, -0.5991f, -0.7525f), LegL = new Vector3(-0.19f, 0.105f, 0.26f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                },
+            };
+            // the pre-motion: the lead foot steps out into a deep crouch, the sword hand drawn back at the right hip with the tip forward, the left hand reaching out
+            var windup = new AttackMove
+            {
+                Name = "Sword pre-motion", Limb = StrikeLimb.HandR, Hit = 0.25f, Streak = new Vector2(-1f, -1f), Length = 0.25f,
+                Keys = new[]
+                {
+                    K(0f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 16f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 6f, HipsPitch = 4f, TorsoYaw = 4f,
+                        TorsoPitch = 8f, HeadPitch = -4f, ArmL = new Vector3(-0.16f, 1.36f, 0.36f), TwistL = -10f, OpenL = 0.6f,
+                        ArmR = new Vector3(0.333f, 1.1f, 0.1174f), TwistR = -1.19f, WristR = -3.86f,
+                        ElbowR = new Vector3(0.2734f, -0.5991f, -0.7525f), LegL = new Vector3(-0.19f, 0.105f, 0.26f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                    K(0.12f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, -0.02f), RootYaw = 21f, HipsPos = new Vector3(0f, -0.19f, 0f), HipsYaw = 6.25f,
+                        HipsPitch = 8f, TorsoYaw = 6f, TorsoPitch = 16f, HeadPitch = -9f, ArmL = new Vector3(-0.23f, 1.33f, 0.51f),
+                        TwistL = -25f, OpenL = 0.775f, ArmR = new Vector3(0.3329f, 1.0021f, 0.087f), TwistR = -1f, WristR = 7.035f,
+                        ElbowR = new Vector3(0.4272f, -0.6298f, -0.6141f), LegL = new Vector3(-0.22f, 0.19f, 0.36f), FootYawL = 11f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 40f,
+                    }),
+                    K(0.25f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, -0.04f), RootYaw = 26f, HipsPos = new Vector3(0f, -0.28f, 0f), HipsYaw = 6.5f,
+                        HipsPitch = 12f, TorsoYaw = 8f, TorsoPitch = 24f, HeadPitch = -14f, ArmL = new Vector3(-0.3f, 1.3f, 0.66f),
+                        TwistL = -40f, OpenL = 0.95f, ArmR = new Vector3(0.3328f, 0.9041f, 0.0566f), TwistR = -0.81f, WristR = 17.93f,
+                        ElbowR = new Vector3(0.581f, -0.6604f, -0.4757f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                },
+            };
+            // Twin Fang 1: from the pre-motion the sword rises past the right side, over the right shoulder, and cuts down across to the left hip
+            var fang1 = new AttackMove
+            {
+                Name = "Twin Fang 1", Limb = StrikeLimb.HandR, Hit = 0.1f, Streak = new Vector2(0.06f, 0.19f), Length = 0.36f,
+                Keys = new[]
+                {
+                    K(0f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, -0.04f), RootYaw = 26f, HipsPos = new Vector3(0f, -0.28f, 0f), HipsYaw = 6.5f,
+                        HipsPitch = 12f, TorsoYaw = 8f, TorsoPitch = 24f, HeadPitch = -14f, ArmL = new Vector3(-0.3f, 1.3f, 0.66f),
+                        TwistL = -40f, OpenL = 0.95f, ArmR = new Vector3(0.3328f, 0.9041f, 0.0566f), TwistR = -0.81f, WristR = 17.93f,
+                        ElbowR = new Vector3(0.581f, -0.6604f, -0.4757f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.03f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 24f, HipsPos = new Vector3(0f, -0.22f, 0f), HipsYaw = 6f, HipsPitch = 4f, TorsoYaw = 9f,
+                        TorsoPitch = 14f, HeadPitch = -10f, ArmL = new Vector3(-0.28f, 1.22f, 0.52f), TwistL = -25f, OpenL = 0.8f,
+                        ArmR = new Vector3(0.4581f, 1.2284f, 0.1747f), TwistR = -64.55f, WristR = 5.95f,
+                        ElbowR = new Vector3(0.8373f, -0.5241f, -0.1559f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.06f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 22f, HipsPos = new Vector3(0f, -0.18f, 0f), HipsYaw = 5.5f, HipsPitch = 4f, TorsoYaw = 10f,
+                        TorsoPitch = 6f, HeadPitch = -6f, ArmL = new Vector3(-0.26f, 1.15f, 0.42f), TwistL = -20f, OpenL = 0.7f,
+                        ArmR = new Vector3(0.3738f, 1.7749f, 0.0952f), TwistR = -158.15f, WristR = -10.43f,
+                        ElbowR = new Vector3(0.9863f, 0.0334f, -0.1615f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.1f, KeyEase.In, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.12f), RootYaw = -10f, HipsPos = new Vector3(0f, -0.16f, 0f), HipsYaw = -2.5f,
+                        HipsPitch = 4f, TorsoYaw = -3f, TorsoPitch = 12f, HeadPitch = -4f, ArmL = new Vector3(-0.12f, 1.05f, -0.1f),
+                        TwistL = -20f, OpenL = 0.7f, ArmR = new Vector3(0.3722f, 1.524f, 0.73f), TwistR = -23.86f, WristR = 36.93f,
+                        ElbowR = new Vector3(0.5122f, 0.5959f, -0.6185f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.19f, KeyEase.Snap, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.14f), RootYaw = -26f, HipsPos = new Vector3(0f, -0.18f, 0f), HipsYaw = -6.5f,
+                        HipsPitch = 4f, TorsoYaw = -12f, TorsoPitch = 16f, HeadPitch = -4f, ArmL = new Vector3(-0.02f, 1.02f, -0.16f),
+                        TwistL = -20f, OpenL = 0.7f, ArmR = new Vector3(-0.1455f, 1.0978f, 0.6042f), TwistR = 8.7f, WristR = 45.28f,
+                        ElbowR = new Vector3(0.9716f, 0.2119f, 0.1049f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.36f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 16f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 6f, HipsPitch = 4f, TorsoYaw = 4f,
+                        TorsoPitch = 8f, HeadPitch = -4f, ArmL = new Vector3(-0.16f, 1.36f, 0.36f), TwistL = -10f, OpenL = 0.6f,
+                        ArmR = new Vector3(0.333f, 1.1f, 0.1174f), TwistR = -1.19f, WristR = -3.86f,
+                        ElbowR = new Vector3(0.2734f, -0.5991f, -0.7525f), LegL = new Vector3(-0.19f, 0.105f, 0.26f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                },
+            };
+            // Twin Fang 2: lifted over the left shoulder and cut down across to the right hip, crossing the first (an X); held, then the guard
+            var fang2 = new AttackMove
+            {
+                Name = "Twin Fang 2", Limb = StrikeLimb.HandR, Hit = 0.09f, Streak = new Vector2(0.05f, 0.18f), Length = 0.46f, Big = true,
+                Keys = new[]
+                {
+                    K(0f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.14f), RootYaw = -26f, HipsPos = new Vector3(0f, -0.18f, 0f), HipsYaw = -6.5f,
+                        HipsPitch = 4f, TorsoYaw = -12f, TorsoPitch = 16f, HeadPitch = -4f, ArmL = new Vector3(-0.02f, 1.02f, -0.16f),
+                        TwistL = -20f, OpenL = 0.7f, ArmR = new Vector3(-0.1455f, 1.0978f, 0.6042f), TwistR = 8.7f, WristR = 45.28f,
+                        ElbowR = new Vector3(0.9716f, 0.2119f, 0.1049f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.05f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.14f), RootYaw = -30f, HipsPos = new Vector3(0f, -0.16f, 0f), HipsYaw = -7.5f,
+                        HipsPitch = 4f, TorsoYaw = -16f, TorsoPitch = 4f, HeadPitch = -8f, ArmL = new Vector3(-0.1f, 1.3f, 0.32f),
+                        TwistL = -20f, OpenL = 0.55f, ArmR = new Vector3(-0.1924f, 1.6885f, 0.5259f), TwistR = -80.09f,
+                        WristR = 33.21f, ElbowR = new Vector3(0.9841f, -0.0506f, 0.1704f), LegL = new Vector3(-0.24f, 0.105f, 0.44f),
+                        FootYawL = 10f, LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.09f, KeyEase.In, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.18f), RootYaw = 6f, HipsPos = new Vector3(0f, -0.16f, 0f), HipsYaw = 1.5f,
+                        HipsPitch = 4f, TorsoYaw = 1.8f, TorsoPitch = 12f, HeadPitch = -4f, ArmL = new Vector3(-0.34f, 1.22f, 0.04f),
+                        TwistL = -25f, OpenL = 0.75f, ArmR = new Vector3(0.2871f, 1.4281f, 0.7305f), TwistR = -159.32f,
+                        WristR = 36.55f, ElbowR = new Vector3(0.1082f, -0.978f, 0.1782f), LegL = new Vector3(-0.24f, 0.105f, 0.44f),
+                        FootYawL = 10f, LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.18f, KeyEase.Snap, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.18f), RootYaw = 28f, HipsPos = new Vector3(0f, -0.18f, 0f), HipsYaw = 7f,
+                        HipsPitch = 4f, TorsoYaw = 12f, TorsoPitch = 18f, HeadPitch = -4f, ArmL = new Vector3(-0.36f, 1.28f, 0.16f),
+                        TwistL = -25f, OpenL = 0.75f, ArmR = new Vector3(0.4906f, 1.0905f, 0.2772f), TwistR = -125.51f,
+                        WristR = 25.34f, ElbowR = new Vector3(-0.3256f, -0.8731f, -0.3629f), LegL = new Vector3(-0.24f, 0.105f, 0.44f),
+                        FootYawL = 10f, LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.3f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.18f), RootYaw = 28f, HipsPos = new Vector3(0f, -0.18f, 0f), HipsYaw = 7f,
+                        HipsPitch = 4f, TorsoYaw = 12f, TorsoPitch = 18f, HeadPitch = -4f, ArmL = new Vector3(-0.36f, 1.28f, 0.16f),
+                        TwistL = -25f, OpenL = 0.75f, ArmR = new Vector3(0.4906f, 1.0905f, 0.2772f), TwistR = -125.51f,
+                        WristR = 25.34f, ElbowR = new Vector3(-0.3256f, -0.8731f, -0.3629f), LegL = new Vector3(-0.24f, 0.105f, 0.44f),
+                        FootYawL = 10f, LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.46f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 16f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 6f, HipsPitch = 4f, TorsoYaw = 4f,
+                        TorsoPitch = 8f, HeadPitch = -4f, ArmL = new Vector3(-0.16f, 1.36f, 0.36f), TwistL = -10f, OpenL = 0.6f,
+                        ArmR = new Vector3(0.333f, 1.1f, 0.1174f), TwistR = -1.19f, WristR = -3.86f,
+                        ElbowR = new Vector3(0.2734f, -0.5991f, -0.7525f), LegL = new Vector3(-0.19f, 0.105f, 0.26f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                },
+            };
+            // Quartet Edge 1: up past the right side and across the top of the square, right to left
+            var quartet1 = new AttackMove
+            {
+                Name = "Quartet Edge 1", Limb = StrikeLimb.HandR, Hit = 0.09f, Streak = new Vector2(0.05f, 0.15f), Length = 0.32f,
+                Keys = new[]
+                {
+                    K(0f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, -0.04f), RootYaw = 26f, HipsPos = new Vector3(0f, -0.28f, 0f), HipsYaw = 6.5f,
+                        HipsPitch = 12f, TorsoYaw = 8f, TorsoPitch = 24f, HeadPitch = -14f, ArmL = new Vector3(-0.3f, 1.3f, 0.66f),
+                        TwistL = -40f, OpenL = 0.95f, ArmR = new Vector3(0.3328f, 0.9041f, 0.0566f), TwistR = -0.81f, WristR = 17.93f,
+                        ElbowR = new Vector3(0.581f, -0.6604f, -0.4757f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.025f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 24f, HipsPos = new Vector3(0f, -0.22f, 0f), HipsYaw = 6f, HipsPitch = 4f, TorsoYaw = 9f,
+                        TorsoPitch = 14f, HeadPitch = -10f, ArmL = new Vector3(-0.36f, 1.16f, 0.3f), TwistL = -25f, OpenL = 0.8f,
+                        ArmR = new Vector3(0.4864f, 1.2368f, 0.1685f), TwistR = -57.84f, WristR = 16.27f,
+                        ElbowR = new Vector3(0.6813f, -0.7044f, -0.1991f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.05f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 26f, HipsPos = new Vector3(0f, -0.16f, 0f), HipsYaw = 6.5f, HipsPitch = 4f, TorsoYaw = 10f,
+                        TorsoPitch = 6f, HeadPitch = -6f, ArmL = new Vector3(-0.42f, 1.12f, 0.16f), TwistL = -20f, OpenL = 0.7f,
+                        ArmR = new Vector3(0.5109f, 1.6957f, 0.1019f), TwistR = -138.93f, WristR = -14.28f,
+                        ElbowR = new Vector3(0.8402f, -0.5203f, 0.1528f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.09f, KeyEase.In, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.1f), HipsPos = new Vector3(0f, -0.14f, 0f), HipsPitch = 4f, TorsoPitch = 6f,
+                        HeadPitch = -6f, ArmL = new Vector3(-0.36f, 1.28f, 0.02f), TwistL = -30f, OpenL = 0.8f,
+                        ArmR = new Vector3(0.547f, 1.6023f, 0.5293f), TwistR = -48.2f, WristR = 33.72f,
+                        ElbowR = new Vector3(0.5544f, 0.4663f, -0.6894f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.15f, KeyEase.Snap, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.12f), RootYaw = -24f, HipsPos = new Vector3(0f, -0.14f, 0f), HipsYaw = -6f,
+                        HipsPitch = 4f, TorsoYaw = -10f, TorsoPitch = 6f, HeadPitch = -6f, ArmL = new Vector3(-0.1f, 1.1f, -0.12f),
+                        TwistL = -20f, OpenL = 0.7f, ArmR = new Vector3(-0.1938f, 1.6754f, 0.5729f), TwistR = 2.51f, WristR = 31.7f,
+                        ElbowR = new Vector3(0.9664f, -0.0435f, 0.2534f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.32f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 16f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 6f, HipsPitch = 4f, TorsoYaw = 4f,
+                        TorsoPitch = 8f, HeadPitch = -4f, ArmL = new Vector3(-0.16f, 1.36f, 0.36f), TwistL = -10f, OpenL = 0.6f,
+                        ArmR = new Vector3(0.333f, 1.1f, 0.1174f), TwistR = -1.19f, WristR = -3.86f,
+                        ElbowR = new Vector3(0.2734f, -0.5991f, -0.7525f), LegL = new Vector3(-0.19f, 0.105f, 0.26f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                },
+            };
+            // Quartet Edge 2: down the left side
+            var quartet2 = new AttackMove
+            {
+                Name = "Quartet Edge 2", Limb = StrikeLimb.HandR, Hit = 0.07f, Streak = new Vector2(0.04f, 0.13f), Length = 0.3f,
+                Keys = new[]
+                {
+                    K(0f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.12f), RootYaw = -24f, HipsPos = new Vector3(0f, -0.14f, 0f), HipsYaw = -6f,
+                        HipsPitch = 4f, TorsoYaw = -10f, TorsoPitch = 6f, HeadPitch = -6f, ArmL = new Vector3(-0.1f, 1.1f, -0.12f),
+                        TwistL = -20f, OpenL = 0.7f, ArmR = new Vector3(-0.1938f, 1.6754f, 0.5729f), TwistR = 2.51f, WristR = 31.7f,
+                        ElbowR = new Vector3(0.9664f, -0.0435f, 0.2534f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.04f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.12f), RootYaw = -26f, HipsPos = new Vector3(0f, -0.14f, 0f), HipsYaw = -6.5f,
+                        HipsPitch = 4f, TorsoYaw = -14f, TorsoPitch = 2f, HeadPitch = -8f, ArmL = new Vector3(-0.1f, 1.2f, 0.3f),
+                        TwistL = -20f, OpenL = 0.55f, ArmR = new Vector3(-0.1229f, 1.7598f, 0.5291f), TwistR = 14.8f, WristR = 46.32f,
+                        ElbowR = new Vector3(0.1875f, -0.7467f, 0.6381f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.07f, KeyEase.In, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.14f), RootYaw = -12f, HipsPos = new Vector3(0f, -0.16f, 0f), HipsYaw = -3f,
+                        HipsPitch = 4f, TorsoYaw = -6f, TorsoPitch = 14f, HeadPitch = -4f, ArmL = new Vector3(-0.12f, 1.05f, -0.12f),
+                        TwistL = -20f, OpenL = 0.7f, ArmR = new Vector3(-0.063f, 1.6283f, 0.732f), TwistR = 97.53f, WristR = 16.02f,
+                        ElbowR = new Vector3(0.973f, 0.2287f, 0.0311f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.13f, KeyEase.Snap, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.14f), RootYaw = -6f, HipsPos = new Vector3(0f, -0.2f, 0f), HipsYaw = -1.5f,
+                        HipsPitch = 4f, TorsoYaw = -2f, TorsoPitch = 20f, HeadPitch = -4f, ArmL = new Vector3(-0.12f, 1.02f, -0.1f),
+                        TwistL = -20f, OpenL = 0.7f, ArmR = new Vector3(0.1252f, 1.053f, 0.5914f), TwistR = 118.71f, WristR = 43.05f,
+                        ElbowR = new Vector3(0.9851f, 0.1294f, 0.113f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.3f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 16f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 6f, HipsPitch = 4f, TorsoYaw = 4f,
+                        TorsoPitch = 8f, HeadPitch = -4f, ArmL = new Vector3(-0.16f, 1.36f, 0.36f), TwistL = -10f, OpenL = 0.6f,
+                        ArmR = new Vector3(0.333f, 1.1f, 0.1174f), TwistR = -1.19f, WristR = -3.86f,
+                        ElbowR = new Vector3(0.2734f, -0.5991f, -0.7525f), LegL = new Vector3(-0.19f, 0.105f, 0.26f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                },
+            };
+            // Quartet Edge 3: across the bottom, left to right
+            var quartet3 = new AttackMove
+            {
+                Name = "Quartet Edge 3", Limb = StrikeLimb.HandR, Hit = 0.08f, Streak = new Vector2(0.04f, 0.14f), Length = 0.32f,
+                Keys = new[]
+                {
+                    K(0f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.14f), RootYaw = -6f, HipsPos = new Vector3(0f, -0.2f, 0f), HipsYaw = -1.5f,
+                        HipsPitch = 4f, TorsoYaw = -2f, TorsoPitch = 20f, HeadPitch = -4f, ArmL = new Vector3(-0.12f, 1.02f, -0.1f),
+                        TwistL = -20f, OpenL = 0.7f, ArmR = new Vector3(0.1252f, 1.053f, 0.5914f), TwistR = 118.71f, WristR = 43.05f,
+                        ElbowR = new Vector3(0.9851f, 0.1294f, 0.113f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.04f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.14f), RootYaw = -28f, HipsPos = new Vector3(0f, -0.22f, 0f), HipsYaw = -7f,
+                        HipsPitch = 4f, TorsoYaw = -12f, TorsoPitch = 22f, HeadPitch = -4f, ArmL = new Vector3(-0.12f, 1.05f, 0.3f),
+                        TwistL = -20f, OpenL = 0.6f, ArmR = new Vector3(-0.1902f, 1.1163f, 0.5823f), TwistR = 23.87f, WristR = 29.7f,
+                        ElbowR = new Vector3(0.9432f, -0.3323f, -0.0028f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.08f, KeyEase.In, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.16f), RootYaw = 2f, HipsPos = new Vector3(0f, -0.24f, 0f), HipsYaw = 0.5f,
+                        HipsPitch = 4f, TorsoYaw = 0.6f, TorsoPitch = 24f, HeadPitch = -4f, ArmL = new Vector3(-0.36f, 1.18f, -0.04f),
+                        TwistL = -30f, OpenL = 0.8f, ArmR = new Vector3(-0.0584f, 1.1388f, 0.615f), TwistR = -85.3f, WristR = 25.04f,
+                        ElbowR = new Vector3(0.0793f, -0.9936f, -0.0803f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.14f, KeyEase.Snap, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.16f), RootYaw = 28f, HipsPos = new Vector3(0f, -0.24f, 0f), HipsYaw = 7f,
+                        HipsPitch = 4f, TorsoYaw = 12f, TorsoPitch = 24f, HeadPitch = -4f, ArmL = new Vector3(-0.4f, 1.24f, 0.1f),
+                        TwistL = -30f, OpenL = 0.8f, ArmR = new Vector3(0.5429f, 1.0962f, 0.3301f), TwistR = -120.5f, WristR = -5.57f,
+                        ElbowR = new Vector3(0.2476f, -0.9565f, -0.1544f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.32f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 16f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 6f, HipsPitch = 4f, TorsoYaw = 4f,
+                        TorsoPitch = 8f, HeadPitch = -4f, ArmL = new Vector3(-0.16f, 1.36f, 0.36f), TwistL = -10f, OpenL = 0.6f,
+                        ArmR = new Vector3(0.333f, 1.1f, 0.1174f), TwistR = -1.19f, WristR = -3.86f,
+                        ElbowR = new Vector3(0.2734f, -0.5991f, -0.7525f), LegL = new Vector3(-0.19f, 0.105f, 0.26f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                },
+            };
+            // Quartet Edge 4: up the right side, the launcher; held overhead, the blade brought down in front, then the guard
+            var quartet4 = new AttackMove
+            {
+                Name = "Quartet Edge 4", Limb = StrikeLimb.HandR, Hit = 0.09f, Streak = new Vector2(0.04f, 0.18f), Length = 0.58f, Big = true,
+                Keys = new[]
+                {
+                    K(0f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.16f), RootYaw = 28f, HipsPos = new Vector3(0f, -0.24f, 0f), HipsYaw = 7f,
+                        HipsPitch = 4f, TorsoYaw = 12f, TorsoPitch = 24f, HeadPitch = -4f, ArmL = new Vector3(-0.4f, 1.24f, 0.1f),
+                        TwistL = -30f, OpenL = 0.8f, ArmR = new Vector3(0.5429f, 1.0962f, 0.3301f), TwistR = -120.5f, WristR = -5.57f,
+                        ElbowR = new Vector3(0.2476f, -0.9565f, -0.1544f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.04f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.16f), RootYaw = 24f, HipsPos = new Vector3(0f, -0.26f, 0f), HipsYaw = 6f,
+                        HipsPitch = 4f, TorsoYaw = 10f, TorsoPitch = 26f, HeadPitch = -4f, ArmL = new Vector3(-0.34f, 1.2f, 0.16f),
+                        TwistL = -30f, OpenL = 0.8f, ArmR = new Vector3(0.4359f, 0.9959f, 0.3489f), TwistR = -140.49f, WristR = -0.54f,
+                        ElbowR = new Vector3(-0.5069f, -0.808f, -0.3002f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.09f, KeyEase.In, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.2f), RootYaw = 14f, HipsPos = new Vector3(0f, -0.18f, 0f), HipsYaw = 3.5f,
+                        HipsPitch = 4f, TorsoYaw = 6f, TorsoPitch = 8f, HeadPitch = -12f, ArmL = new Vector3(-0.3f, 1.1f, -0.08f),
+                        TwistL = -25f, OpenL = 0.75f, ArmR = new Vector3(0.4199f, 1.4673f, 0.6451f), TwistR = -87.07f, WristR = 43.43f,
+                        ElbowR = new Vector3(0.9485f, -0.304f, 0.0896f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.18f, KeyEase.Snap, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.22f), RootYaw = 10f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 2.5f,
+                        HipsPitch = 4f, TorsoYaw = 4f, TorsoPitch = -8f, HeadPitch = -26f, ArmL = new Vector3(-0.36f, 1f, 0f),
+                        TwistL = -25f, OpenL = 0.75f, ArmR = new Vector3(0.2811f, 1.9971f, 0.3363f), TwistR = -119.55f, WristR = 7.72f,
+                        ElbowR = new Vector3(0.9871f, -0.1108f, 0.1159f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.34f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.22f), RootYaw = 10f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 2.5f,
+                        HipsPitch = 4f, TorsoYaw = 4f, TorsoPitch = -8f, HeadPitch = -26f, ArmL = new Vector3(-0.36f, 1f, 0f),
+                        TwistL = -25f, OpenL = 0.75f, ArmR = new Vector3(0.2811f, 1.9971f, 0.3363f), TwistR = -119.55f, WristR = 7.72f,
+                        ElbowR = new Vector3(0.9871f, -0.1108f, 0.1159f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.46f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.12f), RootYaw = 6f, HipsPos = new Vector3(0f, -0.12f, 0f), HipsYaw = 1.5f,
+                        HipsPitch = 4f, TorsoYaw = 2f, TorsoPitch = 6f, HeadPitch = -8f, ArmL = new Vector3(-0.22f, 1.2f, 0.3f),
+                        TwistL = -15f, OpenL = 0.7f, ArmR = new Vector3(0.2867f, 1.3389f, 0.5558f), TwistR = -70.25f, WristR = 26.57f,
+                        ElbowR = new Vector3(0.8132f, -0.5731f, -0.1013f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.58f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 16f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 6f, HipsPitch = 4f, TorsoYaw = 4f,
+                        TorsoPitch = 8f, HeadPitch = -4f, ArmL = new Vector3(-0.16f, 1.36f, 0.36f), TwistL = -10f, OpenL = 0.6f,
+                        ArmR = new Vector3(0.333f, 1.1f, 0.1174f), TwistR = -1.19f, WristR = -3.86f,
+                        ElbowR = new Vector3(0.2734f, -0.5991f, -0.7525f), LegL = new Vector3(-0.19f, 0.105f, 0.26f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                },
+            };
+            // Comet Thrust: from the coiled pre-motion the body launches, the arm drives the blade straight through and the lunge is held through the dash
+            var comet = new AttackMove
+            {
+                Name = "Comet Thrust", Limb = StrikeLimb.HandR, Hit = 0.12f, Streak = new Vector2(0.05f, 0.3f), Length = 0.8f, Big = true,
+                Keys = new[]
+                {
+                    K(0f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, -0.08f), RootYaw = 26f, HipsPos = new Vector3(0f, -0.34f, 0f), HipsYaw = 6.5f,
+                        HipsPitch = 12f, TorsoYaw = 8f, TorsoPitch = 30f, HeadPitch = -18f, ArmL = new Vector3(-0.3f, 1.3f, 0.7f),
+                        TwistL = -40f, OpenL = 0.95f, ArmR = new Vector3(0.3317f, 0.8475f, 0.0056f), TwistR = 1.15f, WristR = 15.79f,
+                        ElbowR = new Vector3(0.556f, -0.6859f, -0.4695f), LegL = new Vector3(-0.24f, 0.105f, 0.44f), FootYawL = 10f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f,
+                    }),
+                    K(0.05f, KeyEase.In, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.1f), RootYaw = 10f, HipsPos = new Vector3(0f, -0.28f, 0f), HipsYaw = 2.5f,
+                        HipsPitch = 12f, TorsoYaw = 3f, TorsoPitch = 24f, HeadPitch = -14f, ArmL = new Vector3(-0.36f, 1.2f, -0.1f),
+                        TwistL = -30f, OpenL = 0.85f, ArmR = new Vector3(0.3595f, 0.9628f, 0.501f), TwistR = -17.18f, WristR = 40.02f,
+                        ElbowR = new Vector3(0.4396f, -0.8661f, -0.2379f), LegL = new Vector3(-0.22f, 0.2f, 0.62f), FootYawL = 8f,
+                        LegR = new Vector3(0.3f, 0.105f, -0.3f), FootYawR = 44f, FootPitchR = 20f,
+                    }),
+                    K(0.12f, KeyEase.Snap, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.525f), RootYaw = -12f, HipsPos = new Vector3(0f, -0.235f, 0f), HipsYaw = -3f,
+                        HipsPitch = 8f, TorsoYaw = -3.6f, TorsoPitch = 19f, HeadPitch = -12f, ArmL = new Vector3(-0.42f, 1.18f, -0.2f),
+                        TwistL = -35f, OpenL = 0.9f, ArmR = new Vector3(0.1364f, 1.2076f, 1.2206f), TwistR = -69.73f, WristR = 50f,
+                        ElbowR = new Vector3(0.4164f, -0.9092f, -0.0003f), LegL = new Vector3(-0.21f, 0.105f, 0.91f), FootYawL = 4f,
+                        LegR = new Vector3(0.25f, 0.105f, -0.22f), FootYawR = 26f, FootPitchR = 28f,
+                    }),
+                    K(0.46f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.525f), RootYaw = -12f, HipsPos = new Vector3(0f, -0.235f, 0f), HipsYaw = -3f,
+                        HipsPitch = 8f, TorsoYaw = -3.6f, TorsoPitch = 19f, HeadPitch = -12f, ArmL = new Vector3(-0.42f, 1.18f, -0.2f),
+                        TwistL = -35f, OpenL = 0.9f, ArmR = new Vector3(0.1364f, 1.2076f, 1.2206f), TwistR = -69.73f, WristR = 50f,
+                        ElbowR = new Vector3(0.4164f, -0.9092f, -0.0003f), LegL = new Vector3(-0.21f, 0.105f, 0.91f), FootYawL = 4f,
+                        LegR = new Vector3(0.25f, 0.105f, -0.22f), FootYawR = 26f, FootPitchR = 28f,
+                    }),
+                    K(0.64f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, 0.2625f), RootYaw = 2f, HipsPos = new Vector3(0f, -0.1675f, 0f), HipsYaw = 1.5f,
+                        HipsPitch = 6f, TorsoYaw = 0.2f, TorsoPitch = 13.5f, HeadPitch = -8f, ArmL = new Vector3(-0.29f, 1.27f, 0.08f),
+                        TwistL = -22.5f, OpenL = 0.75f, ArmR = new Vector3(0.2347f, 1.1538f, 0.669f), TwistR = -35.46f,
+                        WristR = 23.07f, ElbowR = new Vector3(0.3449f, -0.7541f, -0.3764f), LegL = new Vector3(-0.2f, 0.22f, 0.52f),
+                        FootYawL = 8f, LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 31f, FootPitchR = 14f,
+                    }),
+                    K(0.8f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 16f, HipsPos = new Vector3(0f, -0.1f, 0f), HipsYaw = 6f, HipsPitch = 4f, TorsoYaw = 4f,
+                        TorsoPitch = 8f, HeadPitch = -4f, ArmL = new Vector3(-0.16f, 1.36f, 0.36f), TwistL = -10f, OpenL = 0.6f,
+                        ArmR = new Vector3(0.333f, 1.1f, 0.1174f), TwistR = -1.19f, WristR = -3.86f,
+                        ElbowR = new Vector3(0.2734f, -0.5991f, -0.7525f), LegL = new Vector3(-0.19f, 0.105f, 0.26f), FootYawL = 12f,
+                        LegR = new Vector3(0.23f, 0.105f, -0.22f), FootYawR = 36f,
+                    }),
+                },
+            };
+            var heavy = new HeavyAttack { Name = "Sword pre-motion", Limb = StrikeLimb.HandR, WindUp = windup, Coiled = coiled, Swing = comet };
+            return new BasicMoveset
+            {
+                Id = SwordId, Name = "Sword", Guard = guard, Moves = new[] { slash1, slash2, slash3, thrust }, Heavy = heavy,
+                Charge = rush.Charge, Surge = rush.Surge, Skills = new[] { fang1, fang2, quartet1, quartet2, quartet3, quartet4, comet },
+            };
+        }
     }
 
     /// <summary>Poses the rig to an <see cref="AttackPose"/> (port of the Attack Bench's applyPose). Writes model rotations only.</summary>
@@ -827,6 +1518,19 @@ namespace LightMMORPG.Characters
             rig.SetFingerCurl(side, 1f);
         }
 
+        /// <summary>
+        /// The axis a hand bends sideways about (<see cref="AttackPose.WristL"/>), in the hand's own (bind) frame: square to the
+        /// thumb and the forearm, turned so + takes the thumb side towards the forearm's far end (towards the little finger).
+        /// </summary>
+        public static Vector3 WristAxis(CharacterRig rig, int side)
+        {
+            var hand = (CharacterBone)CharacterBones.Side(CharacterBone.LeftHand, side);
+            var thumb = (CharacterBone)CharacterBones.Side(CharacterBone.LeftThumbProximal, side);
+            Vector3 fore = rig.BindLocal(hand).normalized;
+            Vector3 up = Vector3.ProjectOnPlane(rig.BindLocal(thumb), fore).normalized;
+            return Vector3.Cross(up, fore).normalized;
+        }
+
         /// <summary>One leg to a foot target (model space) with <see cref="KneePole"/>, over the current pose.</summary>
         public static void LegTo(CharacterRig rig, int side, Vector3 target, float weight, float hs)
         {
@@ -877,6 +1581,9 @@ namespace LightMMORPG.Characters
                 Quaternion roll = Quaternion.AngleAxis(twist * 0.5f, fore);
                 rig.SetModelRotation(ua + 1, roll * rig.GetModelRotation(ua + 1));
                 rig.SetModelRotation(ua + 2, roll * rig.GetModelRotation(ua + 1));
+                // the wrist bent sideways (a held sword's blade swung forward towards the forearm's line, or back)
+                float wrist = side < 0 ? P.WristL : P.WristR;
+                if (wrist != 0f) rig.SetModelRotation(ua + 2, rig.GetModelRotation(ua + 2) * Quaternion.AngleAxis(wrist, WristAxis(rig, side)));
                 rig.SetFingerCurl(side, 1f - Mathf.Clamp01(side < 0 ? P.OpenL : P.OpenR));
             }
 

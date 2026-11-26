@@ -9,6 +9,8 @@ them with a port of the game's solver, and writes a keyed action back as C# for 
     blender --background --python tools/attack_keys_blender.py -- check heavy [--blend path] [--dump out.json]
 
 Moves: heavy (= windup + swing + coiled), windup, swing, coiled, guard, left, right, body, power, charge, surge, all.
+The Sword moveset (BuildSword, actions Sword.<move>): sword (= all of them), sword.guard, sword.slash1 .. sword.slash3,
+sword.thrust, sword.windup, sword.coiled, sword.fang1, sword.fang2, sword.quartet1 .. sword.quartet4, sword.comet.
 `load` and `export` work on ArtSource/Player/player.blend unless --blend says otherwise; `load` saves the file and refuses to
 replace an action that already exists without --force. `export` writes ArtSource/Player/export/<move>.cs.txt (outside Assets,
 so Unity doesn't compile it) and changes nothing in the game. `check` changes no file except --dump.
@@ -21,7 +23,9 @@ The controls (bone collection "AttackControls"; everything else is solved, so do
     c.Hips   location = HipsPos, rotation = HipsPitch / HipsYaw / HipsRoll
     c.Torso  rotation = TorsoPitch / TorsoYaw / TorsoRoll
     c.Head   rotation = HeadPitch / HeadYaw
-    c.ArmL/R location = the fist target (ArmL / ArmR); custom properties Twist (degrees) and Open (0 fist .. 1 flat hand)
+    c.ArmL/R location = the fist target (ArmL / ArmR); custom properties Twist (degrees), Wrist (degrees: the wrist bent
+             towards the little finger, which swings a held sword's blade forward into line with the forearm) and Open
+             (0 fist .. 1 flat hand)
     c.ElbowL/R location = the elbow aim (ElbowL / ElbowR) in the chest's frame, drawn from the shoulder; its length (0..1) is how
              much it overrides the solver's own elbow, so at zero (on the shoulder) the solver decides
     c.LegL/R location = the foot target (LegL / LegR), rotation = FootPitch (X) and FootYaw (Y)
@@ -97,13 +101,15 @@ def side_bone(left, side):
 # ------------------------------------------------------------------ AttackPose
 VEC_FIELDS = ("RootPos", "HipsPos", "ArmL", "ArmR", "ElbowL", "ElbowR", "LegL", "LegR")
 DEG_FIELDS = ("RootYaw", "RootPitch", "RootRoll", "HipsYaw", "HipsPitch", "HipsRoll", "TorsoYaw", "TorsoPitch", "TorsoRoll",
-              "HeadYaw", "HeadPitch", "TwistL", "TwistR", "FootYawL", "FootYawR", "FootPitchL", "FootPitchR")
+              "HeadYaw", "HeadPitch", "TwistL", "TwistR", "WristL", "WristR", "FootYawL", "FootYawR", "FootPitchL", "FootPitchR")
 FRAC_FIELDS = ("OpenL", "OpenR")
 # the order the C# is written in
 FIELD_ORDER = ("RootPos", "RootYaw", "RootPitch", "RootRoll", "HipsPos", "HipsYaw", "HipsPitch", "HipsRoll",
                "TorsoYaw", "TorsoPitch", "TorsoRoll", "HeadYaw", "HeadPitch",
-               "ArmL", "TwistL", "OpenL", "ElbowL", "ArmR", "TwistR", "OpenR", "ElbowR",
+               "ArmL", "TwistL", "WristL", "OpenL", "ElbowL", "ArmR", "TwistR", "WristR", "OpenR", "ElbowR",
                "LegL", "FootYawL", "FootPitchL", "LegR", "FootYawR", "FootPitchR")
+# channels added after actions were already keyed: an action without the curve reads the default
+LATE_FIELDS = ("WristL", "WristR")
 
 
 def new_pose():
@@ -337,9 +343,10 @@ class Reader:
                 raise SyntaxError("can't read the statement at %r" % [x[1] for x in self.t[self.i:self.i + 6]])
 
 
-def read_rush(path=MOVESETS):
+def read_builder(name, path=MOVESETS):
+    """The local variables a moveset builder (BuildRush, BuildSword) leaves before its return."""
     text = open(path, encoding="utf-8").read()
-    start = text.index("{", text.index("private static BasicMoveset BuildRush()"))
+    start = text.index("{", text.index("private static BasicMoveset %s(" % name))
     depth, i = 0, start
     while True:
         depth += (text[i] == "{") - (text[i] == "}")
@@ -348,23 +355,55 @@ def read_rush(path=MOVESETS):
             break
     r = Reader(tokenize(text[start + 1: i - 1]))
     r.statements()
-    e = r.env
+    return r.env
+
+
+def _single(name, pose):
+    return {"Name": name, "Keys": [{"T": 0.0, "Ease": "Smooth", "Pose": pose}]}
+
+
+def read_rush(path=MOVESETS):
+    e = read_builder("BuildRush", path)
     h = e["heavy"]
-    single = lambda name, pose: {"Name": name, "Keys": [{"T": 0.0, "Ease": "Smooth", "Pose": pose}]}
-    return {"guard": single("Guard", e["guard"]), "left": e["left"], "right": e["right"], "body": e["body"], "power": e["power"],
-            "windup": h["WindUp"], "swing": h["Swing"], "coiled": single("Charged punch coiled", h["Coiled"]),
+    return {"guard": _single("Guard", e["guard"]), "left": e["left"], "right": e["right"], "body": e["body"], "power": e["power"],
+            "windup": h["WindUp"], "swing": h["Swing"], "coiled": _single("Charged punch coiled", h["Coiled"]),
             "charge": e["charge"], "surge": e["surge"]}
 
 
+SWORD_MOVES = ("sword.guard", "sword.slash1", "sword.slash2", "sword.slash3", "sword.thrust", "sword.windup", "sword.coiled",
+               "sword.fang1", "sword.fang2", "sword.quartet1", "sword.quartet2", "sword.quartet3", "sword.quartet4", "sword.comet")
+SINGLES = ("guard", "coiled", "sword.guard", "sword.coiled")
+
+
+def read_sword(path=MOVESETS):
+    e = read_builder("BuildSword", path)
+    h = e["heavy"]
+    out = {"sword.guard": _single("Sword guard", e["guard"]), "sword.windup": h["WindUp"],
+           "sword.coiled": _single("Sword pre-motion coiled", h["Coiled"])}
+    for m in SWORD_MOVES:
+        if m not in out:
+            out[m] = e[m[len("sword."):]]
+    return out
+
+
+def read_all(path=MOVESETS):
+    moves = read_rush(path)
+    if "private static BasicMoveset BuildSword(" in open(path, encoding="utf-8").read():
+        moves.update(read_sword(path))
+    return moves
+
+
 GROUPS = {"heavy": ("windup", "swing", "coiled"),
-          "all": ("guard", "left", "right", "body", "power", "windup", "swing", "coiled", "charge", "surge")}
+          "all": ("guard", "left", "right", "body", "power", "windup", "swing", "coiled", "charge", "surge"),
+          "sword": SWORD_MOVES}
 
 
 def move_names(arg):
     names = GROUPS.get(arg, (arg,))
     for n in names:
-        if n not in GROUPS["all"]:
-            sys.exit("unknown move %r (heavy, windup, swing, coiled, guard, left, right, body, power, charge, surge, all)" % n)
+        if n not in GROUPS["all"] and n not in SWORD_MOVES:
+            sys.exit("unknown move %r (heavy, windup, swing, coiled, guard, left, right, body, power, charge, surge, all; sword, %s)"
+                     % (n, ", ".join(SWORD_MOVES)))
     return names
 
 
@@ -621,6 +660,15 @@ def euler_q(yaw, pitch, roll):
     return AA(yaw, UP) @ AA(pitch, RIGHT) @ AA(roll, FWD)
 
 
+def wrist_axis(rig, side):
+    """AttackPoseSolver.WristAxis: in the hand's bind frame, square to the thumb and the forearm; + bends the thumb side towards
+    the forearm's far end (towards the little finger)."""
+    hand, thumb = side_bone(B["LeftHand"], side), side_bone(B["LeftThumbProximal"], side)
+    fore = rig.bind[hand].normalized()
+    up = project_on_plane(rig.bind[thumb], fore).normalized()
+    return up.cross(fore).normalized()
+
+
 def knee_pole(hip, foot, fy):
     d = (foot - hip).normalized()
     right = AA(fy, UP) @ RIGHT
@@ -672,6 +720,8 @@ def solve(rig, P):
         roll = AA(P["Twist" + s] * 0.5, fore)
         rig.set(ua + 1, roll @ rig.model[ua + 1])
         rig.set(ua + 2, roll @ rig.model[ua + 1])
+        if P["Wrist" + s]:
+            rig.set(ua + 2, rig.model[ua + 2] @ AA(P["Wrist" + s], wrist_axis(rig, side)))
         rig.finger_curl(side, 1 - clamp(P["Open" + s], 0, 1))
     for side in (-1, 1):
         s = "L" if side < 0 else "R"
@@ -732,6 +782,7 @@ def _channels():
     for s in "LR":
         vec("Arm" + s, "c.Arm" + s)
         out.append(("Twist" + s, None, "c.Arm" + s, '["Twist"]', None, 1.0))
+        out.append(("Wrist" + s, None, "c.Arm" + s, '["Wrist"]', None, 1.0))
         out.append(("Open" + s, None, "c.Arm" + s, '["Open"]', None, 1.0))
         vec("Elbow" + s, "c.Elbow" + s)
         vec("Leg" + s, "c.Leg" + s)
@@ -758,6 +809,7 @@ def ensure_controls(arm):
         if (got - joints[i]).length > 1e-3:
             sys.exit("PlayerRig's %s is not on the game's joint (%.4f m off): re-import the body first" % (n, (got - joints[i]).length))
     if all(c in arm.data.bones for c in CONTROLS):
+        ensure_wrist(arm)
         return
     bpy.context.view_layer.objects.active = arm
     arm.hide_set(False)
@@ -803,9 +855,20 @@ def ensure_controls(arm):
         pb.id_properties_ui("Twist").update(min=-180.0, max=180.0, description="AttackPose.Twist: fist roll, degrees")
         pb["Open"] = 0.0
         pb.id_properties_ui("Open").update(min=0.0, max=1.0, description="AttackPose.Open: 0 fist, 1 flat hand")
+    ensure_wrist(arm)
     for pb in arm.pose.bones:
         if pb.name not in CONTROLS:
             pb.rotation_mode = "QUATERNION"
+
+
+def ensure_wrist(arm):
+    """The Wrist property (added 2026-11-26, after the controls were first made) on both fist controls."""
+    for c in ("c.ArmL", "c.ArmR"):
+        pb = arm.pose.bones[c]
+        if "Wrist" not in pb:
+            pb["Wrist"] = 0.0
+            pb.id_properties_ui("Wrist").update(min=-90.0, max=90.0,
+                                                description="AttackPose.Wrist: the wrist bent towards the little finger (+) or the thumb (-), degrees")
 
 
 def read_controls(arm):
@@ -865,6 +928,8 @@ BLENDER_TO_EASE = {v: k for k, v in EASE_TO_BLENDER.items()}
 
 
 def action_name(move):
+    if move.startswith("sword."):
+        return "Sword." + move[len("sword."):]
     return "Rush." + move
 
 
@@ -929,6 +994,8 @@ def read_action(arm, move):
         field, comp, bone, prop, idx, unit = ch
         fc = bag.fcurves.find(data_path(bone, prop), index=idx if idx is not None else 0)
         if fc is None:
+            if field in LATE_FIELDS:
+                continue        # keyed before this channel existed: it stays at its default (0)
             sys.exit("%s has no curve for %s.%s" % (act.name, bone, prop))
         curves[ch] = fc
     frames = sorted({round(kp.co.x, 3) for fc in curves.values() for kp in fc.keyframe_points})
@@ -1000,18 +1067,20 @@ def cs_pose(P, indent):
 
 
 def cs_move(move, keys):
-    if move in ("coiled", "guard"):
-        return "// %s\n%s = %s;\n" % (move, move, cs_pose(keys[0]["Pose"], 0))
+    builder = "BuildSword" if move.startswith("sword.") else "BuildRush"
+    var = move.split(".")[-1]
+    if move in SINGLES:
+        return "// %s\n%s = %s;\n" % (move, var, cs_pose(keys[0]["Pose"], 0))
     body = "".join("    K(%s, KeyEase.%s, %s),\n" % (cs_num(k["T"]), k["Ease"], cs_pose(k["Pose"], 4)) for k in keys)
-    return "// %s: paste as this move's Keys in BuildRush (BasicMovesets.cs)\nKeys = new[]\n{\n%s},\n" % (move, body)
+    return "// %s: paste as this move's Keys in %s (BasicMovesets.cs)\nKeys = new[]\n{\n%s},\n" % (move, builder, body)
 
 
 def reread_cs(move, text):
-    """The exported C# read back with the same reader that reads BuildRush."""
+    """The exported C# read back with the same reader that reads BuildRush / BuildSword."""
     code = re.sub(r"//[^\n]*", "", text)
     r = Reader(tokenize(code[code.index("=") + 1:]))
     v = r.expr()
-    if move in ("coiled", "guard"):
+    if move in SINGLES:
         return [{"T": 0.0, "Ease": "Smooth", "Pose": v}]
     return v
 
@@ -1042,7 +1111,7 @@ def compare(a, b):
 def check(arg, dump):
     arm = get_rig()
     ensure_controls(arm)
-    rush = read_rush()
+    rush = read_all()
     scene = bpy.context.scene
     ok = True
     out = {}
@@ -1059,7 +1128,9 @@ def check(arg, dump):
         worst_joint = 0.0
         rig_out = []
         for k, key in zip(data["Keys"], back):
-            scene.frame_set(int(round(k["T"] * FPS)))
+            f = k["T"] * FPS                      # keys between frames (0.025 s = frame 2.5) are posed at their own time
+            whole = math.floor(f + 1e-6)
+            scene.frame_set(int(whole), subframe=max(0.0, f - whole))
             P = read_controls(arm)
             root, positions = pose_body(arm, P)
             bpy.context.view_layer.update()
@@ -1145,7 +1216,7 @@ def main():
             sys.exit(1)
     elif cmd == "load":
         ensure_controls(arm)
-        rush = read_rush()
+        rush = read_all()
         for move in move_names(arg):
             if not force and bpy.data.actions.get(action_name(move)):
                 sys.exit("action %s already exists (it may hold your keys): pass --force to replace it" % action_name(move))

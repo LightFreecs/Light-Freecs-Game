@@ -1,5 +1,6 @@
 using LightMMORPG.Characters;
 using LightMMORPG.Config;
+using LightMMORPG.Player;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -8,7 +9,12 @@ namespace LightMMORPG.VFX
     /// <summary>
     /// The fighter's sword in sword stance: a placeholder blade built from cubes in the right fist (until one is modelled in
     /// Blender), a glow shell whose colour and strength show the readied sword skill, and a light ribbon traced between the
-    /// blade's base and tip whenever it sweeps fast, so every swing leaves an anime slash arc.
+    /// blade's base and tip while a strike is live (the animator's <see cref="PlayerProceduralAnimator.InStrike"/>) and the
+    /// tip sweeps fast, so every slash leaves an anime arc and wind-ups don't smear.
+    /// The blade leaves the fist on the thumb side, tipped 0.35 along the forearm; its flat faces the palm and its edges run along
+    /// the forearm, like a real grip, so the sword moves (BasicMovesets.Sword) cut edge first. It is placed in the hand's own frame
+    /// from the bind pose, so it rides the fist roll and the wrist bend (<see cref="AttackPose.WristR"/>) whatever pose it was drawn
+    /// in. The same placement is in ArtSource/Player/player.blend (SwordProxy) and docs/bench/sword-bench.html.
     /// </summary>
     public sealed class SwordVisual : MonoBehaviour
     {
@@ -20,6 +26,7 @@ namespace LightMMORPG.VFX
 
         private Transform _root, _base, _tip;
         private Renderer _glow;
+        private PlayerProceduralAnimator _anim;
         private MaterialPropertyBlock _mpb;
         private GameObject _ribbonGo;
         private Mesh _ribbon;
@@ -61,18 +68,20 @@ namespace LightMMORPG.VFX
             var rig = GetComponentInChildren<CharacterRig>();
             Transform hand = rig != null ? rig[CharacterBone.RightHand] : null;
             if (hand == null) return;
-            Vector3 fore = hand.position - rig[CharacterBone.RightLowerArm].position;
+            _anim = GetComponent<PlayerProceduralAnimator>();
+            // in the hand's own frame (the rig's bind rotations are identity): the forearm's line and the thumb's side, from the bind pose
+            Vector3 fore = rig.BindLocal(CharacterBone.RightHand);
             float forearm = Mathf.Max(0.12f, fore.magnitude);
             fore /= forearm;
             // the blade leaves the fist on the thumb side, tipped a little along the forearm
-            Transform thumb = rig[CharacterBone.RightThumbProximal];
-            Vector3 up = thumb != null ? Vector3.ProjectOnPlane(thumb.position - hand.position, fore) : Vector3.zero;
-            if (up.sqrMagnitude < 1e-6f) up = Vector3.ProjectOnPlane(transform.forward, fore);
+            Vector3 up = Vector3.ProjectOnPlane(rig.BindLocal(CharacterBone.RightThumbProximal), fore);
+            if (up.sqrMagnitude < 1e-8f) up = Vector3.ProjectOnPlane(Vector3.forward, fore);
             Vector3 axis = (up.normalized + fore * 0.35f).normalized;
 
             _root = new GameObject("Sword").transform;
             _root.SetParent(hand, false);
-            _root.SetPositionAndRotation(hand.position + fore * (forearm * 0.25f), Quaternion.LookRotation(axis, fore));
+            _root.localPosition = fore * (forearm * 0.25f);
+            _root.localRotation = Quaternion.LookRotation(axis, fore);
 
             float k = forearm / 0.27f;            // ~1 on the default hero
             float len = 0.95f * k, start = 0.11f * k;
@@ -81,10 +90,11 @@ namespace LightMMORPG.VFX
             Tint(steel, new Color(0.8f, 0.84f, 0.92f));
             var dark = new Material(cfg.fighterBodyMaterial);
             Tint(dark, new Color(0.1f, 0.1f, 0.14f));
+            // local x = the flat's normal (the palm's side), y = along the edges (the forearm's line), z = the blade
             Box("Grip", new Vector3(0f, 0f, -0.02f * k), new Vector3(0.035f, 0.035f, 0.2f) * k, dark);
-            Box("Guard", new Vector3(0f, 0f, 0.09f * k), new Vector3(0.2f, 0.035f, 0.04f) * k, dark);
-            Box("Blade", new Vector3(0f, 0f, start + len * 0.5f), new Vector3(0.055f * k, 0.012f * k, len), steel);
-            _glow = Box("Glow", new Vector3(0f, 0f, start + len * 0.5f), new Vector3(0.11f * k, 0.045f * k, len * 1.04f), new Material(cfg.auraMaterial));
+            Box("Guard", new Vector3(0f, 0f, 0.09f * k), new Vector3(0.035f, 0.2f, 0.04f) * k, dark);
+            Box("Blade", new Vector3(0f, 0f, start + len * 0.5f), new Vector3(0.012f * k, 0.055f * k, len), steel);
+            _glow = Box("Glow", new Vector3(0f, 0f, start + len * 0.5f), new Vector3(0.045f * k, 0.11f * k, len * 1.04f), new Material(cfg.auraMaterial));
             _base = Point("Base", start + len * 0.12f);
             _tip = Point("Tip", start + len);
 
@@ -153,13 +163,14 @@ namespace LightMMORPG.VFX
             _mpb.SetFloat(IntensityId, _glowNow);
             _glow.SetPropertyBlock(_mpb);
 
-            // slash ribbon: shift the samples, add this frame's blade, fade each by age and by how fast the tip swept then
+            // slash ribbon: shift the samples, add this frame's blade, fade each by age and by how fast the tip swept then; a new
+            // sample only shows while a strike is live (no rig: whenever it sweeps fast)
             for (int i = Samples - 1; i > 0; i--) { _b[i] = _b[i - 1]; _t[i] = _t[i - 1]; _a[i] = _a[i - 1]; }
             Vector3 tip = _tip.position;
             float sweep = _count > 0 ? (tip - _t[1]).magnitude / Mathf.Max(Time.deltaTime, 1e-3f) : 0f;
             _b[0] = _base.position;
             _t[0] = tip;
-            _a[0] = Mathf.InverseLerp(4f, 14f, sweep);
+            _a[0] = _anim == null || _anim.InStrike ? Mathf.InverseLerp(4f, 14f, sweep) : 0f;
             _count = Mathf.Min(_count + 1, Samples);
             for (int i = 0; i < Samples; i++)
             {

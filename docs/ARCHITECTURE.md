@@ -1072,3 +1072,30 @@ and tuning knobs in `docs/COMBAT_PLAN.md`, rules under "Gameplay rules" above).
 - Not done: a remote attacker's own hit-stop isn't predicted (it shows ~one round trip after the impact frame); the dash's
   dodge window is on server time (no lag compensation).
 - Verified: headless compile only; nothing was played (the owner tests by hand).
+
+### 2026-11-26 — Sword moveset (combat phase 2)
+Sword stance now has its own moveset, keyed in Blender: `BasicMovesets.Sword` (`BuildSword`, id `sword`): a 4-hit light combo
+(diagonal slash down-right, rising slash, horizontal sweep, thrust finisher), the sword skills' pre-motion as its heavy wind-up
+(low, blade drawn back at the hip, tip forward; Coiled = deeper) and the skills' strikes in `BasicMoveset.Skills` (Twin Fang x2,
+Quartet Edge x4, Comet Thrust, which is also the sword's plain heavy swing). Charge / Surge are Rush's. Details and numbers:
+`docs/COMBAT_PLAN.md` ("phase 2"); bench `docs/bench/sword-bench.html` (+ `sword-bench.json`).
+- `AttackPose.WristL / WristR` (new): the wrist bent sideways, degrees, + towards the little finger (a held blade swings into
+  line with the forearm). `AttackPoseSolver.Apply` turns the hand by it after the fist roll, about `WristAxis` (in the hand's
+  bind frame, square to the thumb and the forearm). Lerp / Combine / Mirror carry it (mirrored without a sign flip). Zero in
+  every fist move, so nothing else changed.
+- `tools/attack_keys_blender.py`: the `Wrist` custom property on `c.ArmL/R` (added to existing files by `ensure_controls`;
+  actions keyed before it read 0), the Sword moves (`sword`, `sword.<move>`, actions `Sword.<move>`, read back from
+  `BuildSword`), and `check` poses keys between frames (0.025 s = frame 2.5) at their own time. Round trip OK on all Rush and
+  Sword keys. `player.blend` has `SwordProxy`, the game's placeholder blade parented to the `RightHand` bone, for posing.
+- `VFX/SwordVisual`: built in the hand's own frame from the bind pose (rides the fist roll and the wrist, whatever pose it was
+  drawn in); the blade, glow and guard turned so the flat faces the palm (edges along the forearm, like a real grip); the slash
+  ribbon only grows during a strike (`PlayerProceduralAnimator.InStrike`).
+- `PlayerProceduralAnimator`: `MovesetId`, `PlayStrike(move)` (a skill's strike), `InStrike`, and the heavy it started is kept
+  (`HeavyNow`), so a moveset switch can't swap a wind-up or swing under it.
+- `PlayerCombat`: `SyncSwordMoveset` (every instance: Sword set while the sword is drawn, owner predicted, others from the
+  SyncVar; the fighter's own set back when sheathed), `Moveset` = the Sword set while `SwordDrawn` (server hit timing and strike
+  points), skill strikes from `SwordSkills.StrikeMove` (`Moves` index `BasicMovesets.Sword.Skills`; -1 still = the heavy
+  swing), no sheathing during a skill or its post-motion delay.
+- Verified: the keys round-trip Blender ↔ C# exactly; the bench's solver (with the wrist) matches the tool's within 0.0012 mm on
+  all 69 sword keys; headless compile. Nothing was played in Unity (the owner tests by hand): not seen with the Toon Head and hair,
+  on a moving fighter, or over the network.

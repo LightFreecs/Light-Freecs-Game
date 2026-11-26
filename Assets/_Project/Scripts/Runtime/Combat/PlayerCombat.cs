@@ -96,8 +96,16 @@ namespace LightMMORPG.Combat
         /// <summary>Owner: how charged the held heavy is (0 = a tap, 1 = full); 0 when not held.</summary>
         public float HeavyCharge01 => _heavyCharging ? CombatMath.Charge01(Time.time - _heavyChargeStart, _config.heavyMaxChargeTime) : 0f;
 
-        /// <summary>The basic-attack moveset this fighter uses (its animator's; the default on a server without one).</summary>
-        private BasicMoveset Moveset => _anim != null ? _anim.Moveset : BasicMovesets.Get(BasicMovesets.DefaultId);
+        /// <summary>
+        /// The basic-attack moveset this fighter uses: the sword stance's while the sword is drawn (the synced state, so the server
+        /// times every blow by the moves it plays), else the fighter's own (its animator's; the default on a server without one).
+        /// </summary>
+        private BasicMoveset Moveset => _sword.Value ? BasicMovesets.Sword
+            : _anim != null && !_animSword ? _anim.Moveset : BasicMovesets.Get(_ownMoveset);
+
+        // the animator plays the Sword set while the sword is drawn and its own set again once it's sheathed (SyncSwordMoveset)
+        private bool _animSword;
+        private string _ownMoveset = BasicMovesets.DefaultId;
 
         private void Awake()
         {
@@ -193,7 +201,8 @@ namespace LightMMORPG.Combat
             if (!IsOwner || _input == null || !_input.InputEnabled) return;
             bool canAct = !_stats.IsDown.Value && !_motor.IsStunned;
             float now = Time.time;
-            if (_input.Pressed(GameAction.Sword) && !_heavyCharging)
+            // not mid pre-motion or mid skill (the skill's strikes and its post-motion delay are the sword's)
+            if (_input.Pressed(GameAction.Sword) && !_heavyCharging && now >= _busyUntilLocal)
             {
                 _swordLocal = !_swordLocal;
                 SwordVis.SetDrawn(_swordLocal);
@@ -425,18 +434,37 @@ namespace LightMMORPG.Combat
             ThirdPersonCamera.Punch(6f, 0.25f);
         }
 
+        /// <summary>
+        /// Every instance: the animator plays the Sword moveset while the sword is drawn (the owner's predicted state, everyone
+        /// else's synced one) and the fighter's own set again once it's sheathed. Light / heavy / pre-motion then come from it.
+        /// </summary>
+        private void SyncSwordMoveset()
+        {
+            bool drawn = IsOwner ? _swordLocal : _sword.Value;
+            if (_anim == null || drawn == _animSword) return;
+            _animSword = drawn;
+            if (drawn)
+            {
+                if (_anim.MovesetId != BasicMovesets.SwordId) _ownMoveset = _anim.MovesetId;
+                _anim.SetMoveset(BasicMovesets.SwordId);
+            }
+            else _anim.SetMoveset(_ownMoveset);
+        }
+
         /// <summary>All clients: the skill's strikes on schedule, and the readied skill's glow while the pre-motion is held.</summary>
         private void UpdateSwordVisuals()
         {
+            SyncSwordMoveset();
             if (_playTier >= 0)
             {
                 var sk = SwordSkills.All[_playTier];
                 float t = Time.time - _playStart;
                 while (_playNext < sk.Starts.Length && t >= sk.Starts[_playNext])
                 {
-                    int move = sk.Moves[_playNext++];
+                    int i = _playNext++;
                     if (_anim == null) continue;
-                    if (move >= 0) _anim.PlayAttack(AttackKind.Light, move);
+                    // each strike is its own keyed move (BasicMovesets.Sword.Skills), cross-faded from the one before
+                    if (sk.Moves[i] >= 0) _anim.PlayStrike(SwordSkills.StrikeMove(sk, i));
                     else _anim.PlayHeavySwing(1f);
                 }
                 if (_playNext >= sk.Starts.Length) _playTier = -1;
@@ -556,7 +584,7 @@ namespace LightMMORPG.Combat
             MeleeHits(_heavyAim, damage, stun, CombatMath.HeavyKnockback(_heavyAim, charge01), HitKind.Heavy, strike, charge01, _heavySweep, _heavyFrom);
         }
 
-        private AttackMove SkillMove(SwordSkill sk, int i) => sk.Moves[i] >= 0 ? Moveset.Move(sk.Moves[i]) : Moveset.Heavy?.Swing;
+        private static AttackMove SkillMove(SwordSkill sk, int i) => SwordSkills.StrikeMove(sk, i);
 
         /// <summary>
         /// Server: a sword skill fired from the held pre-motion (sword stance). The tier is the client's pick capped by the

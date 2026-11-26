@@ -96,7 +96,29 @@ namespace LightMMORPG.Player
 
         /// <summary>The basic-attack moveset this fighter plays (default <see cref="BasicMovesets.DefaultId"/>; later picked from an inventory).</summary>
         public BasicMoveset Moveset => BasicMovesets.Get(_movesetId);
+        /// <summary>The id of <see cref="Moveset"/> (the sword stance switches it to <see cref="BasicMovesets.SwordId"/> and back).</summary>
+        public string MovesetId => _movesetId;
         public void SetMoveset(string id) => _movesetId = string.IsNullOrEmpty(id) ? BasicMovesets.DefaultId : id;
+
+        /// <summary>The heavy being wound up or swung (kept from its start, so switching movesets mid-swing can't swap it).</summary>
+        private HeavyAttack HeavyNow => _heavyAtk ?? Moveset.Heavy;
+        private HeavyAttack _heavyAtk;
+
+        /// <summary>
+        /// A strike is live: the playing move (or heavy swing) is inside its <see cref="AttackMove.Streak"/> window. The sword's slash
+        /// ribbon only grows then, so wind-ups and recoveries leave no smear.
+        /// </summary>
+        public bool InStrike => _heavy == HeavyPhase.Swing ? InWindow(HeavyNow?.Swing, _heavyT) : _move != null && InWindow(_move, _moveT);
+
+        private static bool InWindow(AttackMove m, float t) => m != null && m.Streak.x >= 0f && t >= m.Streak.x && t <= m.Streak.y;
+
+        /// <summary>Plays one given move (a sword skill's strike), cross-faded from what's on screen, with the striking limb's speed lines.</summary>
+        public void PlayStrike(AttackMove m)
+        {
+            if (_proc == null || m == null) return;
+            StartMove(m);
+            if (_speedLines != null) _speedLines.Begin();
+        }
 
         /// <summary>
         /// How this fighter walks and runs (default <see cref="LocomotionStyles.DefaultId"/>). Several running styles are planned:
@@ -196,6 +218,7 @@ namespace LightMMORPG.Player
         public void PlayHeavyWindUp()
         {
             if (_proc == null || Moveset.Heavy == null) return;
+            _heavyAtk = Moveset.Heavy;
             _move = null; _fromMove = null;   // a fade still running (the power-up being let go) carries on into the wind-up
             _attackT = 1f;
             _heavy = HeavyPhase.WindUp;
@@ -209,13 +232,15 @@ namespace LightMMORPG.Player
         /// </summary>
         public void PlayHeavySwing(float charge01)
         {
-            var h = Moveset.Heavy;
+            // the swing that belongs to the wind-up on screen (the set can't change under it), else the set's own
+            var h = _heavy == HeavyPhase.WindUp && _heavyAtk != null ? _heavyAtk : Moveset.Heavy;
             if (_proc == null || h == null)
             {
                 _heavy = HeavyPhase.None;
                 PlayCastPose(AttackKind.Heavy, 0);
                 return;
             }
+            _heavyAtk = h;
             charge01 = Mathf.Clamp01(charge01);
             if (_heavy == HeavyPhase.WindUp) SampleHeavyHeld(h, _heavyFrom);
             else
@@ -242,7 +267,7 @@ namespace LightMMORPG.Player
         /// <summary>Ends the heavy where it is, cross-fading from its current pose into whatever comes next.</summary>
         private void StopHeavy(float guardHold)
         {
-            var h = Moveset.Heavy;
+            var h = HeavyNow;
             if (h != null && _heavy != HeavyPhase.None)
             {
                 SampleHeavy(h, _fadeFrom);
@@ -282,7 +307,7 @@ namespace LightMMORPG.Player
                 if (_heavyCharge >= 1f && !_heavyFull) { _heavyFull = true; _heavyFlashPending = true; }
                 return;
             }
-            var h = Moveset.Heavy;
+            var h = HeavyNow;
             if (h == null || _heavyT >= h.Swing.Length)
             {
                 // the swing's last key is the guard: hold it a moment, then relax (AdvanceMove)
@@ -522,7 +547,7 @@ namespace LightMMORPG.Player
                 _pose.ArmL -= _pose.HipsPos * airborne;
                 _pose.ArmR -= _pose.HipsPos * airborne;
             }
-            else if (_heavy != HeavyPhase.None && set.Heavy != null) SampleHeavy(set.Heavy, _pose);
+            else if (_heavy != HeavyPhase.None && HeavyNow != null) SampleHeavy(HeavyNow, _pose);
             else if (_move != null)
             {
                 _move.Sample(_moveT, _pose);
@@ -992,8 +1017,9 @@ namespace LightMMORPG.Player
             // speed lines on the striking limb (frozen with the pose during hit-stop, since this point isn't reached then)
             if (_speedLines != null && _proc != null && _proc.Rig != null)
             {
-                bool swing = _heavy == HeavyPhase.Swing && Moveset.Heavy != null;
-                _speedLines.Tick(_proc.Rig, swing ? Moveset.Heavy.Swing : _move, swing ? _heavyT : _moveT, dt, _hs);
+                var heavyNow = HeavyNow;
+                bool swing = _heavy == HeavyPhase.Swing && heavyNow != null;
+                _speedLines.Tick(_proc.Rig, swing ? heavyNow.Swing : _move, swing ? _heavyT : _moveT, dt, _hs);
             }
 
             // full charge: a flash at the drawn-back fist, so the player knows letting go now hits hardest
@@ -1001,7 +1027,7 @@ namespace LightMMORPG.Player
             {
                 _heavyFlashPending = false;
                 var rig = _proc != null ? _proc.Rig : null;
-                var h = Moveset.Heavy;
+                var h = HeavyNow;
                 if (rig != null && h != null && _heavy == HeavyPhase.WindUp)
                 {
                     int side = h.Limb == StrikeLimb.HandL || h.Limb == StrikeLimb.FootL ? -1 : 1;
