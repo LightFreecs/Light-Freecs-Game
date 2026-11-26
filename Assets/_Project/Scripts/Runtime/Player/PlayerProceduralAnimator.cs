@@ -98,6 +98,15 @@ namespace LightMMORPG.Player
         private readonly AttackPose _launchPose = new();
         private const float LaunchIn = 0.08f, LaunchOut = 0.3f;
 
+        // keyed hit reactions (overhaul T2, HitPoses.Get): the server's reaction played whole over the base pose. Key 0 is the impact
+        // drawing, posed once inside the hit-stop so the freeze shows it; a big blow plays it slower (it lasts its longer hitstun).
+        // Turned towards the blow (at most ReactMaxTurn). The fighter's own next action (attack, block, dash, power-up) cuts it.
+        private AttackMove _react;
+        private float _reactT, _reactRate = 1f, _reactW, _reactYaw;
+        private bool _reactSnap;
+        private readonly AttackPose _reactPose = new();
+        private const float ReactOut = 0.12f, ReactCut = 0.08f, ReactLight = 0.45f, ReactBig = 0.75f, ReactMaxTurn = 45f;
+
         /// <summary>The basic-attack moveset this fighter plays (default <see cref="BasicMovesets.DefaultId"/>; later picked from an inventory).</summary>
         public BasicMoveset Moveset => BasicMovesets.Get(_movesetId);
         /// <summary>The id of <see cref="Moveset"/> (the sword stance switches it to <see cref="BasicMovesets.SwordId"/> and back).</summary>
@@ -376,6 +385,7 @@ namespace LightMMORPG.Player
             _launchStrength = Mathf.Lerp(0.6f, 1f, impact);
             _launchDur = CombatMath.HeavyAirTime(impact);
             _launchT = 0f;
+            _react = null;
             if (_heavy != HeavyPhase.None) { _heavy = HeavyPhase.None; SetHeavyFace(false); }
             _move = null; _fromMove = null; _fadeFromHeld = false; _moveWeight = 0f;
         }
@@ -499,6 +509,7 @@ namespace LightMMORPG.Player
                 AttackPoseSolver.ArmTo(rig, 1, r * hs, wr, hs);
             }
             ApplyLaunch(rig, hs);
+            ApplyReaction(rig, hs);
             ApplyHitReaction(rig, hs);
         }
 
@@ -643,6 +654,27 @@ namespace LightMMORPG.Player
             TurnPose(_launchPose, _launchYaw);
             BlendOverBase(rig, hs, _launchPose, w, w);
         }
+
+        /// <summary>A keyed reaction (<see cref="PlayHitReaction"/>) over the base pose, legs and all (in the air the legs keep flying).</summary>
+        private void ApplyReaction(CharacterRig rig, float hs)
+        {
+            if (_react == null) return;
+            float len = _react.Length;
+            if (_reactT >= len || _reactW <= 0f) { _react = null; return; }
+            float w = (1f - Smooth01(len - ReactOut * _reactRate, len, _reactT)) * _reactW;
+            if (w <= 0.001f) return;
+            _react.Sample(_reactT, _reactPose);
+            TurnPose(_reactPose, _reactYaw);
+            BlendOverBase(rig, hs, _reactPose, w, w * (1f - _flightBlend));
+        }
+
+        /// <summary>The keyed move for a reaction (null = none keyed yet: the procedural recoil plays). <paramref name="side"/> = where it landed, + right.</summary>
+        private static AttackMove KeyedReaction(HitReaction r, float side) => r switch
+        {
+            HitReaction.FlinchHigh => HitPoses.Get(side > 0f ? "flinchHighR" : "flinchHigh"),
+            HitReaction.FlinchBody => HitPoses.Get("flinchBody"),
+            _ => null,
+        };
 
         /// <summary>Turns a whole attack-space pose about the vertical through its root: limb targets, feet, head and root together.</summary>
         private static void TurnPose(AttackPose p, float yaw)
@@ -868,9 +900,10 @@ namespace LightMMORPG.Player
         /// <paramref name="worldPush"/> (attacker → victim). The body reacts around that spot: a head shot snaps the head back
         /// and away, a chest hit rocks and twists the upper body away, a gut punch folds the fighter over the fist with the
         /// hips knocked back, a leg kick buckles that knee. Hits off-centre twist the body away from the struck side.
-        /// <paramref name="strength"/> ~1 for a jab, ~1.6 for a finisher / heavy; blocked hits are small.
+        /// <paramref name="strength"/> ~1 for a jab, ~1.6 for a finisher / heavy; blocked hits are small. A <paramref name="reaction"/>
+        /// with keyed poses (<see cref="HitPoses.Get"/>) plays those instead, whole, and ends what this fighter was doing.
         /// </summary>
-        public void PlayHitReaction(Vector3 worldPoint, Vector3 worldPush, float strength, bool big)
+        public void PlayHitReaction(Vector3 worldPoint, Vector3 worldPush, float strength, bool big, HitReaction reaction = HitReaction.None)
         {
             var rig = _proc != null ? _proc.Rig : null;
             if (rig == null) return;
@@ -880,9 +913,27 @@ namespace LightMMORPG.Player
             Vector3 push = worldPush.sqrMagnitude > 1e-6f ? rt.InverseTransformDirection(worldPush.normalized) : Vector3.back;
             push.y = 0f;
             _hrPush = push.sqrMagnitude > 1e-6f ? push.normalized : Vector3.back;
-            _hrStrength = strength;
-            _hrDur = big ? 0.62f : 0.38f;
-            _hrT = 0f;
+            var keyed = KeyedReaction(reaction, _hrPoint.x);
+            if (keyed != null && _graphics != null)
+            {
+                Vector3 g = _graphics.InverseTransformDirection(worldPush.sqrMagnitude > 1e-6f ? worldPush.normalized : -_graphics.forward);
+                _reactYaw = Mathf.Clamp(Mathf.Atan2(-g.x, -g.z) * Mathf.Rad2Deg, -ReactMaxTurn, ReactMaxTurn);
+                _react = keyed;
+                _reactT = 0f;
+                _reactW = 1f;
+                _reactRate = keyed.Length / (big ? ReactBig : ReactLight);
+                _reactSnap = true;
+                _hrT = 9f;
+                if (_heavy != HeavyPhase.None) { _heavy = HeavyPhase.None; SetHeavyFace(false); }
+                _move = null; _fromMove = null; _fadeFromHeld = false; _moveWeight = 0f;
+            }
+            else
+            {
+                if (reaction != HitReaction.None) _react = null;
+                _hrStrength = strength;
+                _hrDur = big ? 0.62f : 0.38f;
+                _hrT = 0f;
+            }
             if (big && strength > 0.5f)
             {
                 if (_face == null) _face = _model.GetComponentInChildren<ToonFaceAnimator>();
@@ -973,10 +1024,16 @@ namespace LightMMORPG.Player
         {
             if (_graphics == null || _model == null) return;
             float dt = Mathf.Max(Time.deltaTime, 1e-4f);
-            if (Time.time < _hitStopUntil)
+            if (Time.time < _hitStopUntil && !_reactSnap)
             {
                 _lastPos = _graphics.position;
                 return; // hold the pose
+            }
+            if (_reactSnap)
+            {
+                // a keyed reaction just started: pose its impact key now, so the freeze holds the struck drawing
+                _reactSnap = false;
+                if (Time.time < _hitStopUntil) dt = 1e-4f;
             }
             bool down = _stats != null && _stats.IsDown.Value;
             _down = Mathf.MoveTowards(_down, down ? 1f : 0f, dt * (down ? 2.5f : 4f));
@@ -1005,6 +1062,9 @@ namespace LightMMORPG.Player
             _recoil = Vector3.MoveTowards(_recoil, Vector3.zero, dt * 3f);
             _hrT += dt;
             _launchT += dt;
+            _reactT += dt * _reactRate;
+            if (_react != null && (_move != null || _heavy != HeavyPhase.None || _blockingNow || _dashingNow || _powerUp))
+                _reactW = Mathf.MoveTowards(_reactW, 0f, dt / ReactCut);
 
             _phase += dt * Mathf.Lerp(2.2f, 9f, Mathf.Clamp01(planar / 13f));
             UpdateLocomotion(dt, local, planar, flying, dashing, stunned);

@@ -76,7 +76,8 @@ namespace LightMMORPG.VFX
             return (g != null ? g : p.transform).GetComponentInChildren<CharacterRig>();
         }
 
-        private void OnHit(PlayerStats victim, PlayerStats attacker, Vector3 point, float damage, bool blocked, bool guardBreak, HitKind kind, float impact)
+        private void OnHit(PlayerStats victim, PlayerStats attacker, Vector3 point, float damage, bool blocked, bool guardBreak, HitKind kind, float impact,
+            HitReaction reaction)
         {
             if (victim == null || blocked || damage <= 0f) return;
             var s = Get(victim);

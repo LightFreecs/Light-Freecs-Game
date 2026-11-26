@@ -216,6 +216,152 @@ namespace LightMMORPG.Characters
             LegL = new Vector3(-0.14f, 0.70f, 0.30f), FootYawL = -6f, FootPitchL = 35f,
             LegR = new Vector3(0.22f, 0.50f, 0.58f), FootYawR = 8f, FootPitchR = 30f,
         };
+
+        /// <summary>
+        /// A keyed reaction by name (overhaul T2; Blender actions <c>Hit.&lt;name&gt;</c> in <c>player.blend</c>, traced from the reference
+        /// clips), or null. Played whole by the victim's animator over the base pose; key 0 is the impact drawing (shown through the
+        /// hit-stop) and the last key is the guard. flinchHigh / flinchHighR: struck on the left / right of the face, the head snaps aside
+        /// and back, the struck side's arm flung out, the body twisting away. flinchBody: folds over the blow.
+        /// </summary>
+        public static AttackMove Get(string name) => name != null && Keyed.TryGetValue(name, out var m) ? m : null;
+
+        private static readonly Dictionary<string, AttackMove> Keyed = BuildHits();
+
+        // <hit keys> generated from the Blender actions Hit.* (player.blend; tools/attack_keys_blender.py reads it back)
+        private static Dictionary<string, AttackMove> BuildHits()
+        {
+            AttackKey K(float t, KeyEase e, AttackPose p) => new() { T = t, Ease = e, Pose = p };
+
+            var flinchHigh = new AttackMove
+            {
+                Name = "Flinch high", Length = 0.45f,
+                Keys = new[]
+                {
+                    K(0f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 12f, RootPitch = -4f, HipsPos = new Vector3(0f, -0.07f, -0.03f), HipsYaw = 6f, HipsPitch = 3f,
+                        TorsoYaw = 22f, TorsoPitch = -10f, TorsoRoll = 8f, HeadYaw = 38f, HeadPitch = -30f,
+                        ArmL = new Vector3(-0.5876f, 1.3855f, 0.1778f), TwistL = -10f, OpenL = 0.6f,
+                        ArmR = new Vector3(0.1937f, 1.1688f, -0.2152f), TwistR = 10f, OpenR = 0.3f,
+                        LegL = new Vector3(-0.18f, 0.105f, 0.22f), FootYawL = 14f, LegR = new Vector3(0.22f, 0.105f, -0.22f),
+                        FootYawR = 34f,
+                    }),
+                    K(0.16f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 12f, RootPitch = -7f, HipsPos = new Vector3(0f, -0.09f, -0.06f), HipsYaw = 6f, HipsPitch = 3f,
+                        TorsoYaw = 30f, TorsoPitch = -16f, TorsoRoll = 12f, HeadYaw = 46f, HeadPitch = -36f,
+                        ArmL = new Vector3(-0.6328f, 1.2776f, 0.1169f), OpenL = 0.85f, ArmR = new Vector3(0.1255f, 1.0989f, -0.5051f),
+                        TwistR = 10f, OpenR = 0.6f, LegL = new Vector3(-0.18f, 0.105f, 0.22f), FootYawL = 14f,
+                        LegR = new Vector3(0.22f, 0.105f, -0.22f), FootYawR = 34f,
+                    }),
+                    K(0.3f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 12f, RootPitch = -3f, HipsPos = new Vector3(0f, -0.07f, -0.03f), HipsYaw = 6f, HipsPitch = 3f,
+                        TorsoYaw = 14f, TorsoPitch = -5f, TorsoRoll = 5f, HeadYaw = 20f, HeadPitch = -16f,
+                        ArmL = new Vector3(-0.4987f, 1.3222f, 0.1875f), TwistL = -12f, OpenL = 0.35f,
+                        ArmR = new Vector3(0.207f, 1.259f, -0.0193f), TwistR = 15f, OpenR = 0.2f,
+                        LegL = new Vector3(-0.18f, 0.105f, 0.22f), FootYawL = 14f, LegR = new Vector3(0.22f, 0.105f, -0.22f),
+                        FootYawR = 34f,
+                    }),
+                    K(0.45f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 12f, HipsPos = new Vector3(0f, -0.06f, 0f), HipsYaw = 6f, HipsPitch = 3f, TorsoYaw = 4f,
+                        TorsoPitch = 6f, HeadPitch = -6f, ArmL = new Vector3(-0.07f, 1.55f, 0.32f), TwistL = -20f,
+                        ArmR = new Vector3(0.12f, 1.49f, 0.2f), TwistR = 20f, LegL = new Vector3(-0.18f, 0.105f, 0.22f),
+                        FootYawL = 14f, LegR = new Vector3(0.22f, 0.105f, -0.22f), FootYawR = 34f,
+                    }),
+                },
+            };
+
+            var flinchHighR = new AttackMove
+            {
+                Name = "Flinch high (struck on the right)", Length = 0.45f,
+                Keys = new[]
+                {
+                    K(0f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 12f, RootPitch = -4f, HipsPos = new Vector3(0f, -0.07f, -0.03f), HipsYaw = 6f, HipsPitch = 3f,
+                        TorsoYaw = -14f, TorsoPitch = -10f, TorsoRoll = -8f, HeadYaw = -38f, HeadPitch = -30f,
+                        ArmL = new Vector3(-0.1437f, 1.2288f, -0.0952f), TwistL = -10f, OpenL = 0.3f,
+                        ArmR = new Vector3(0.6376f, 1.3255f, 0.0578f), TwistR = 10f, OpenR = 0.6f,
+                        LegL = new Vector3(-0.18f, 0.105f, 0.22f), FootYawL = 14f, LegR = new Vector3(0.22f, 0.105f, -0.22f),
+                        FootYawR = 34f,
+                    }),
+                    K(0.16f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 12f, RootPitch = -7f, HipsPos = new Vector3(0f, -0.09f, -0.06f), HipsYaw = 6f, HipsPitch = 3f,
+                        TorsoYaw = -22f, TorsoPitch = -16f, TorsoRoll = -12f, HeadYaw = -46f, HeadPitch = -36f,
+                        ArmL = new Vector3(-0.0755f, 1.1589f, -0.3851f), TwistL = -10f, OpenL = 0.6f,
+                        ArmR = new Vector3(0.6828f, 1.2176f, -0.0031f), OpenR = 0.85f, LegL = new Vector3(-0.18f, 0.105f, 0.22f),
+                        FootYawL = 14f, LegR = new Vector3(0.22f, 0.105f, -0.22f), FootYawR = 34f,
+                    }),
+                    K(0.3f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 12f, RootPitch = -3f, HipsPos = new Vector3(0f, -0.07f, -0.03f), HipsYaw = 6f, HipsPitch = 3f,
+                        TorsoYaw = -6f, TorsoPitch = -5f, TorsoRoll = -5f, HeadYaw = -20f, HeadPitch = -16f,
+                        ArmL = new Vector3(-0.157f, 1.319f, 0.1007f), TwistL = -15f, OpenL = 0.2f,
+                        ArmR = new Vector3(0.5487f, 1.2622f, 0.0675f), TwistR = 12f, OpenR = 0.35f,
+                        LegL = new Vector3(-0.18f, 0.105f, 0.22f), FootYawL = 14f, LegR = new Vector3(0.22f, 0.105f, -0.22f),
+                        FootYawR = 34f,
+                    }),
+                    K(0.45f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 12f, HipsPos = new Vector3(0f, -0.06f, 0f), HipsYaw = 6f, HipsPitch = 3f, TorsoYaw = 4f,
+                        TorsoPitch = 6f, HeadPitch = -6f, ArmL = new Vector3(-0.07f, 1.55f, 0.32f), TwistL = -20f,
+                        ArmR = new Vector3(0.12f, 1.49f, 0.2f), TwistR = 20f, LegL = new Vector3(-0.18f, 0.105f, 0.22f),
+                        FootYawL = 14f, LegR = new Vector3(0.22f, 0.105f, -0.22f), FootYawR = 34f,
+                    }),
+                },
+            };
+
+            var flinchBody = new AttackMove
+            {
+                Name = "Flinch body", Length = 0.5f,
+                Keys = new[]
+                {
+                    K(0f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, -0.04f), RootYaw = 12f, RootPitch = 6f, HipsPos = new Vector3(0f, -0.13f, -0.1f),
+                        HipsYaw = 6f, HipsPitch = 18f, TorsoYaw = 2f, TorsoPitch = 40f, HeadPitch = 16f,
+                        ArmL = new Vector3(-0.1851f, 1.0167f, 0.5484f), TwistL = -10f, OpenL = 0.6f,
+                        ArmR = new Vector3(0.3783f, 1.0502f, 0.4099f), TwistR = 10f, OpenR = 0.6f,
+                        LegL = new Vector3(-0.18f, 0.105f, 0.22f), FootYawL = 14f, LegR = new Vector3(0.22f, 0.105f, -0.22f),
+                        FootYawR = 34f,
+                    }),
+                    K(0.18f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, -0.06f), RootYaw = 12f, RootPitch = 8f,
+                        HipsPos = new Vector3(0f, -0.17f, -0.12f), HipsYaw = 6f, HipsPitch = 22f, TorsoYaw = 2f, TorsoPitch = 50f,
+                        HeadPitch = 22f, ArmL = new Vector3(-0.1592f, 0.8455f, 0.5132f), OpenL = 0.85f,
+                        ArmR = new Vector3(0.3982f, 0.8722f, 0.3851f), OpenR = 0.85f, LegL = new Vector3(-0.18f, 0.105f, 0.22f),
+                        FootYawL = 14f, LegR = new Vector3(0.22f, 0.105f, -0.22f), FootYawR = 34f,
+                    }),
+                    K(0.34f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, -0.03f), RootYaw = 12f, RootPitch = 3f,
+                        HipsPos = new Vector3(0f, -0.11f, -0.06f), HipsYaw = 6f, HipsPitch = 11f, TorsoYaw = 3f, TorsoPitch = 26f,
+                        HeadPitch = 6f, ArmL = new Vector3(-0.2354f, 1.2042f, 0.4747f), TwistL = -15f, OpenL = 0.3f,
+                        ArmR = new Vector3(0.3509f, 1.2232f, 0.3104f), TwistR = 15f, OpenR = 0.3f,
+                        LegL = new Vector3(-0.18f, 0.105f, 0.22f), FootYawL = 14f, LegR = new Vector3(0.22f, 0.105f, -0.22f),
+                        FootYawR = 34f,
+                    }),
+                    K(0.5f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 12f, HipsPos = new Vector3(0f, -0.06f, 0f), HipsYaw = 6f, HipsPitch = 3f, TorsoYaw = 4f,
+                        TorsoPitch = 6f, HeadPitch = -6f, ArmL = new Vector3(-0.07f, 1.55f, 0.32f), TwistL = -20f,
+                        ArmR = new Vector3(0.12f, 1.49f, 0.2f), TwistR = 20f, LegL = new Vector3(-0.18f, 0.105f, 0.22f),
+                        FootYawL = 14f, LegR = new Vector3(0.22f, 0.105f, -0.22f), FootYawR = 34f,
+                    }),
+                },
+            };
+            return new Dictionary<string, AttackMove>
+            {
+                ["flinchHigh"] = flinchHigh,
+                ["flinchHighR"] = flinchHighR,
+                ["flinchBody"] = flinchBody,
+            };
+        }
+        // </hit keys>
     }
 
     /// <summary>

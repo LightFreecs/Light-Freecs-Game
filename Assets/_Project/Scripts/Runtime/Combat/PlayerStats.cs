@@ -13,6 +13,14 @@ namespace LightMMORPG.Combat
 {
     public enum HitKind : byte { Light, Finisher, Heavy, Blast, Beam }
 
+    /// <summary>
+    /// How the victim's body reacts to a blow (overhaul T2), picked by the server and carried by the hit message. None = a blocked blow
+    /// (the guard's small recoil). Flinches by where it landed: High (head / chest: the head snaps aside and back) or Body (folds over
+    /// it). Stagger = the guard broken; Launched = sent flying by a charged heavy. Reactions without keyed poses yet play the old
+    /// procedural recoil.
+    /// </summary>
+    public enum HitReaction : byte { None, FlinchHigh, FlinchBody, Stagger, Knockdown, SpinOut, Launched }
+
     public static class HitKinds
     {
         /// <summary>The big blows: finishers, heavies, beams and any guard break (longer hit-stop, bigger reactions).</summary>
@@ -41,7 +49,8 @@ namespace LightMMORPG.Combat
         /// Client side, every machine: (victim, attacker or null, point, health damage, blocked, guard broken, kind, impact).
         /// Impact 0..1 = how charged a heavy was (0 for every other hit); a charged heavy sends the victim flying.
         /// </summary>
-        public static event Action<PlayerStats, PlayerStats, Vector3, float, bool, bool, HitKind, float> OnHitFeedback;
+        /// The last value is the body's reaction (<see cref="HitReaction"/>).
+        public static event Action<PlayerStats, PlayerStats, Vector3, float, bool, bool, HitKind, float, HitReaction> OnHitFeedback;
         /// <summary>Client side, every machine: (victim, attacker or null).</summary>
         public static event Action<PlayerStats, PlayerStats> OnKnockout;
         /// <summary>Client side, every machine: (dodger, attacker or null, where the blow / blast would have landed).</summary>
@@ -350,10 +359,26 @@ namespace LightMMORPG.Combat
                       " dmg=" + r.HealthDamage.ToString("F0", CultureInfo.InvariantCulture) + (blocking ? " (blocked)" : "") +
                       (guardBroke ? " GUARD BREAK" : "") + " hp=" + _health.Current.ToString("F0", CultureInfo.InvariantCulture));
 
-            byte flags = (byte)((blocking ? 1 : 0) | (guardBroke ? 2 : 0));
+            byte flags = (byte)((blocking ? 1 : 0) | (guardBroke ? 2 : 0) | ((int)PickReaction(kind, point, blocking, guardBroke) << 2));
             RpcHitFeedback(attacker != null ? attacker.NetworkObject : null, point, r.HealthDamage, flags, (byte)kind, (byte)Mathf.RoundToInt(impact * 255f));
             if (ko) ServerKnockout();
             return true;
+        }
+
+        /// <summary>
+        /// Server: the body's reaction to a blow (sent in the hit message's flags, bits 2-5). A charged heavy launches, a broken guard
+        /// staggers, a blocked blow is only the guard's recoil; anything else flinches by how high it landed on the body (the head and
+        /// chest from <see cref="CombatConstants.FlinchHighFrom"/> of the body's height up, the gut and legs below).
+        /// </summary>
+        private HitReaction PickReaction(HitKind kind, Vector3 point, bool blocked, bool guardBroke)
+        {
+            if (guardBroke) return HitReaction.Stagger;
+            if (blocked) return HitReaction.None;
+            if (kind == HitKind.Heavy) return HitReaction.Launched;
+            var col = Motor != null ? Motor.GetComponent<Collider>() : null;
+            Bounds b = col != null ? col.bounds : new Bounds(transform.position + Vector3.up * 1.15f, new Vector3(1f, 2.3f, 1f));
+            float h = (point.y - b.min.y) / Mathf.Max(0.5f, b.size.y);
+            return h >= CombatConstants.FlinchHighFrom ? HitReaction.FlinchHigh : HitReaction.FlinchBody;
         }
 
         private void ServerKnockout()
@@ -398,7 +423,7 @@ namespace LightMMORPG.Combat
         private void RpcHitFeedback(NetworkObject attacker, Vector3 point, float damage, byte flags, byte kind, byte impact)
         {
             PlayerStats a = attacker != null ? attacker.GetComponent<PlayerStats>() : null;
-            OnHitFeedback?.Invoke(this, a, point, damage, (flags & 1) != 0, (flags & 2) != 0, (HitKind)kind, impact / 255f);
+            OnHitFeedback?.Invoke(this, a, point, damage, (flags & 1) != 0, (flags & 2) != 0, (HitKind)kind, impact / 255f, (HitReaction)((flags >> 2) & 15));
         }
 
         [ObserversRpc]

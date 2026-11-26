@@ -42,6 +42,8 @@ namespace LightMMORPG.Core
         /// <summary>Guard meter drain per point of blocked (absorbed) damage.</summary>
         public const float GuardDrainPerBlockedDamage = 0.5f;
         public const float GuardBreakStun = 1.0f;
+        /// <summary>Hit reactions (overhaul T2): a blow landing this high on the body (share of its height) or higher flinches the head; lower folds the body.</summary>
+        public const float FlinchHighFrom = 0.62f;
         /// <summary>Prototype value (not in spec): guard refill rate while not blocking.</summary>
         public const float GuardRecoverPerSecond = 20f;
 

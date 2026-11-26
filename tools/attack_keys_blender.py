@@ -11,6 +11,7 @@ them with a port of the game's solver, and writes a keyed action back as C# for 
 Moves: heavy (= windup + swing + coiled), windup, swing, coiled, guard, left, right, body, power, charge, surge, all.
 The Sword moveset (BuildSword, actions Sword.<move>): sword (= all of them), sword.guard, sword.slash1 .. sword.slash3,
 sword.thrust, sword.windup, sword.coiled, sword.fang1, sword.fang2, sword.quartet1 .. sword.quartet4, sword.comet.
+Hit reactions (HitPoses.BuildHits, actions Hit.<name>, overhaul T2): hit (= all of them), hit.<name> for each name in HIT_MOVES.
 `load` and `export` work on ArtSource/Player/player.blend unless --blend says otherwise; `load` saves the file and refuses to
 replace an action that already exists without --force. `export` writes ArtSource/Player/export/<move>.cs.txt (outside Assets,
 so Unity doesn't compile it) and changes nothing in the game. `check` changes no file except --dump.
@@ -346,7 +347,7 @@ class Reader:
 def read_builder(name, path=MOVESETS):
     """The local variables a moveset builder (BuildRush, BuildSword) leaves before its return."""
     text = open(path, encoding="utf-8").read()
-    start = text.index("{", text.index("private static BasicMoveset %s(" % name))
+    start = text.index("{", re.search(r"private static [\w\[\]<>, ]+ %s\(" % name, text).start())
     depth, i = 0, start
     while True:
         depth += (text[i] == "{") - (text[i] == "}")
@@ -386,22 +387,35 @@ def read_sword(path=MOVESETS):
     return out
 
 
+# hit reactions (HitPoses.BuildHits): flinches by where the blow lands, stagger, knockdown + get-up / tech, winded, spin-out
+HIT_MOVES = ("hit.flinchHigh", "hit.flinchHighR", "hit.flinchBody", "hit.stagger", "hit.knockdown", "hit.getUp", "hit.tech",
+             "hit.winded", "hit.spinOut")
+
+
+def read_hits(path=MOVESETS):
+    e = read_builder("BuildHits", path)
+    return {m: e[m[len("hit."):]] for m in HIT_MOVES if m[len("hit."):] in e}
+
+
 def read_all(path=MOVESETS):
     moves = read_rush(path)
-    if "private static BasicMoveset BuildSword(" in open(path, encoding="utf-8").read():
+    text = open(path, encoding="utf-8").read()
+    if "private static BasicMoveset BuildSword(" in text:
         moves.update(read_sword(path))
+    if " BuildHits(" in text:
+        moves.update(read_hits(path))
     return moves
 
 
 GROUPS = {"heavy": ("windup", "swing", "coiled"),
           "all": ("guard", "left", "right", "body", "power", "windup", "swing", "coiled", "charge", "surge"),
-          "sword": SWORD_MOVES}
+          "sword": SWORD_MOVES, "hit": HIT_MOVES}
 
 
 def move_names(arg):
     names = GROUPS.get(arg, (arg,))
     for n in names:
-        if n not in GROUPS["all"] and n not in SWORD_MOVES:
+        if n not in GROUPS["all"] and n not in SWORD_MOVES and n not in HIT_MOVES:
             sys.exit("unknown move %r (heavy, windup, swing, coiled, guard, left, right, body, power, charge, surge, all; sword, %s)"
                      % (n, ", ".join(SWORD_MOVES)))
     return names
@@ -930,6 +944,8 @@ BLENDER_TO_EASE = {v: k for k, v in EASE_TO_BLENDER.items()}
 def action_name(move):
     if move.startswith("sword."):
         return "Sword." + move[len("sword."):]
+    if move.startswith("hit."):
+        return "Hit." + move[len("hit."):]
     return "Rush." + move
 
 
@@ -1067,7 +1083,7 @@ def cs_pose(P, indent):
 
 
 def cs_move(move, keys):
-    builder = "BuildSword" if move.startswith("sword.") else "BuildRush"
+    builder = "BuildSword" if move.startswith("sword.") else "BuildHits" if move.startswith("hit.") else "BuildRush"
     var = move.split(".")[-1]
     if move in SINGLES:
         return "// %s\n%s = %s;\n" % (move, var, cs_pose(keys[0]["Pose"], 0))

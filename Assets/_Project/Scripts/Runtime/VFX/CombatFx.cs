@@ -42,7 +42,8 @@ namespace LightMMORPG.VFX
             }
         }
 
-        private static void OnHit(PlayerStats victim, PlayerStats attacker, Vector3 point, float damage, bool blocked, bool guardBreak, HitKind kind, float impact)
+        private static void OnHit(PlayerStats victim, PlayerStats attacker, Vector3 point, float damage, bool blocked, bool guardBreak, HitKind kind, float impact,
+            HitReaction reaction)
         {
             bool big = HitKinds.IsBig(kind, guardBreak);
             // a charged heavy (impact = its charge) hits harder everywhere: longer freeze, bigger shake, a shockwave, and it
@@ -59,7 +60,7 @@ namespace LightMMORPG.VFX
                 victimAnim.PlayRecoil(dir, blocked ? 0.4f + 0.4f * charged : (big ? 1.4f + 0.6f * charged : 0.8f));
                 // the body reacts where the fist / foot / blast landed (the server reports the struck spot)
                 float react = blocked ? 0.3f : kind == HitKind.Beam ? 1.8f : big ? 1.6f + 0.4f * charged : kind == HitKind.Blast ? 1.2f : 1f;
-                victimAnim.PlayHitReaction(point, dir, react, big && !blocked);
+                victimAnim.PlayHitReaction(point, dir, react, big && !blocked, reaction);
                 if (kind == HitKind.Heavy && !blocked) victimAnim.PlayLaunch(dir, charged);
             }
             if (attackerAnim != null && kind != HitKind.Blast && kind != HitKind.Beam) attackerAnim.HitStop(stop);

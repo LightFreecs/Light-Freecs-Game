@@ -106,7 +106,7 @@ namespace LightMMORPG.Combat
 
         /// <summary>Owner: a blow of ours sent someone flying (finisher, heavy, beam, a skill's launch): Dash chases them for a moment.</summary>
         private void OnHitForPursuit(PlayerStats victim, PlayerStats attacker, Vector3 point, float damage, bool blocked, bool guardBreak,
-                                     HitKind kind, float impact)
+                                     HitKind kind, float impact, HitReaction reaction)
         {
             if (!IsOwner || attacker != _stats || victim == null || victim == _stats) return;
             if (_motor != null) _motor.QueueConnected();   // our blow landed (hit or blocked): Dash / Block / Jump may cut its recovery
