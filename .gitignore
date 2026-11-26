@@ -64,3 +64,6 @@ Thumbs.db
 
 # Blender backups
 *.blend1
+
+# Session-local Claude launch config (points at a temp scratchpad)
+/.claude/launch.json

@@ -28,18 +28,45 @@ the SAO fight a low pre-motion with a glowing blade, then a system-driven dash a
   - Comet Thrust (hold 1.1 s): one thrust 290 with a 10 m dash, full launch; 25 energy, 2.4 s cd, 0.6 s delay.
   - Not enough energy: a weaker skill, or the normal heavy.
 
-## Next (phase 2): needs Blender (CLAUDE.md rule)
-The skills and sword swings still replay the fist moves (light combo 0..3, heavy swing). Key real sword moves in
-Blender on `PlayerRig` (`ArtSource/Player/player.blend`) through `tools/attack_keys_blender.py`, check them on the
-game's solver (`docs/bench/`), and add a `Sword` moveset to `BasicMovesets` that `PlayerCombat` switches to in sword
-stance (`_anim.SetMoveset`). Moves to key:
-1. Sword light combo x4: diagonal slash down-right, rising slash back, horizontal sweep, thrust.
-2. Sword pre-motion: low stance, blade drawn back at the hip, tip forward (Kirito's reference frames).
-3. Twin Fang: two crossing slashes. Quartet Edge: four slashes in a square. Comet Thrust: long lunge thrust.
-4. A sword model in Blender to replace the cube blade (keep the glow shell + ribbon trail).
-Then: tune lunge distances / hit-stop after the owner plays it; ideas next in line: blade clash (both swing into each
-other = sparks + push apart), pursuit dash after a launch (Dash right after a launcher zips to the victim), aerial
-juggles.
+## Done (phase 2: the sword moveset, 2026-11-26; keyed in Blender, checked on the bench, compile-checked, not played)
+Every sword move is posed and keyed on `PlayerRig` in Blender (`ArtSource/Player/player.blend`, actions `Sword.*`), exported
+with `tools/attack_keys_blender.py` (`-- export sword`) into `BasicMovesets.Sword` (`BuildSword`) and checked on the game's
+solver in `docs/bench/sword-bench.html` (+ `sword-bench.json`, the same keys).
+- **New pose field `AttackPose.WristL / WristR`**: the wrist bent sideways (+ towards the little finger). A blade fixed ~71°
+  off the forearm can't thrust or reach along the arm; with the wrist it swings into line. Solver step after the fist roll
+  (`AttackPoseSolver.WristAxis`), in the tool (`c.ArmL/R["Wrist"]`) and the bench. Zero for every fist move (unchanged).
+- **The blade** (`VFX/SwordVisual`): placed in the hand's own frame from the bind pose (rides the fist roll and the wrist);
+  its flat now faces the palm and its edges run along the forearm, like a real grip, so cuts go edge first. The slash ribbon
+  only grows while a strike is live (`PlayerProceduralAnimator.InStrike`, the move's `Streak` window): no smear on wind-ups.
+- **Light combo** (sword stance): Diagonal slash (a backhand from over the left shoulder down to the right hip, hit 0.10 s),
+  Rising slash (low right up across to over the left shoulder, 0.10 s), Horizontal sweep (left to right at chest height,
+  0.10 s), Thrust (finisher: drawn back to the hip, a lunge with the lead foot stepping in, 0.13 s).
+- **Pre-motion** (held Heavy): the lead foot steps out into a deep crouch, the sword hand drawn back at the right hip with
+  the tip forward, the left hand reaching out; coils deeper with the charge (the heavy's hold + tremble).
+- **Skills** (`BasicMoveset.Skills`, `SwordSkills.StrikeMove`): Twin Fang = up over the right shoulder and down to the left
+  hip, then over the left shoulder and down to the right (an X); Quartet Edge = a square (across the top, down the left
+  side, across the bottom, up the right side as the launcher); Comet Thrust = from the coiled pre-motion a long lunging
+  thrust held through the dash (also the sword's plain heavy when there's no energy for a skill).
+- **Hook-up**: `PlayerCombat` switches the animator to the `Sword` set while the sword is drawn (owner predicted, others from
+  the SyncVar) and back to the fighter's own set when it's sheathed; `Moveset` (server timing, strike points) is the sword
+  set while `SwordDrawn`. The animator keeps the heavy it started (`HeavyNow`) so a switch can't swap it mid-swing; no
+  sheathing during a skill. Charge and Surge stay Rush's.
+- **Method**: each key = body + fist placed from the posed shoulder, then the elbow, wrist and fist roll searched so the blade
+  points where the cut needs it with its edge along the blade's real travel; whole moves solved together (no elbow flips,
+  blade spins or body clipping between keys, checked on 4 in-between frames per segment). At each hit the fist is still on
+  the side the cut comes from and the blade reaches across the target (the blade leads).
+- **Measured** (bench, on the game's solver): edge lead 0.75-0.84 on the light slashes, 0.77-0.83 on Twin Fang and Quartet
+  1 / 4, 0.48 / 0.59 on Quartet 2 / 3; the blade clears the fighter's own body everywhere (closest 1 cm); worst upper-arm
+  twist 60°; elbow pops ≤ 2.6 cm. Bench solver = the tool's within 0.0012 mm on all 69 keys.
+
+## Next
+The combat / movement / customization overhaul (owner, 2026-11-26) takes over from here: **`docs/OVERHAUL_PLAN.md`**
+(tasks T1-T9, one session each). The items below are folded into it.
+1. A sword model in Blender to replace the cube blade (keep the glow shell + ribbon trail; the blade's frame is
+   `SwordVisual`'s and `SwordProxy` in `player.blend`). → overhaul T8.
+2. After the owner plays it: tune lunge distances / hit-stop, the skills' timing, the slashes' look on the Toon Head + hair.
+3. Sword stance's own idle and run (the sword arm uses the unarmed run today: the hand opens on the swing back). → T9.
+4. Ideas next in line: blade clash (both swing into each other = sparks + push apart), aerial juggles. → T3.
 
 ## Done (fight feel + movement, 2026-11-26; code only, compile-checked, not played)
 Owner: "it does not feel smooth and the movement doesn't help the battle system". No animation was changed.
