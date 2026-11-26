@@ -354,11 +354,61 @@ namespace LightMMORPG.Characters
                     }),
                 },
             };
+
+            var stagger = new AttackMove
+            {
+                Name = "Stagger (guard broken)", Length = 1f,
+                Keys = new[]
+                {
+                    K(0f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 12f, RootPitch = -5f, HipsPos = new Vector3(0f, -0.07f, -0.05f), HipsYaw = 6f, HipsPitch = 3f,
+                        TorsoPitch = -16f, HeadPitch = -22f, ArmL = new Vector3(-0.6415f, 1.7795f, -0.0789f), TwistL = -30f,
+                        OpenL = 0.85f, ArmR = new Vector3(0.529f, 1.7835f, -0.2715f), TwistR = 30f, OpenR = 0.85f,
+                        LegL = new Vector3(-0.18f, 0.105f, 0.22f), FootYawL = 14f, LegR = new Vector3(0.22f, 0.105f, -0.22f),
+                        FootYawR = 34f,
+                    }),
+                    K(0.2f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, -0.06f), RootYaw = 12f, RootPitch = -8f,
+                        HipsPos = new Vector3(0f, -0.1f, -0.08f), HipsYaw = 6f, HipsPitch = 3f, TorsoPitch = -22f, HeadPitch = -26f,
+                        ArmL = new Vector3(-0.6812f, 1.7579f, -0.3974f), TwistL = -30f, OpenL = 0.9f,
+                        ArmR = new Vector3(0.5039f, 1.733f, -0.5368f), TwistR = 30f, OpenR = 0.9f,
+                        LegL = new Vector3(-0.17f, 0.26f, 0.3f), FootYawL = 14f, FootPitchL = -20f,
+                        LegR = new Vector3(0.22f, 0.105f, -0.22f), FootYawR = 34f,
+                    }),
+                    K(0.42f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootPos = new Vector3(0f, 0f, -0.03f), RootYaw = 12f, HipsPos = new Vector3(0f, -0.12f, -0.04f), HipsYaw = 6f,
+                        HipsPitch = 3f, TorsoYaw = 2f, TorsoPitch = -4f, HeadPitch = -8f,
+                        ArmL = new Vector3(-0.5492f, 1.2657f, 0.1069f), TwistL = -20f, OpenL = 0.6f,
+                        ArmR = new Vector3(0.526f, 1.2583f, -0.0657f), TwistR = 20f, OpenR = 0.6f,
+                        LegL = new Vector3(-0.18f, 0.105f, 0.22f), FootYawL = 14f, LegR = new Vector3(0.22f, 0.105f, -0.22f),
+                        FootYawR = 34f,
+                    }),
+                    K(0.7f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 12f, HipsPos = new Vector3(0f, -0.09f, -0.02f), HipsYaw = 6f, HipsPitch = 3f, TorsoYaw = 3f,
+                        TorsoPitch = 6f, ArmL = new Vector3(-0.373f, 1.3238f, 0.354f), TwistL = -20f, OpenL = 0.3f,
+                        ArmR = new Vector3(0.37f, 1.2992f, 0.1701f), TwistR = 20f, OpenR = 0.3f,
+                        LegL = new Vector3(-0.18f, 0.105f, 0.22f), FootYawL = 14f, LegR = new Vector3(0.22f, 0.105f, -0.22f),
+                        FootYawR = 34f,
+                    }),
+                    K(1f, KeyEase.Smooth, new AttackPose
+                    {
+                        RootYaw = 12f, HipsPos = new Vector3(0f, -0.06f, 0f), HipsYaw = 6f, HipsPitch = 3f, TorsoYaw = 4f,
+                        TorsoPitch = 6f, HeadPitch = -6f, ArmL = new Vector3(-0.07f, 1.55f, 0.32f), TwistL = -20f,
+                        ArmR = new Vector3(0.12f, 1.49f, 0.2f), TwistR = 20f, LegL = new Vector3(-0.18f, 0.105f, 0.22f),
+                        FootYawL = 14f, LegR = new Vector3(0.22f, 0.105f, -0.22f), FootYawR = 34f,
+                    }),
+                },
+            };
             return new Dictionary<string, AttackMove>
             {
                 ["flinchHigh"] = flinchHigh,
                 ["flinchHighR"] = flinchHighR,
                 ["flinchBody"] = flinchBody,
+                ["stagger"] = stagger,
             };
         }
         // </hit keys>

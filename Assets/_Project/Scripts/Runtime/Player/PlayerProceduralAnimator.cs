@@ -106,6 +106,8 @@ namespace LightMMORPG.Player
         private bool _reactSnap;
         private readonly AttackPose _reactPose = new();
         private const float ReactOut = 0.12f, ReactCut = 0.08f, ReactLight = 0.45f, ReactBig = 0.75f, ReactMaxTurn = 45f;
+        // the stagger lasts the guard break's stun plus its hit-stop
+        private const float ReactStagger = CombatConstants.GuardBreakStun + 0.15f;
 
         /// <summary>The basic-attack moveset this fighter plays (default <see cref="BasicMovesets.DefaultId"/>; later picked from an inventory).</summary>
         public BasicMoveset Moveset => BasicMovesets.Get(_movesetId);
@@ -673,6 +675,7 @@ namespace LightMMORPG.Player
         {
             HitReaction.FlinchHigh => HitPoses.Get(side > 0f ? "flinchHighR" : "flinchHigh"),
             HitReaction.FlinchBody => HitPoses.Get("flinchBody"),
+            HitReaction.Stagger => HitPoses.Get("stagger"),
             _ => null,
         };
 
@@ -921,7 +924,7 @@ namespace LightMMORPG.Player
                 _react = keyed;
                 _reactT = 0f;
                 _reactW = 1f;
-                _reactRate = keyed.Length / (big ? ReactBig : ReactLight);
+                _reactRate = keyed.Length / (reaction == HitReaction.Stagger ? ReactStagger : big ? ReactBig : ReactLight);
                 _reactSnap = true;
                 _hrT = 9f;
                 if (_heavy != HeavyPhase.None) { _heavy = HeavyPhase.None; SetHeavyFace(false); }
@@ -1063,7 +1066,7 @@ namespace LightMMORPG.Player
             _hrT += dt;
             _launchT += dt;
             _reactT += dt * _reactRate;
-            if (_react != null && (_move != null || _heavy != HeavyPhase.None || _blockingNow || _dashingNow || _powerUp))
+            if (_react != null && !stunned && (_move != null || _heavy != HeavyPhase.None || _blockingNow || _dashingNow || _powerUp))
                 _reactW = Mathf.MoveTowards(_reactW, 0f, dt / ReactCut);
 
             _phase += dt * Mathf.Lerp(2.2f, 9f, Mathf.Clamp01(planar / 13f));
