@@ -139,7 +139,13 @@ whatever the owner reports as clunky after playing T1-T6.
   stamina / Winded / recovery cancels / hit-stop as specified above. Knobs: `CombatConstants` (Stamina*, Winded*, TiredDamageMultiplier),
   `CombatMath.HitStopLight / HitStopBig / HitStopCharge`, `PlayerProceduralAnimator.HandoverFade / HandoverShare`, `TrainingDummy.LowStamina`.
   Details: `ARCHITECTURE.md` Status 2026-11-26 (T1).
-- T2 Hit reactions: not started
+- [ ] T2 Hit reactions: **in progress** (stopped at 99 % weekly usage, 2026-11-26; compile-checked, not played). Done: flinch high
+  (+ its mirror, by the struck side) and flinch body (305693e), stagger on a guard break (aacf2e8), keyed in Blender (`Hit.*` in
+  `player.blend`), the server's `HitReaction` in the hit message, keyed playback in `PlayerProceduralAnimator`. **Left:** knockdown on
+  the back + get-up + tech recovery (needs a server down state after a launch lands; Dash on landing = flip up, stamina cost in
+  `CombatConstants`), winded (while `PlayerStats.Winded`), spin-out (T3's sweep), and a `docs/bench/` page for the reactions (checked so
+  far on the tool's copy of the game's solver only). How the keys are made: side-session notes `t2-hit-reactions/` (README +
+  `hit_design.py`). Details: `ARCHITECTURE.md` Status 2026-11-26 (T2).
 - T3 Techniques from the clips: not started
 - T4 Fighting styles: not started
 - T5 Gear, loadout, unlocks, LOADOUT screen: not started

@@ -1140,3 +1140,24 @@ Task T1 of `docs/OVERHAUL_PLAN.md`. Code only, no animation changed. Rules: "Gam
   early; harmless on the host); the server trusts the owner's tired flag and attack spends (prototype, like the level); the dummy has no
   committed recovery (its attacks don't go through the owner input). The winded pose comes in T2.
 - Verified: headless compile only (exit 0); nothing was played (the owner tests by hand).
+
+### 2026-11-26 — Overhaul T2 (part 1): keyed hit reactions — flinches and stagger
+Task T2 of `docs/OVERHAUL_PLAN.md`, stopped at 99 % weekly usage with knockdown / get-up / tech, winded and spin-out left (plan "Status").
+- Keyed in Blender on `PlayerRig` (actions `Hit.flinchHigh`, `Hit.flinchHighR`, `Hit.flinchBody`, `Hit.stagger` in `player.blend`), traced
+  from the clip frames in `COMBAT_PLAN.md` (DBZ 0:16.40 / Naruto 1:47.7 head snapped aside and back with the struck side's arm flung out;
+  Hisoka 0:18.42 / DBZ 0:34.57 folded ~80° over the blow; SAO 1:41.47 thrown back off the clash, arms wide). Key 0 = the impact drawing,
+  the last key = the Rush guard. `flinchHighR` is the left one mirrored (upper body only; the feet stay planted).
+- `HitPoses.Get(name)` / `BuildHits()` (between `// <hit keys>` markers, generated from the actions). `tools/attack_keys_blender.py`
+  knows `hit.*` moves (`HIT_MOVES`, actions `Hit.<name>`, reads `BuildHits` back; `read_builder` takes any return type).
+- `HitReaction` (`PlayerStats.cs`: None, FlinchHigh, FlinchBody, Stagger, Knockdown, SpinOut, Launched): the server picks it
+  (`PlayerStats.PickReaction`: guard broken = Stagger, blocked = None, charged heavy = Launched, else by the struck height against the
+  collider: from `CombatConstants.FlinchHighFrom` (0.62) up = FlinchHigh) and sends it in the hit message's flags (bits 2-5);
+  `OnHitFeedback` gained the reaction as its last argument.
+- `PlayerProceduralAnimator.PlayHitReaction(.., reaction)`: a keyed reaction plays whole over the base pose (legs too, not in flight),
+  turned towards the blow (at most `ReactMaxTurn` 45°), and ends the victim's own move / heavy. Its impact key is posed once inside the
+  hit-stop, so the freeze shows the struck drawing. Duration: `ReactLight` 0.45 s, `ReactBig` 0.75 s, `ReactStagger` = guard-break stun +
+  0.15; fade out `ReactOut` 0.12 s; once the fighter is no longer stunned, their own attack / block / dash / power-up cuts it in
+  `ReactCut` 0.08 s. Reactions without keys (Launched, blocked hits) keep the procedural recoil.
+- Checked on the tool's copy of the game's solver (`attack_keys_blender.py`, matches the bench's to 0.001 mm), every 1/600 s: worst
+  upper-arm roll 58° (flinches) / 76° (stagger), elbow pops under 3 mm, elbows and fists at least 22 cm from the torso's axis. No
+  `docs/bench/` page for them yet. Headless compile only (exit 0); nothing played, not seen with the Toon Head and hair.
