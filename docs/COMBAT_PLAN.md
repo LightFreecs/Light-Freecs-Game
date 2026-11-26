@@ -40,3 +40,22 @@ stance (`_anim.SetMoveset`). Moves to key:
 Then: tune lunge distances / hit-stop after the owner plays it; ideas next in line: blade clash (both swing into each
 other = sparks + push apart), pursuit dash after a launch (Dash right after a launcher zips to the victim), aerial
 juggles.
+
+## Done (fight feel + movement, 2026-11-26; code only, compile-checked, not played)
+Owner: "it does not feel smooth and the movement doesn't help the battle system". No animation was changed.
+- **Blows land on their impact frame**: light hits resolve when the move's fist arrives (`AttackMove.Hit`), like the heavy;
+  a blow is lost when its attacker is struck first (trades go to the faster blow).
+- **Hit-stop that stops**: the victim's body freezes on the server for the blow's hit-stop (`CombatMath.HitStop`) and the
+  knockback starts after it, so a frozen pose no longer slides; every client freezes the poses as long. Block-stop too.
+- **Smooth movement**: walking / running / flying accelerate (a run starts in ~0.1 s, skids ~0.45 m to a stop), a dash skids
+  out at run speed, attack lunges and rushes burst out and ease into the arrival.
+- **Rush**: locked on, Dash with no stick or towards the opponent dashes into striking range (up to 16 m); a jab pressed
+  during it comes out on arrival. **Pursuit** (the idea above): for 1.1 s after your finisher / heavy / beam / a skill's launch
+  lands, Dash chases the victim, aimed where they will be. Back / sideways dashes stay plain dashes.
+- **Dodge**: the first 0.15 s of a dash or rush slips past blows and blasts, with an afterimage.
+- **Lock-on circling**: sidesteps follow the circle round the opponent (same distance) instead of spiralling away.
+- **Afterimages** (`VFX/Afterimage.cs`): dash / rush trails, a copy where a flash step vanished, a bright one on a dodge.
+- **Sparring dummy**: rushes in from range now and then, sometimes dodges your opening blow (heavies / skills more often).
+Tuning: `PlayerMotor` (GroundAccel / GroundDecel / AirAccel / FlyAccel ..., MaxRush, RushSpeed, LungeEase, RushEase),
+`CombatMath.DashEvadeTime` and `HitStop`, `PlayerCombat.Movement.cs` (PursuitWindow, RushMinGap, RushAimAngle).
+Not done: a remote attacker's own hit-stop isn't predicted (it shows ~one round trip after the impact frame).

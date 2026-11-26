@@ -25,7 +25,7 @@ namespace LightMMORPG.Combat
     /// The heavy is held: pressing it winds up (the fist is pulled back, movement slows), releasing it swings; damage,
     /// knockback (up to sending the victim flying) and hitstun grow with the hold time up to <c>heavyMaxChargeTime</c>.
     /// </summary>
-    public sealed class PlayerCombat : NetworkBehaviour
+    public sealed partial class PlayerCombat : NetworkBehaviour
     {
         public static PlayerCombat Local { get; private set; }
         /// <summary>Owner-side aim override (smoke-test autopilot). Null = camera.</summary>
@@ -113,6 +113,7 @@ namespace LightMMORPG.Combat
             _beamCd = new Cooldown(Def(AttackKind.Beam)?.cooldown ?? 4f);
             _surgeCd = new Cooldown(Def(AttackKind.Surge)?.cooldown ?? 20f);
             _heavyCdDurLocal = _config.heavyCooldown;
+            InitFightMovement();   // rush / pursuit on Dash, afterimages (PlayerCombat.Movement.cs)
             _sword.OnChange += (prev, next, asServer) =>
             {
                 if (asServer && !IsClientStarted) return;   // a dedicated server draws nothing
@@ -209,7 +210,9 @@ namespace LightMMORPG.Combat
 
             if (!canAct || now < _busyUntilLocal) return;   // a sword skill and its post-motion delay hold everything
 
-            if (!_heavyCharging && now - _lightBufferedAt <= BufferTime && now >= _nextLightLocal)
+            // a jab pressed during a rush waits for the arrival, so the blow comes out as you get there
+            if (_motor.IsRushing && now - _lightBufferedAt <= BufferTime) _lightBufferedAt = now;
+            if (!_heavyCharging && !_motor.IsRushing && now - _lightBufferedAt <= BufferTime && now >= _nextLightLocal)
             {
                 _lightBufferedAt = -10f;
                 _nextLightLocal = now + CombatMath.LightAttackInterval;
@@ -477,7 +480,11 @@ namespace LightMMORPG.Combat
         [ServerRpc] private void CmdBeamFire(Vector3 aim, float claimedCharge) => ServerBeamFire(aim, claimedCharge);
         [ServerRpc] private void CmdSurge() => ServerSurge();
 
-        /// <summary>Server: the next light combo hit towards aim. False when it was refused (down, stunned, too soon).</summary>
+        /// <summary>
+        /// Server: the next light combo hit towards aim. The blow lands when its fist / foot / blade arrives (the move's
+        /// <see cref="AttackMove.Hit"/> after the swing starts, like the heavy), sweeping the dash from where it started; struck
+        /// before then, it is lost (<see cref="ServerLightHits"/>). False when it was refused (down, stunned, too soon).
+        /// </summary>
         [Server]
         public bool ServerLight(Vector3 aim, Vector3 lunge = default)
         {
@@ -485,13 +492,7 @@ namespace LightMMORPG.Combat
             _nextLightServer = Now + CombatMath.LightAttackInterval * 0.8; // small slack for jitter
             aim = SafeDir(aim, _motor.Forward);
             ComboHit hit = _combo.RegisterHit(Now);
-            HitKind kind = hit.Knockback ? HitKind.Finisher : HitKind.Light;
-            Vector3 kb = hit.Knockback
-                ? CombatMath.Knockback(aim, CombatMath.FinisherKnockbackSpeed, CombatMath.FinisherLift)
-                : CombatMath.Knockback(aim, CombatMath.LightKnockbackSpeed, 0f);
-            float stun = hit.Knockback ? _config.heavyHitstun : _config.lightHitstun;
-            float damage = hit.Damage * (_sword.Value ? SwordDamageMul : 1f);
-            MeleeHits(aim, damage, stun, kb, kind, StrikePoint(aim, hit.Index), 0f, ClampLunge(lunge, LightLunge));
+            QueueLightHit(aim, hit, ClampLunge(lunge, LightLunge));
             RpcSwing((byte)AttackKind.Light, (byte)hit.Index);
             return true;
         }
@@ -768,6 +769,7 @@ namespace LightMMORPG.Combat
 
         private void ServerTick()
         {
+            if (_lightHits.Count > 0) ServerLightHits();
             if (_heavyPending && Now >= _heavyHitAt) ServerHeavyHit();
             while (_skillHits.Count > 0 && Now >= _skillHits[0].At)
             {
@@ -789,6 +791,12 @@ namespace LightMMORPG.Combat
                 {
                     var ps = h.collider.GetComponentInParent<PlayerStats>();
                     if (ps == _stats) continue;
+                    if (ps != null && ps.ServerIsEvading)
+                    {
+                        // dodged: the blast flies on through (ServerApplyHit only plays the dodge)
+                        ps.ServerApplyHit(_stats, 0f, 0f, Vector3.zero, h.distance > 0f ? h.point : p.Pos, HitKind.Blast);
+                        continue;
+                    }
                     if (h.distance < best) { best = h.distance; bestHit = h; }
                 }
                 if (best < float.MaxValue)

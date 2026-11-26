@@ -13,6 +13,20 @@ namespace LightMMORPG.Combat
 {
     public enum HitKind : byte { Light, Finisher, Heavy, Blast, Beam }
 
+    public static class HitKinds
+    {
+        /// <summary>The big blows: finishers, heavies, beams and any guard break (longer hit-stop, bigger reactions).</summary>
+        public static bool IsBig(HitKind kind, bool guardBreak = false) =>
+            guardBreak || kind == HitKind.Finisher || kind == HitKind.Heavy || kind == HitKind.Beam;
+
+        /// <summary>
+        /// A blow's hit-stop in seconds (<see cref="CombatMath.HitStop"/>): the server freezes the victim this long and every
+        /// client freezes the poses as long. <paramref name="impact"/> = how charged a heavy was.
+        /// </summary>
+        public static float HitStop(HitKind kind, float impact, bool guardBreak = false) =>
+            CombatMath.HitStop(IsBig(kind, guardBreak), kind == HitKind.Heavy ? impact : 0f);
+    }
+
     /// <summary>
     /// Server-authoritative fighter stats. The server owns the Core pools (<see cref="HealthPool"/>, <see cref="EnergyPool"/>,
     /// <see cref="GuardMeter"/>, <see cref="BuffTimer"/>) and mirrors them into SyncVars every tick; clients only read.
@@ -30,6 +44,8 @@ namespace LightMMORPG.Combat
         public static event Action<PlayerStats, PlayerStats, Vector3, float, bool, bool, HitKind, float> OnHitFeedback;
         /// <summary>Client side, every machine: (victim, attacker or null).</summary>
         public static event Action<PlayerStats, PlayerStats> OnKnockout;
+        /// <summary>Client side, every machine: (dodger, attacker or null, where the blow / blast would have landed).</summary>
+        public static event Action<PlayerStats, PlayerStats, Vector3> OnDodge;
 
         public readonly SyncVar<float> Health = new(CombatConstants.MaxHealth, new SyncTypeSettings(0f));
         public readonly SyncVar<float> Energy = new(CombatConstants.MaxEnergy, new SyncTypeSettings(0.1f));
@@ -81,6 +97,7 @@ namespace LightMMORPG.Combat
         private PlayerStats _lastAttacker;
         private int _lastSpawn = -1;
         private bool _buildReceived;
+        private double _lastDodgeFx = -10.0;
         private static bool _verbose;
 
         private void Awake()
@@ -262,17 +279,29 @@ namespace LightMMORPG.Combat
             SurgeRemaining.Value = 0f;
         }
 
+        /// <summary>Server: in the dodge window of a dash or a rush (blows and blasts slip past, see <see cref="ServerApplyHit"/>).</summary>
+        public bool ServerIsEvading => Motor != null && Motor.IsEvading && !_health.IsKnockedOut;
+
         /// <summary>
         /// Server: resolve one hit on this player. Applies surge (attacker) and block (this player), guard drain/break,
-        /// hitstun + knockback through the motor, KO. Returns false if the hit was ignored (already down).
+        /// hitstun + knockback through the motor, KO. Returns false if the hit was ignored (already down, or dodged: the first
+        /// moments of a dash slip past every blow and blast, and everyone sees an afterimage).
         /// <paramref name="impact"/> (0..1) = how charged a heavy was: a blocked charged heavy pushes the guard back further,
-        /// and clients scale the hit-stop, shake and launch with it.
+        /// and clients scale the hit-stop, shake and launch with it. The victim holds still for the blow's hit-stop
+        /// (<see cref="HitKinds.HitStop"/>) before the knockback carries them away, as long as every client freezes the poses.
         /// </summary>
         [Server]
         public bool ServerApplyHit(PlayerStats attacker, float baseDamage, float hitstun, Vector3 knockback, Vector3 point, HitKind kind, float impact = 0f)
         {
             impact = Mathf.Clamp01(impact);
             if (_health.IsKnockedOut) return false;
+            if (attacker != this && ServerIsEvading)
+            {
+                double now = Time.timeAsDouble;
+                if (now - _lastDodgeFx > 0.25) { _lastDodgeFx = now; RpcDodge(attacker != null ? attacker.NetworkObject : null, point); }
+                Debug.Log("[Combat] " + DisplayName + " dodged " + (attacker != null ? attacker.DisplayName : "?") + "'s " + kind);
+                return false;
+            }
             bool surging = attacker != null && attacker._surge.IsActive;
             float dmgBase = surging ? baseDamage * attacker._surgeDamageMultiplier / CombatConstants.SurgeDamageMultiplier : baseDamage;
             // stat builds: attacker's Power, this player's Defense (both exactly 1 without points)
@@ -290,10 +319,11 @@ namespace LightMMORPG.Combat
             {
                 guardBroke = _guard.Drain(r.GuardDamage);
                 float push = CombatMath.BlockedPushSpeed * (1f + 2f * impact);   // a charged heavy shoves the guard back up to 3x
-                if (guardBroke) Motor.ServerApplyKnockback(flat.normalized * push * 1.5f, _guard.BreakStunDuration);
-                else Motor.ServerApplyKnockback(flat.normalized * push, 0f);
+                float freeze = HitKinds.HitStop(kind, impact, guardBroke);       // block-stop: held for the impact, then pushed back
+                if (guardBroke) Motor.ServerApplyKnockback(flat.normalized * push * 1.5f, _guard.BreakStunDuration, freeze);
+                else Motor.ServerApplyKnockback(flat.normalized * push, 0f, freeze);
             }
-            else if (Motor != null) Motor.ServerApplyKnockback(knockback, hitstun);
+            else if (Motor != null) Motor.ServerApplyKnockback(knockback, hitstun, HitKinds.HitStop(kind, impact));
 
             if (attacker != null && attacker != this) _lastAttacker = attacker;
             bool ko = _health.ApplyDamage(r.HealthDamage);
@@ -359,6 +389,13 @@ namespace LightMMORPG.Combat
         {
             PlayerStats a = attacker != null ? attacker.GetComponent<PlayerStats>() : null;
             OnKnockout?.Invoke(this, a);
+        }
+
+        [ObserversRpc]
+        private void RpcDodge(NetworkObject attacker, Vector3 point)
+        {
+            PlayerStats a = attacker != null ? attacker.GetComponent<PlayerStats>() : null;
+            OnDodge?.Invoke(this, a, point);
         }
     }
 }

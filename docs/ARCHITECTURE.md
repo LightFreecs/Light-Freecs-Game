@@ -54,11 +54,23 @@ Later sessions add to `ProjectBuilder` rather than writing a second builder.
   the health bar, AURA bar under guard (aura colour). The charging aura grows with the power level.
 - Movement: walk 2.2 m/s (default), run 8 m/s (hold Shift; was run 8 / sprint 13 until 2026-11-18), jump; flight toggle (fly up/down, no gravity, 11 m/s); dash (burst 25 m/s for 0.18 s, 0.6 s cooldown);
   flash step (instant ~7 m teleport in move dir, 2.5 s cooldown). All tick-based inside prediction.
+  Fight feel (2026-11-26, `PlayerMotor`): walking / running / flying accelerate (ground 90 m/s² up, 70 down: a run starts in ~0.1 s and
+  skids ~0.45 m to a stop; air 40 / 22; flight 50 / 34, up/down too); a dash skids out at run speed. The first 0.15 s of a dash or a
+  rush dodge every blow and blast (`CombatMath.DashEvadeTime`, server-side in `PlayerStats.ServerApplyHit`; an afterimage shows it).
+  Rush: locked on, Dash with no stick or the stick within 60° of the opponent dashes into striking range of them (up to 16 m, ~46 m/s,
+  uses the dash and its cooldown); back / sideways stays the plain dash. Pursuit: for 1.1 s after your finisher / heavy / beam / a
+  skill's launch lands, Dash chases the victim the same way (locked on or not), aimed where they will be. Locked on, movement is
+  relative to the opponent's exact bearing and sidesteps follow the circle round them (same distance). Attack dashes (lunges) and
+  rushes burst out and ease into the arrival (`CombatMath.EaseOutStep`) instead of a constant speed and a dead stop.
 - Melee: 4-hit light combo (damage 30/30/40/60, combo window 0.6 s after each hit, last hit knockback), heavy attack
   = hold to charge (owner 2026-11-21), up to 1.5 s: damage 110 (tap) → 300 (full), knockback 15 → 32 m/s with lift 8 → 14
   (a tap shoves ~5 m, a full charge sends the victim flying ~23 m, ~1 s in the air), hitstun 0.6 → 1.3 s; winding up slows
   to 0.35× walk (no running); 1.2 s cooldown from the release; the hit lands 0.10 s after the release (when the fist
   arrives on the face; owner's clip, 2026-11-22). Hit = sphere overlap 1.2 m radius at 1.3 m in front of attacker, server side.
+  Light blows also land on their move's impact frame (`AttackMove.Hit`, 0.07-0.10 s for the fist moves; since 2026-11-26), and a
+  blow is lost when its attacker is struck first. Hit-stop (`CombatMath.HitStop`: 0.06 s, big blows 0.11 s, + up to 0.12 s for a
+  charged heavy) freezes the victim's body on the server (the knockback starts after it, the stun covers it, blocked hits too) and
+  the poses on every client for the same time.
 - Block: hold, movement x0.35, blocks 80% damage, guard meter 100 drains by blocked damage/2, at 0 → guard break (stun 1.0 s).
 - Hitstun: 0.35 s light, 0.6 s heavy/knockback. Stunned players cannot act.
 - Powers (data-driven `AbilityDefinition` ScriptableObjects):
@@ -1038,3 +1050,25 @@ impact frame / speed lines (`VFX/AnimeScreenFx`), sword stance (X) with a placeh
 (`VFX/SwordVisual`) and three sword skills (`Combat/SwordSkills.cs`: hold Heavy = pre-motion, release = system dash +
 strikes + post-motion delay). Strikes still replay the fist moves; phase 2 = sword moves keyed in Blender. Details and
 next steps: `docs/COMBAT_PLAN.md`. Compile-checked only; the owner tests in game.
+
+### 2026-11-26 — Combat feel: smooth fights, movement that serves the battle
+Owner: "it does not feel smooth and the movement doesn't help the battle system". Code only, no animation changed (summary
+and tuning knobs in `docs/COMBAT_PLAN.md`, rules under "Gameplay rules" above).
+- Found: light hits were resolved on the press (on the host the victim reacted before the fist arrived, and the attacker froze
+  in its wind-up); the hit-stop froze only the poses while the bodies kept sliding (a frozen victim drifting back); movement
+  started and stopped dead, lunges ran at a constant speed into a dead stop; the dash was only a reposition; locked-on
+  sidesteps spiralled away from the opponent; closing the gap after a launch meant running after them.
+- `PlayerMotor`: acceleration (`MoveVelocity`), eased lunges (`LungeDuration`), hit-stop freeze (`FreezeTimer`, set by
+  `ServerApplyKnockback(..., freeze)`), dodge window (`EvadeTimer`), rush (`ReplicateData.Rush`, `QueueRush`,
+  `OwnerDashOverride`), lock-on orbit (`LockTargetProvider` from the camera: the exact bearing, sidesteps turned by half their
+  arc, `CombatMath.OrbitChordDegrees`). All in the reconcile.
+- `PlayerCombat.Movement.cs` (partial class): queued light hits (`QueueLightHit` / `ServerLightHits`), rush / pursuit on Dash
+  (`TryRush`), `ServerStrikeIncoming` for the dummy. `PlayerStats`: `HitKinds.IsBig / HitStop` (shared with `CombatFx`), the
+  dodge (`ServerIsEvading`, `OnDodge` / `RpcDodge`; blasts fly through a dodger). `VFX/Afterimage.cs`: baked-body ghosts with
+  the aura glow (`AfterimageTrail` on every fighter: dash / rush trail, flash-step vanish; `CombatFx.OnDodge`).
+- `TrainingDummy`: one-shot inputs are latched for the next tick (`BotInput`), it rushes in from 6-22 m (30 % a think) and
+  dodges the player's opening blow (20 %, heavies / skills 40 %).
+- Tests: `CombatFeelTests` (eased dashes cover the exact distance, hit-stop order, sidesteps keep the distance).
+- Not done: a remote attacker's own hit-stop isn't predicted (it shows ~one round trip after the impact frame); the dash's
+  dodge window is on server time (no lag compensation).
+- Verified: headless compile only; nothing was played (the owner tests by hand).

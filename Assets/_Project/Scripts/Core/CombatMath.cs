@@ -74,6 +74,39 @@ namespace LightMMORPG.Core
         /// <summary>Seconds in the air after a heavy of this charge (0..1): ~0.57 s for a tap, 1 s at full charge.</summary>
         public static float HeavyAirTime(float charge01) => AirTime(Mathf.Lerp(HeavyLift, HeavyMaxLift, Mathf.Clamp01(charge01)));
 
+        // ---------------- fight feel (shared by the server's motor and every client's visuals) ----------------
+
+        /// <summary>Seconds at the start of a dash (or a rush) in which blows and blasts slip past: a dodge.</summary>
+        public const float DashEvadeTime = 0.15f;
+
+        /// <summary>
+        /// Hit-stop of a blow in seconds: the impact freeze. The server holds the victim (and its knockback) still this long,
+        /// and every client freezes the fighters' poses for as long. Big blows (finishers, heavies, beams, guard breaks) hold
+        /// longer, a charged heavy longest (<paramref name="charge01"/> = its charge).
+        /// </summary>
+        public static float HitStop(bool big, float charge01) => (big ? 0.11f : 0.06f) + 0.12f * Mathf.Clamp01(charge01);
+
+        /// <summary>
+        /// Share of the average speed for one tick of an eased dash (an attack's lunge, a rush): <paramref name="remaining"/>
+        /// ticks left including this one, out of <paramref name="total"/>. Fast out of the start, slowing into the arrival;
+        /// <paramref name="ease"/> 0 = constant speed, 1 = from twice the average down to nothing. The shares of all the
+        /// ticks add up to <paramref name="total"/>, so the distance covered is exact.
+        /// </summary>
+        public static float EaseOutStep(int remaining, int total, float ease)
+        {
+            if (total <= 1) return 1f;
+            int k = Mathf.Clamp(remaining, 1, total);
+            return 1f + Mathf.Clamp01(ease) * ((2f * k - 1f) / total - 1f);
+        }
+
+        /// <summary>
+        /// Degrees to turn a sideways step towards the one you circle round, so the step follows the chord of that circle
+        /// instead of its tangent and the distance stays the same (<paramref name="lateralStep"/>: metres sideways this
+        /// step, right positive; <paramref name="radius"/>: distance to the centre).
+        /// </summary>
+        public static float OrbitChordDegrees(float lateralStep, float radius) =>
+            radius > 1e-3f ? Mathf.Rad2Deg * lateralStep / (2f * radius) : 0f;
+
         /// <summary>Picks a spawn index from a 0..1 random value, avoiding <paramref name="avoid"/> when possible.</summary>
         public static int PickSpawn(int count, float random01, int avoid = -1)
         {

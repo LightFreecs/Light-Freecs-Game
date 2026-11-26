@@ -89,6 +89,8 @@ namespace LightMMORPG.Cameras
             _currentDistance = distance;
             PlayerMotor.CameraYawProvider = () => _yaw;
             PlayerMotor.LockedOnProvider = () => CurrentTarget != null;
+            // locked on, the motor moves relative to the opponent's exact bearing (sideways circles them)
+            PlayerMotor.LockTargetProvider = () => CurrentTarget != null ? CurrentTarget.transform.position : (Vector3?)null;
             PlayerMotor.OnLocalPlayerStarted += Attach;
             if (PlayerMotor.Local != null) Attach(PlayerMotor.Local);
         }

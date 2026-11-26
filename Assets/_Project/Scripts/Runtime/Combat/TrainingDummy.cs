@@ -9,10 +9,11 @@ namespace LightMMORPG.Combat
     /// <see cref="PlayerMotor.ServerBotInput"/> for movement and <see cref="PlayerCombat"/>'s <c>Server*</c> attacks, so it
     /// plays by exactly the same rules (power level, aura reserve, energy, cooldowns).
     /// <list type="bullet">
-    /// <item><b>Spar</b> (default): fights back. Closes in, throws 2–4 hit combos (sometimes ending in a charged heavy: a short
-    /// wind-up, now and then a full charge that sends you flying), guards or
-    /// backs off after taking hits, fires energy blasts from range, and powers up (Charge) when it has room, so it starts
-    /// weak like everyone and gets stronger. Reaction times are human-ish so it's beatable.</item>
+    /// <item><b>Spar</b> (default): fights back. Closes in (now and then rushing in from range), throws 2–4 hit combos
+    /// (sometimes ending in a charged heavy: a short wind-up, now and then a full charge that sends you flying), guards or
+    /// backs off after taking hits, sometimes dodges your opening blow with a dash aside, fires energy blasts from range, and
+    /// powers up (Charge) when it has room, so it starts weak like everyone and gets stronger. Reaction times are human-ish
+    /// so it's beatable.</item>
     /// <item><b>Stand</b> / <b>Block</b>: the old punching bag (faces you, optionally holds block).</item>
     /// </list>
     /// It refills after a few calm seconds and walks back to its spot (teleport) after a knockout or when knocked far away.
@@ -56,6 +57,14 @@ namespace LightMMORPG.Combat
         private int _comboLeft;
         private bool _finishHeavy;
         private float _strafe = 1f, _strafeFlip;
+        // one-shot inputs for the next tick (a dodge's dash, a rush at the player): Update runs more often than the ticks
+        private bool _dashLatch;
+        private Vector3 _rushLatch;
+        private float _dodgeUntil;
+        private Vector2 _dodgeMove;
+        private bool _sawStrike;
+        private PlayerStats _seenTarget;
+        private PlayerCombat _targetCombat;
 
         public static TrainingDummy Attach(GameObject fighter, Vector3 home)
         {
@@ -76,7 +85,19 @@ namespace LightMMORPG.Combat
             if (_motor != null) _motor.ServerBotInput = null;
         }
 
-        private PlayerMotor.ReplicateData BotInput() => _rd;
+        private PlayerMotor.ReplicateData BotInput()
+        {
+            var rd = _rd;
+            if (_dashLatch) { rd.Dash = true; _dashLatch = false; }
+            if (_rushLatch.sqrMagnitude > 1e-4f) { rd.Lunge = _rushLatch; rd.Rush = true; _rushLatch = Vector3.zero; }
+            return rd;
+        }
+
+        private PlayerCombat CombatOf(PlayerStats target)
+        {
+            if (target != _seenTarget) { _seenTarget = target; _targetCombat = target != null ? target.GetComponent<PlayerCombat>() : null; }
+            return _targetCombat;
+        }
 
         private PlayerStats NearestPlayer()
         {
@@ -139,7 +160,9 @@ namespace LightMMORPG.Combat
         private void ResetBrain()
         {
             _comboLeft = 0;
-            _chargeUntil = _blockUntil = _backOffUntil = 0f;
+            _chargeUntil = _blockUntil = _backOffUntil = _dodgeUntil = 0f;
+            _dashLatch = false;
+            _rushLatch = Vector3.zero;
             if (_combat != null && _combat.ServerBeamCharging) _combat.ServerBeamCharge(false);
             CancelHeavy();
         }
@@ -170,7 +193,12 @@ namespace LightMMORPG.Combat
                 if (_stats.Power.Value < 0.5f && !_stats.AuraDepleted) _rd.Charge = true;
                 return;
             }
-            if (!_stats.ServerCanAct()) { _comboLeft = 0; CancelHeavy(); return; }
+            // the player's blow on its way (the swing has started, it hasn't landed yet): noticed once per blow
+            var theirs = CombatOf(target);
+            bool incoming = theirs != null && theirs.ServerStrikeIncoming;
+            bool freshStrike = incoming && !_sawStrike;
+            _sawStrike = incoming;
+            if (!_stats.ServerCanAct()) { _comboLeft = 0; _dodgeUntil = 0f; CancelHeavy(); return; }
 
             Vector3 to = target.transform.position - transform.position;
             Vector3 flat = new Vector3(to.x, 0f, to.z);
@@ -187,6 +215,18 @@ namespace LightMMORPG.Combat
                     _combat.ServerHeavyRelease(aim, now - _heavyStart);
                     _nextCombo = now + Random.Range(0.9f, 1.6f);
                 }
+                return;
+            }
+
+            // dodging: now and then a dash aside as the player's opening blow comes in (a dash's first moments slip past blows)
+            if (now < _dodgeUntil) { _rd.Move = _dodgeMove; return; }
+            if (freshStrike && dist < 5f && _comboLeft == 0 && now >= _blockUntil && _motor.DashReady
+                && Random.value < (theirs.ServerBigStrikeIncoming ? 0.4f : 0.2f))
+            {
+                _dodgeMove = new Vector2(_strafe, -0.35f);
+                _dodgeUntil = now + 0.2f;
+                _dashLatch = true;
+                _rd.Move = _dodgeMove;
                 return;
             }
 
@@ -226,6 +266,12 @@ namespace LightMMORPG.Combat
                 {
                     _combat.ServerBlast(aim);
                     _nextBlast = now + Random.Range(1.4f, 3.2f);
+                }
+                // far off: now and then rush in (a dash that stops in reach), straight into a combo
+                if (dist > 6f && dist < 22f && _motor.DashReady && Random.value < 0.3f)
+                {
+                    _rushLatch = flat / dist * (dist - 1.3f);
+                    _nextCombo = Mathf.Min(_nextCombo, now + 0.2f);
                 }
             }
 

@@ -9,7 +9,8 @@ namespace LightMMORPG.VFX
 {
     /// <summary>
     /// Visual-only combat effects built from primitives + the GameConfig glow materials (nothing here affects gameplay).
-    /// Also hooks <see cref="PlayerStats.OnHitFeedback"/> once to play impact flash, hit-stop, recoil and camera shake.
+    /// Also hooks <see cref="PlayerStats.OnHitFeedback"/> once to play impact flash, hit-stop, recoil and camera shake, and
+    /// <see cref="PlayerStats.OnDodge"/> for the dodge's afterimage.
     /// </summary>
     public static class CombatFx
     {
@@ -22,15 +23,33 @@ namespace LightMMORPG.VFX
             if (_hooked) return;
             _hooked = true;
             PlayerStats.OnHitFeedback += OnHit;
+            PlayerStats.OnDodge += OnDodge;
+        }
+
+        /// <summary>
+        /// Slipped past a blow in a dash's first moments: a bright afterimage of the dodger, a puff of glow where the blow
+        /// would have landed, and for the dodger a whoosh of speed lines.
+        /// </summary>
+        private static void OnDodge(PlayerStats dodger, PlayerStats attacker, Vector3 point)
+        {
+            if (Headless || dodger == null) return;
+            Afterimage.Spawn(Afterimage.RigOf(dodger), 0.45f, 1.6f);
+            SpawnFlash(point, 0.7f, GameConfig.Load().auraMaterial, 0.16f);
+            if (dodger.IsOwner)
+            {
+                AnimeScreenFx.SpeedBurst(0.6f, 0.3f);
+                ThirdPersonCamera.Punch(3f, 0.18f);
+            }
         }
 
         private static void OnHit(PlayerStats victim, PlayerStats attacker, Vector3 point, float damage, bool blocked, bool guardBreak, HitKind kind, float impact)
         {
-            bool big = kind == HitKind.Finisher || kind == HitKind.Heavy || kind == HitKind.Beam || guardBreak;
+            bool big = HitKinds.IsBig(kind, guardBreak);
             // a charged heavy (impact = its charge) hits harder everywhere: longer freeze, bigger shake, a shockwave, and it
             // sends the victim flying
             float charged = kind == HitKind.Heavy ? Mathf.Clamp01(impact) : 0f;
-            float stop = (big ? 0.11f : 0.06f) + 0.12f * charged;
+            // the same hit-stop the server holds the victim's body still for (its knockback starts after it)
+            float stop = HitKinds.HitStop(kind, impact, guardBreak);
             var victimAnim = victim != null ? victim.GetComponent<PlayerProceduralAnimator>() : null;
             var attackerAnim = attacker != null ? attacker.GetComponent<PlayerProceduralAnimator>() : null;
             if (victimAnim != null)
