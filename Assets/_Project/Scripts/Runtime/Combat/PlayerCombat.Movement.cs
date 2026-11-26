@@ -64,7 +64,7 @@ namespace LightMMORPG.Combat
         // ---------------- light blows on their impact frame (server) ----------------
 
         /// <summary>Server: a light combo blow, resolved when its fist / foot / blade arrives (<see cref="ServerLightHits"/>).</summary>
-        private void QueueLightHit(Vector3 aim, ComboHit hit, Vector3 sweep)
+        private void QueueLightHit(Vector3 aim, ComboHit hit, Vector3 sweep, bool tired)
         {
             AttackMove m = Moveset.Move(hit.Index);
             float delay = m != null ? Mathf.Clamp(m.Hit, 0f, 0.3f) : 0f;
@@ -75,8 +75,9 @@ namespace LightMMORPG.Combat
                 From = ServerChest,
                 Sweep = sweep,
                 Index = hit.Index,
-                Damage = hit.Damage * (_sword.Value ? SwordDamageMul : 1f),
-                Finisher = hit.Knockback,
+                // a tired swing (thrown without the stamina for it): weaker, and a finisher doesn't send anyone flying
+                Damage = hit.Damage * (_sword.Value ? SwordDamageMul : 1f) * (tired ? CombatConstants.TiredDamageMultiplier : 1f),
+                Finisher = hit.Knockback && !tired,
             });
         }
 
@@ -107,7 +108,9 @@ namespace LightMMORPG.Combat
         private void OnHitForPursuit(PlayerStats victim, PlayerStats attacker, Vector3 point, float damage, bool blocked, bool guardBreak,
                                      HitKind kind, float impact)
         {
-            if (!IsOwner || attacker != _stats || victim == null || victim == _stats || blocked) return;
+            if (!IsOwner || attacker != _stats || victim == null || victim == _stats) return;
+            if (_motor != null) _motor.QueueConnected();   // our blow landed (hit or blocked): Dash / Block / Jump may cut its recovery
+            if (blocked) return;
             if (kind != HitKind.Finisher && kind != HitKind.Heavy && kind != HitKind.Beam) return;
             _pursuit = victim;
             _pursuitUntil = Time.time + PursuitWindow;
@@ -122,7 +125,9 @@ namespace LightMMORPG.Combat
         private bool TryRush()
         {
             if (_stats == null || _input == null || _motor == null || _stats.IsDown.Value || _motor.IsStunned || !_motor.DashReady
-                || _motor.IsCharging) return false;
+                || _motor.IsCharging || _motor.RecoveryLocked) return false;
+            // stamina: no rush when short or winded (the press falls back to the plain dash, which the motor gates on its own cost)
+            if (!_motor.CanAfford(CombatConstants.StaminaRush + (_motor.InRecovery ? CombatConstants.StaminaDashCancel : 0f))) return false;
             float now = Time.time;
             if (now < _busyUntilLocal || now < _motor.OwnerFrozenUntil) return false;
             bool pursuit = _pursuit != null && now < _pursuitUntil && _pursuit.isActiveAndEnabled && !_pursuit.IsDown.Value;

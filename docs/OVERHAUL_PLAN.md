@@ -135,7 +135,10 @@ Sword stance idle and run (`COMBAT_PLAN.md` "Next" 3), dodge / sidestep poses fo
 whatever the owner reports as clunky after playing T1-T6.
 
 ## Status
-- T1 Reference breakdown + pacing core: not started
+- [x] T1 Reference breakdown + pacing core: done 2026-11-26 (compile-checked, not played). Breakdown in `COMBAT_PLAN.md`;
+  stamina / Winded / recovery cancels / hit-stop as specified above. Knobs: `CombatConstants` (Stamina*, Winded*, TiredDamageMultiplier),
+  `CombatMath.HitStopLight / HitStopBig / HitStopCharge`, `PlayerProceduralAnimator.HandoverFade / HandoverShare`, `TrainingDummy.LowStamina`.
+  Details: `ARCHITECTURE.md` Status 2026-11-26 (T1).
 - T2 Hit reactions: not started
 - T3 Techniques from the clips: not started
 - T4 Fighting styles: not started

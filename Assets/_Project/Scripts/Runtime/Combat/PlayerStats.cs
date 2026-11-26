@@ -58,6 +58,10 @@ namespace LightMMORPG.Combat
         public readonly SyncVar<float> Aura = new(CombatConstants.AuraReserve, new SyncTypeSettings(0.1f));
         /// <summary>0 while there is aura left, then rising to 1: strength and defence sink.</summary>
         public readonly SyncVar<float> Exhaustion = new(0f, new SyncTypeSettings(0.25f));
+        /// <summary>Stamina (overhaul T1), mirrored from the motor's server state (the owner's HUD reads its own predicted motor).</summary>
+        public readonly SyncVar<float> Stamina = new(CombatConstants.MaxStamina, new SyncTypeSettings(0.1f));
+        /// <summary>Ran out of stamina and hasn't recovered to <see cref="CombatConstants.WindedRecoverAt"/> yet.</summary>
+        public readonly SyncVar<bool> Winded = new(false, new SyncTypeSettings(0f));
         public readonly SyncVar<bool> IsDown = new(false, new SyncTypeSettings(0f));
         public readonly SyncVar<float> DownRemaining = new(0f, new SyncTypeSettings(0.2f));
         public readonly SyncVar<int> Kos = new(0, new SyncTypeSettings(0f));
@@ -223,6 +227,11 @@ namespace LightMMORPG.Combat
             Exhaustion.Value = _aura.Exhaustion;
             IsDown.Value = _health.IsKnockedOut;
             DownRemaining.Value = _health.DownRemaining;
+            if (Motor != null)
+            {
+                Stamina.Value = Motor.Stamina;
+                Winded.Value = Motor.Winded;
+            }
         }
 
         /// <summary>Server: full health, energy and guard (training dummy recovering between combos). Ignored while down.</summary>
@@ -234,6 +243,7 @@ namespace LightMMORPG.Combat
             _energy.Refill();
             _guard.Reset();
             _aura.Reset();
+            if (Motor != null) Motor.ServerRefillStamina();
             PushAll();
         }
 
@@ -298,7 +308,12 @@ namespace LightMMORPG.Combat
             if (attacker != this && ServerIsEvading)
             {
                 double now = Time.timeAsDouble;
-                if (now - _lastDodgeFx > 0.25) { _lastDodgeFx = now; RpcDodge(attacker != null ? attacker.NetworkObject : null, point); }
+                if (now - _lastDodgeFx > 0.25)
+                {
+                    _lastDodgeFx = now;
+                    Motor.ServerRefundStamina(CombatConstants.StaminaDodgeRefund);   // a perfect dodge pays some of the dash back
+                    RpcDodge(attacker != null ? attacker.NetworkObject : null, point);
+                }
                 Debug.Log("[Combat] " + DisplayName + " dodged " + (attacker != null ? attacker.DisplayName : "?") + "'s " + kind);
                 return false;
             }
@@ -317,7 +332,8 @@ namespace LightMMORPG.Combat
             Vector3 flat = new Vector3(knockback.x, 0f, knockback.z);
             if (blocking)
             {
-                guardBroke = _guard.Drain(r.GuardDamage);
+                // winded: the guard gives way faster
+                guardBroke = _guard.Drain(r.GuardDamage * (Motor.Winded ? CombatConstants.WindedGuardDamageMultiplier : 1f));
                 float push = CombatMath.BlockedPushSpeed * (1f + 2f * impact);   // a charged heavy shoves the guard back up to 3x
                 float freeze = HitKinds.HitStop(kind, impact, guardBroke);       // block-stop: held for the impact, then pushed back
                 if (guardBroke) Motor.ServerApplyKnockback(flat.normalized * push * 1.5f, _guard.BreakStunDuration, freeze);
@@ -361,6 +377,7 @@ namespace LightMMORPG.Combat
             _guard.Reset();
             _aura.Reset(); // a new battle: back to 10 % power, full aura
             EndSurge();
+            Motor.ServerRefillStamina();
             Vector3 pos = transform.position + Vector3.up;
             var spawner = FindAnyObjectByType<PlayerSpawner>();
             if (spawner != null && spawner.Spawns != null && spawner.Spawns.Length > 0)

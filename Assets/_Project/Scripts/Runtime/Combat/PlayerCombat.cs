@@ -224,19 +224,25 @@ namespace LightMMORPG.Combat
             if (!_heavyCharging && !_motor.IsRushing && now - _lightBufferedAt <= BufferTime && now >= _nextLightLocal)
             {
                 _lightBufferedAt = -10f;
-                _nextLightLocal = now + CombatMath.LightAttackInterval;
+                _nextLightLocal = now + CombatMath.LightAttackInterval * _motor.RecoveryScale;   // winded: slower
                 if (now - _localComboTime > _config.comboWindow) _localComboIndex = 0;
                 int idx = _localComboIndex;
                 _localComboIndex = (idx + 1) % Mathf.Max(1, _config.lightComboDamage.Length);
                 _localComboTime = now;
+                // stamina: short, the light still comes out as a tired swing (weaker, no finisher knockback) and the bar flashes
+                bool tired = _motor.Stamina < CombatConstants.StaminaLight;
+                if (tired) _motor.StaminaRefusedAt = now;
+                _motor.QueueSpend(CombatConstants.StaminaLight);
+                CommitRecovery(Moveset.Move(idx));
                 Vector3 aim = MeleeAim(LightLunge, 0.35f, out Vector3 lunge, out bool assisted);
                 if (!assisted) _motor.FaceAimFor(0.6f);
                 _motor.QueueLunge(lunge);
                 if (_anim != null) _anim.PlayAttack(AttackKind.Light, idx);
-                CmdLight(aim, lunge);
+                CmdLight(aim, lunge, tired);
             }
             else if (!_heavyCharging && !_beamCharging && now - _heavyBufferedAt <= BufferTime && now >= _heavyReadyLocal
-                     && !_input.Held(GameAction.Block) && !_input.Held(GameAction.Charge))
+                     && !_input.Held(GameAction.Block) && !_input.Held(GameAction.Charge)
+                     && !StaminaRefused(CombatConstants.StaminaHeavy, now, ref _heavyBufferedAt))
             {
                 // hold to wind up: the fist is pulled back and the charge builds until the button is let go
                 _heavyCharging = true;
@@ -249,16 +255,21 @@ namespace LightMMORPG.Combat
             if (_heavyCharging)
             {
                 _motor.FaceAimFor(0.3f);
-                if (!_input.Held(GameAction.Heavy))
+                // winded: the heavy is a tap only (it swings straight from the wind-up)
+                if (!_input.Held(GameAction.Heavy) || _motor.Winded)
                 {
                     // let go: swing. The charge (seconds held, capped) sets damage, knockback and hitstun on the server.
-                    float charge = Mathf.Min(now - _heavyChargeStart, _config.heavyMaxChargeTime);
+                    float charge = _motor.Winded ? 0f : Mathf.Min(now - _heavyChargeStart, _config.heavyMaxChargeTime);
                     _heavyCharging = false;
                     if (!(_swordLocal && TryReleaseSwordSkill(now, charge)))
                     {
-                        _heavyReadyLocal = now + _config.heavyCooldown;
-                        _heavyCdDurLocal = _config.heavyCooldown;
+                        float cd = _config.heavyCooldown * _motor.RecoveryScale;
+                        _heavyReadyLocal = now + cd;
+                        _heavyCdDurLocal = cd;
                         _nextLightLocal = Mathf.Max(_nextLightLocal, now + 0.3f);   // a jab can't cut the punch off before it lands
+                        // stamina at the release: more for a longer charge (spent down to 0: overdoing it leaves you winded)
+                        _motor.QueueSpend(CombatConstants.StaminaHeavy + CombatConstants.StaminaHeavyCharge * CombatMath.Charge01(charge, _config.heavyMaxChargeTime));
+                        CommitRecovery(Moveset.Heavy != null ? Moveset.Heavy.Swing : null);
                         Vector3 aim = MeleeAim(HeavyLunge, 0.8f, out Vector3 lunge, out bool assisted);
                         if (!assisted) _motor.FaceAimFor(0.8f);
                         _motor.QueueLunge(lunge);
@@ -313,6 +324,25 @@ namespace LightMMORPG.Combat
                 if (_anim != null) _anim.PlayAttack(AttackKind.Surge, 0);
                 CmdSurge();
             }
+        }
+
+        /// <summary>
+        /// Owner: the blow just started commits the fighter for its length (its recovery x1.3 winded): no Dash / Block / Jump /
+        /// running until it lands, so a whiff can be punished (<see cref="PlayerMotor.RecoveryLocked"/>).
+        /// </summary>
+        private void CommitRecovery(AttackMove m)
+        {
+            if (m == null || _motor == null) return;
+            _motor.QueueCommit(m.Hit + Mathf.Max(0f, m.Length - m.Hit) * _motor.RecoveryScale, m.Hit);
+        }
+
+        /// <summary>Owner: true (and the HUD's stamina bar flashes, the buffered press is dropped) when there isn't this much stamina.</summary>
+        private bool StaminaRefused(float cost, float now, ref float bufferedAt)
+        {
+            if (_motor.Stamina >= cost) return false;
+            _motor.StaminaRefusedAt = now;
+            bufferedAt = -10f;
+            return true;
         }
 
         private void CancelBeam()
@@ -400,10 +430,12 @@ namespace LightMMORPG.Combat
         /// <summary>Owner, sword stance: the held pre-motion fires the skill it readied. False = not enough energy (plain heavy).</summary>
         private bool TryReleaseSwordSkill(float now, float charge)
         {
+            if (_motor.Winded) return false;   // winded: no skills, the plain heavy (a tap)
             int tier = SwordSkills.TierFor(charge);
-            while (tier > 0 && _stats.Energy.Value < SwordSkills.All[tier].Energy) tier--;
+            while (tier > 0 && (_stats.Energy.Value < SwordSkills.All[tier].Energy || _motor.Stamina < SkillStamina(tier))) tier--;
             var sk = SwordSkills.All[tier];
-            if (_stats.Energy.Value < sk.Energy) return false;
+            if (_stats.Energy.Value < sk.Energy || _motor.Stamina < SkillStamina(tier)) return false;
+            _motor.QueueSpend(SkillStamina(tier));
             Vector3 aim = MeleeAim(sk.MaxLunge, sk.BaseLunge, out Vector3 lunge, out bool assisted);
             if (!assisted) _motor.FaceAimFor(sk.Duration);
             _motor.QueueLunge(lunge);
@@ -418,6 +450,9 @@ namespace LightMMORPG.Combat
             CmdSwordSkill(aim, charge, lunge, (byte)tier);
             return true;
         }
+
+        private static float SkillStamina(int tier) =>
+            CombatConstants.StaminaSkill[Mathf.Clamp(tier, 0, CombatConstants.StaminaSkill.Length - 1)];
 
         /// <summary>All clients: start showing a sword skill (glow, strikes on schedule; the owner gets the callout).</summary>
         private void PlaySkill(int tier)
@@ -494,7 +529,7 @@ namespace LightMMORPG.Combat
             return d.normalized;
         }
 
-        [ServerRpc] private void CmdLight(Vector3 aim, Vector3 lunge) => ServerLight(aim, lunge);
+        [ServerRpc] private void CmdLight(Vector3 aim, Vector3 lunge, bool tired) => ServerLight(aim, lunge, tired);
         [ServerRpc] private void CmdHeavyCharge(bool on) => ServerHeavyCharge(on);
         [ServerRpc] private void CmdHeavyRelease(Vector3 aim, float claimedCharge, Vector3 lunge) => ServerHeavyRelease(aim, claimedCharge, lunge);
         [ServerRpc] private void CmdSwordSkill(Vector3 aim, float claimedCharge, Vector3 lunge, byte tier) => ServerSwordSkill(aim, claimedCharge, lunge, tier);
@@ -514,13 +549,20 @@ namespace LightMMORPG.Combat
         /// before then, it is lost (<see cref="ServerLightHits"/>). False when it was refused (down, stunned, too soon).
         /// </summary>
         [Server]
-        public bool ServerLight(Vector3 aim, Vector3 lunge = default)
+        public bool ServerLight(Vector3 aim, Vector3 lunge = default, bool tired = false)
         {
             if (!_stats.ServerCanAct() || Now < _nextLightServer || Now < _serverBusyUntil) return false;
-            _nextLightServer = Now + CombatMath.LightAttackInterval * 0.8; // small slack for jitter
+            // stamina: an owner's swing was paid through its predicted input (it says whether it was a tired one);
+            // a server-driven fighter (the dummy) pays here by the same rule
+            if (!Owner.IsValid)
+            {
+                tired = _motor.Stamina < CombatConstants.StaminaLight;
+                _motor.ServerSpendStamina(CombatConstants.StaminaLight);
+            }
+            _nextLightServer = Now + CombatMath.LightAttackInterval * 0.8 * _motor.RecoveryScale; // small slack for jitter
             aim = SafeDir(aim, _motor.Forward);
             ComboHit hit = _combo.RegisterHit(Now);
-            QueueLightHit(aim, hit, ClampLunge(lunge, LightLunge));
+            QueueLightHit(aim, hit, ClampLunge(lunge, LightLunge), tired);
             RpcSwing((byte)AttackKind.Light, (byte)hit.Index);
             return true;
         }
@@ -532,7 +574,8 @@ namespace LightMMORPG.Combat
         [Server]
         public void ServerHeavyCharge(bool on)
         {
-            if (on && (!_stats.ServerCanAct() || Now < _serverBusyUntil)) on = false;
+            if (on && (!_stats.ServerCanAct() || Now < _serverBusyUntil
+                       || (!Owner.IsValid && _motor.Stamina < CombatConstants.StaminaHeavy))) on = false;   // the dummy: no stamina, no heavy
             if (!on && !_serverHeavyCharging) return;
             _serverHeavyCharging = on;
             _serverHeavyStart = Now;
@@ -563,10 +606,12 @@ namespace LightMMORPG.Combat
             _heavyFrom = ServerChest;
             _heavySweep = ClampLunge(lunge, HeavyLunge);
             _heavyChargeTime = CombatMath.ValidateCharge(claimedCharge, (float)(Now - _serverHeavyStart), _config.heavyMaxChargeTime);
+            if (_motor.Winded) _heavyChargeTime = 0f;   // winded: a tap only
             var swing = Moveset.Heavy != null ? Moveset.Heavy.Swing : null;
             _heavyHitAt = Now + (swing != null ? swing.Hit : 0f);
             _heavyPending = true;
             float charge01 = CombatMath.Charge01(_heavyChargeTime, _config.heavyMaxChargeTime);
+            if (!Owner.IsValid) _motor.ServerSpendStamina(CombatConstants.StaminaHeavy + CombatConstants.StaminaHeavyCharge * charge01);
             RpcSwing((byte)AttackKind.Heavy, (byte)Mathf.RoundToInt(charge01 * 255f));
             return true;
         }
@@ -600,7 +645,7 @@ namespace LightMMORPG.Combat
             tier = Mathf.Clamp(Mathf.Min(tier, SwordSkills.TierFor(charge + 0.1f)), 0, SwordSkills.All.Length - 1);
             var sk = SwordSkills.All[tier];
             if (!wasCharging || !_sword.Value || !_stats.ServerCanAct() || Now < _skillReadyServer || Now < _serverBusyUntil
-                || !_stats.ServerHasEnergy(sk.Energy))
+                || !_stats.ServerHasEnergy(sk.Energy) || _motor.Winded)
             {
                 if (wasCharging) RpcHeavyCharge(false);
                 return false;

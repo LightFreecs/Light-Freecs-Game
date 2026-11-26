@@ -51,6 +51,39 @@ namespace LightMMORPG.Core
         /// <summary>Hitstun of a fully charged heavy: covers the flight, so the victim can't act until it has landed.</summary>
         public const float HeavyMaxHitstun = 1.3f;
 
+        // Stamina (overhaul T1, StaminaPool): an exchange is a short burst, then a breather. A full light string plus a dash
+        // costs about half the bar (4 x 6 + 14 = 38), so mashing runs dry. Tuned from the clips' rhythm (docs/COMBAT_PLAN.md).
+        public const float MaxStamina = 100f;
+        public const float StaminaRegenPerSecond = 30f;
+        /// <summary>Seconds without spending before stamina starts coming back.</summary>
+        public const float StaminaRegenDelay = 0.6f;
+        public const float StaminaRegenStill = 1.4f;
+        /// <summary>Regen while running or flying.</summary>
+        public const float StaminaRegenMoving = 0.6f;
+        /// <summary>Regen while blocking, powering up or winding up a heavy.</summary>
+        public const float StaminaRegenGuarding = 0.35f;
+        public const float StaminaLight = 6f;
+        /// <summary>A heavy's cost at the release (needs this much to start the wind-up); a full charge adds <see cref="StaminaHeavyCharge"/>.</summary>
+        public const float StaminaHeavy = 10f;
+        public const float StaminaHeavyCharge = 8f;
+        /// <summary>Sword skills by tier (Twin Fang, Quartet Edge, Comet Thrust), on top of their energy.</summary>
+        public static readonly float[] StaminaSkill = { 12f, 20f, 28f };
+        public const float StaminaDash = 14f;
+        public const float StaminaRush = 18f;
+        public const float StaminaFlashStep = 22f;
+        /// <summary>Extra cost of a dash that cuts a blow's recovery short.</summary>
+        public const float StaminaDashCancel = 4f;
+        /// <summary>Given back when a dash actually slips past a blow or a blast (a perfect dodge).</summary>
+        public const float StaminaDodgeRefund = 10f;
+        /// <summary>Winded (stamina hit 0) lasts until it has come back to this much.</summary>
+        public const float WindedRecoverAt = 40f;
+        /// <summary>Winded: a blow's recovery (the time until the next light, the heavy's cooldown, the committed recovery) x this.</summary>
+        public const float WindedRecoveryMultiplier = 1.3f;
+        /// <summary>Winded: guard damage taken x this.</summary>
+        public const float WindedGuardDamageMultiplier = 1.5f;
+        /// <summary>A light thrown without the stamina for it (a tired swing): damage x this, and no finisher knockback.</summary>
+        public const float TiredDamageMultiplier = 0.6f;
+
         // Powers
         public const float SurgeDamageMultiplier = 1.35f;
         public const float SurgeSpeedMultiplier = 1.2f;

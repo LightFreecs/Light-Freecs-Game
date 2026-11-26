@@ -68,9 +68,19 @@ Later sessions add to `ProjectBuilder` rather than writing a second builder.
   to 0.35× walk (no running); 1.2 s cooldown from the release; the hit lands 0.10 s after the release (when the fist
   arrives on the face; owner's clip, 2026-11-22). Hit = sphere overlap 1.2 m radius at 1.3 m in front of attacker, server side.
   Light blows also land on their move's impact frame (`AttackMove.Hit`, 0.07-0.10 s for the fist moves; since 2026-11-26), and a
-  blow is lost when its attacker is struck first. Hit-stop (`CombatMath.HitStop`: 0.06 s, big blows 0.11 s, + up to 0.12 s for a
-  charged heavy) freezes the victim's body on the server (the knockback starts after it, the stun covers it, blocked hits too) and
-  the poses on every client for the same time.
+  blow is lost when its attacker is struck first. Hit-stop (`CombatMath.HitStop`: 0.07 s, big blows 0.15 s, + up to 0.15 s for a
+  charged heavy or a launching skill; measured from the reference clips, overhaul T1) freezes the victim's body on the server (the
+  knockback starts after it, the stun covers it, blocked hits too) and the poses on every client for the same time.
+- Stamina (overhaul T1, `Core/StaminaPool`, numbers in `CombatConstants`): max 100, back at 30/s after 0.6 s without spending (x1.4
+  standing still, x0.6 running or flying, x0.35 blocking / powering up / winding up a heavy). Costs: light 6, heavy 10 (+8 at full
+  charge, paid at the release), sword skills 12 / 20 / 28 (on top of energy), dash 14, rush 18, flash step 22; a dash that dodges a
+  blow refunds 10. Short: a light still comes out as a tired swing (x0.6 damage, no finisher knockback), everything else is refused
+  (the HUD bar flashes NO STAMINA). Winded (hit 0, until back to 40): no dash / rush / flash step / skills, heavy = tap only,
+  recovery x1.3, guard damage taken x1.5. Predicted in `PlayerMotor` (attack costs ride the input, `ReplicateData.Spend`), so the
+  owner and the server agree on every dash; `PlayerStats.Stamina` / `Winded` mirror it for everyone.
+- Recovery (overhaul T1): a light or a heavy commits the fighter for the move's length (recovery x1.3 winded): no Dash / Block /
+  Jump / running. After the impact of a blow that landed (hit or blocked), any of them cuts the rest (a dash costs +4 stamina); a
+  whiffed blow keeps it all. Moving off in the last 35 % of a recovery hands the pose over to locomotion in 0.1 s.
 - Block: hold, movement x0.35, blocks 80% damage, guard meter 100 drains by blocked damage/2, at 0 → guard break (stun 1.0 s).
 - Hitstun: 0.35 s light, 0.6 s heavy/knockback. Stunned players cannot act.
 - Powers (data-driven `AbilityDefinition` ScriptableObjects):
@@ -1099,3 +1109,34 @@ Quartet Edge x4, Comet Thrust, which is also the sword's plain heavy swing). Cha
 - Verified: the keys round-trip Blender ↔ C# exactly; the bench's solver (with the wrist) matches the tool's within 0.0012 mm on
   all 69 sword keys; headless compile. Nothing was played in Unity (the owner tests by hand): not seen with the Toon Head and hair,
   on a moving fighter, or over the network.
+
+### 2026-11-26 — Overhaul T1: reference breakdown + pacing core (stamina, recovery cancels, hit-stop)
+Task T1 of `docs/OVERHAUL_PLAN.md`. Code only, no animation changed. Rules: "Gameplay rules" above (Stamina, Recovery, Hit-stop).
+- Reference breakdown of the six clips (ffmpeg brightness / frame-change data + frame strips, frames kept out of the repo):
+  `docs/COMBAT_PLAN.md` "Reference breakdown", with clip timestamps for T2 (hit reactions) and T3 (techniques).
+- Stamina: `Core/StaminaPool.cs` (pure; regen delay, multipliers, Winded until 40). `PlayerMotor` carries it in the predicted state
+  (`ReconcileData.Stamina / StaminaIdle / Winded`): dash / rush / flash step are paid and gated inside `Simulate`, attack costs ride the
+  input (`ReplicateData.Spend`, `QueueSpend`), so the owner never predicts a dash the server refuses. Server-driven fighters (the
+  dummy) pay in `ServerSpendStamina`; a perfect dodge refunds through `ServerRefundStamina`; respawn / `ServerRestore` refill.
+  `PlayerStats.Stamina` / `Winded` SyncVars mirror the server's motor; guard damage x1.5 winded. `PlayerCombat`: a short light is a
+  tired swing (`CmdLight(.., tired)`: x0.6, no finisher knockback), the heavy needs 10 to wind up and pays 10 + 8 x charge at the
+  release (winded = tap only), skills pick the highest tier both energy and stamina allow (none winded), light interval and heavy
+  cooldown x1.3 winded. `TryRush` won't rush when short (the press falls back to the plain dash).
+- Recovery cancels: `ReplicateData.Commit / CommitHit / Connected` (`QueueCommit` on every light / heavy, `QueueConnected` when the
+  server's hit feedback names us as the attacker, blocked too). While `RecoveryLocked`, Dash / Block / Jump / Run are dropped from the
+  input; after the impact of a blow that landed they cut the rest (dash +4). `PlayerProceduralAnimator.RecoveryHandover` / `HandOver`:
+  a dash or a jump after the impact, or moving off in the last 35 % of the recovery, cross-fades to locomotion in 0.1 s (also after a
+  finished combo while moving, instead of holding the guard 0.35 s).
+- Hit-stop re-tuned to the clips (`CombatMath.HitStopLight` 0.07 / `HitStopBig` 0.15 / `HitStopCharge` +0.15). Hitstun unchanged
+  (light 0.35 s + 0.07 freeze still covers the next jab at 0.25 + ~0.08 s, winded too; finishers 0.6 + 0.15).
+- HUD (`GameHud`): a stamina bar under the aura (own motor's predicted value), flashing with NO STAMINA on a refused action, WINDED
+  when dry; the surge countdown moved down a row. Dummy (`TrainingDummy`): pays by the same rules, won't dodge / rush without the
+  stamina, and below 24 (or winded) finishes its combo, then backs off and circles until it's back.
+- Tuning knobs: `CombatConstants` (MaxStamina, StaminaRegenPerSecond / Delay / Still / Moving / Guarding, Stamina* costs,
+  StaminaDashCancel, StaminaDodgeRefund, WindedRecoverAt, WindedRecoveryMultiplier, WindedGuardDamageMultiplier,
+  TiredDamageMultiplier), `CombatMath.HitStopLight / HitStopBig / HitStopCharge`, `PlayerProceduralAnimator.HandoverFade /
+  HandoverShare`, `TrainingDummy.LowStamina`.
+- Not done / known limits: the Connected flag isn't tied to a particular blow (a late hit report can unlock the next blow of a string
+  early; harmless on the host); the server trusts the owner's tired flag and attack spends (prototype, like the level); the dummy has no
+  committed recovery (its attacks don't go through the owner input). The winded pose comes in T2.
+- Verified: headless compile only (exit 0); nothing was played (the owner tests by hand).

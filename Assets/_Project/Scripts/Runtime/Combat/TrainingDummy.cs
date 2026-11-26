@@ -27,6 +27,8 @@ namespace LightMMORPG.Combat
 
         public const float RecoverAfter = 3f;
         private const float WanderLimit = 7f, SparLeash = 16f;
+        /// <summary>The dummy backs off to catch its breath below this much stamina (a string + a dash costs ~38).</summary>
+        private const float LowStamina = 24f;
 
         public Behaviour Mode { get; set; } = Behaviour.Spar;
         public PlayerStats Stats => _stats;
@@ -221,7 +223,7 @@ namespace LightMMORPG.Combat
             // dodging: now and then a dash aside as the player's opening blow comes in (a dash's first moments slip past blows)
             if (now < _dodgeUntil) { _rd.Move = _dodgeMove; return; }
             if (freshStrike && dist < 5f && _comboLeft == 0 && now >= _blockUntil && _motor.DashReady
-                && Random.value < (theirs.ServerBigStrikeIncoming ? 0.4f : 0.2f))
+                && _motor.CanAfford(CombatConstants.StaminaDash) && Random.value < (theirs.ServerBigStrikeIncoming ? 0.4f : 0.2f))
             {
                 _dodgeMove = new Vector2(_strafe, -0.35f);
                 _dodgeUntil = now + 0.2f;
@@ -240,6 +242,13 @@ namespace LightMMORPG.Combat
             }
             if (now < _blockUntil) { _rd.Block = true; return; }
             if (now < _backOffUntil) { _rd.Move = new Vector2(_strafe * 0.4f, -1f); _rd.Sprint = true; return; }
+
+            // out of breath (same stamina rules as everyone): finish the combo in hand, then back off and circle until it's back
+            if (_comboLeft == 0 && (_motor.Winded || _motor.Stamina < LowStamina))
+            {
+                _rd.Move = new Vector2(_strafe * 0.7f, dist < 5f ? -0.8f : 0f);
+                return;
+            }
 
             // powering up: only with room to breathe; the player rushing in breaks it off
             if (now < _chargeUntil)
@@ -268,7 +277,7 @@ namespace LightMMORPG.Combat
                     _nextBlast = now + Random.Range(1.4f, 3.2f);
                 }
                 // far off: now and then rush in (a dash that stops in reach), straight into a combo
-                if (dist > 6f && dist < 22f && _motor.DashReady && Random.value < 0.3f)
+                if (dist > 6f && dist < 22f && _motor.DashReady && _motor.CanAfford(CombatConstants.StaminaRush) && Random.value < 0.3f)
                 {
                     _rushLatch = flat / dist * (dist - 1.3f);
                     _nextCombo = Mathf.Min(_nextCombo, now + 0.2f);

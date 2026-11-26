@@ -42,12 +42,14 @@ namespace LightMMORPG.UI
         private static readonly Color HpA = Hex(0xc6ff5c), HpB = Hex(0x36d98a), LowA = Hex(0xffb03d), LowB = Hex(0xff4d43);
         private static readonly Color EnA = Hex(0x6fe6ff), EnB = Hex(0x2c8dff), GuardColor = Hex(0xffd25a), Ko = Hex(0xff4d43);
         private static readonly Color HpLow = new(1f, 0.3f, 0.25f), ExhaustText = Hex(0xff8a7a);
+        private static readonly Color StA = Hex(0xd6fff4), StB = Hex(0x3fd0b0);
 
         private static Color Hex(int rgb) => new(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f, 1f);
 
         private Canvas _canvas;
         private RectTransform _safe, _plates;
-        private HudBar _hp, _energy, _guard, _aura, _surge, _targetHp, _targetGuard;
+        private HudBar _hp, _energy, _guard, _aura, _surge, _targetHp, _targetGuard, _stamina;
+        private Text _staminaTag;
         private Text _targetName, _center, _feed, _score;
         // player cluster: power gauge (strength ring), name, numbers
         private RingShape _ring, _ringGlow, _surgeRing, _ember;
@@ -264,8 +266,13 @@ namespace LightMMORPG.UI
             _ember.raycastTarget = false;
             _ember.Inner = 0f;
             _auraNum = HudBar.Label(_safe, "AuraNum", tl, tl, new Vector2(756f, 158f), new Vector2(360f, 24f), 20, TextAnchor.MiddleLeft);
+            // stamina (overhaul T1): flashes when an action is refused for want of it; WINDED once it ran dry
+            _stamina = HudBar.Create(_safe, "Stamina", tl, tl, new Vector2(206f, 188f), new Vector2(420f, 12f), trail: false, shadow: false);
+            _stamina.SetFillColors(StB, StA);
+            _staminaTag = HudBar.Label(_safe, "Winded", tl, tl, new Vector2(640f, 184f), new Vector2(240f, 20f), 15, TextAnchor.MiddleLeft, FontStyle.Bold);
+            _staminaTag.color = ExhaustText;
             // power surge countdown
-            _surgeRoot = UiKit.Rect("Surge", _safe, tl, tl, new Vector2(236f, -188f), new Vector2(320f, 20f));
+            _surgeRoot = UiKit.Rect("Surge", _safe, tl, tl, new Vector2(236f, -214f), new Vector2(320f, 20f));
             var sl = HudBar.Label(_surgeRoot, "Label", tl, tl, Vector2.zero, new Vector2(90f, 20f), 15, TextAnchor.MiddleLeft, FontStyle.Bold);
             sl.text = "SURGE";
             _surge = HudBar.Create(_surgeRoot, "Bar", tl, tl, new Vector2(94f, 6f), new Vector2(200f, 8f), trail: false, shadow: false);
@@ -352,6 +359,18 @@ namespace LightMMORPG.UI
 
             _surgeRoot.gameObject.SetActive(me.SurgeActive);
             if (me.SurgeActive) _surge.Set(me.SurgeRemaining.Value / Mathf.Max(0.01f, me.SurgeDuration), dt);
+
+            // stamina: our own predicted motor (instant), the synced value otherwise
+            var mm = me.Motor;
+            float st = mm != null ? mm.Stamina : me.Stamina.Value;
+            float stMax = mm != null ? mm.MaxStamina : Core.CombatConstants.MaxStamina;
+            bool winded = mm != null ? mm.Winded : me.Winded.Value;
+            _stamina.Set(st / Mathf.Max(1f, stMax), dt);
+            float flash = mm != null ? Mathf.Clamp01(1f - (Time.time - mm.StaminaRefusedAt) / 0.35f) : 0f;
+            Color sa = winded ? ExhaustText : StA, sb = winded ? Ko : StB;
+            _stamina.SetFillColors(Color.Lerp(sb, Color.white, flash), Color.Lerp(sa, Color.white, flash));
+            _stamina.Back.color = Color.Lerp(HudBar.BackColor, new Color(1f, 0.3f, 0.25f, 0.85f), flash);
+            _staminaTag.text = winded ? "WINDED" : flash > 0f ? "NO STAMINA" : "";
         }
 
         private void UpdateScoreboard()

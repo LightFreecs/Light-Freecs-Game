@@ -84,6 +84,10 @@ namespace LightMMORPG.Player
         private bool _fadeFromHeld;
         private const float FadeDefault = 0.06f, FadeStanceOut = 0.2f;
         private float _fadeTime = FadeDefault;
+        // recovery cancels (overhaul T1): after a blow's impact a dash or a jump, or moving off in the last part of its recovery,
+        // hands over to locomotion with a short cross-fade instead of finishing the pose
+        private const float HandoverFade = 0.1f, HandoverShare = 0.35f;
+        private bool _handover, _dashingNow, _movingNow, _risingNow;
 
         // holding Charge: the moveset's power-up stance (its keys drop the fighter into it, the last one is held)
         private bool _powerUp;
@@ -315,6 +319,33 @@ namespace LightMMORPG.Player
                 _guardHold = 0.35f;
                 SetHeavyFace(false);
             }
+            else if (_heavyT > h.Swing.Hit && RecoveryHandover(h.Swing, _heavyT))
+            {
+                _heavy = HeavyPhase.None;
+                SetHeavyFace(false);
+                HandOver();
+            }
+        }
+
+        /// <summary>
+        /// After a blow's impact frame: a dash or a jump (the motor only allows them once the blow has landed) or moving off in
+        /// the last <see cref="HandoverShare"/> of its recovery ends the pose early.
+        /// </summary>
+        private bool RecoveryHandover(AttackMove m, float t)
+        {
+            if (_dashingNow || _risingNow) return true;
+            return _movingNow && t >= m.Hit + (m.Length - m.Hit) * (1f - HandoverShare);
+        }
+
+        /// <summary>Cross-fades from what's on screen to locomotion in <see cref="HandoverFade"/> (the move layer fades out).</summary>
+        private void HandOver()
+        {
+            AttackPose.Lerp(_pose, _pose, 0f, _fadeFrom);
+            _fadeFromHeld = true;
+            _moveBlend = 0f;
+            _fadeTime = HandoverFade;
+            _guardHold = 0f;
+            _handover = true;
         }
 
         /// <summary>Gritted teeth while winding up and swinging a heavy; back to neutral after.</summary>
@@ -502,14 +533,18 @@ namespace LightMMORPG.Player
                 if (_fromMove != null) _fromT += dt;
                 _moveWeight = Mathf.Min(1f, _moveWeight + dt / 0.05f);
                 if (_moveT >= _move.Length) { _move = null; _fromMove = null; _guardHold = 0.35f; }
+                else if (_moveT > _move.Hit && RecoveryHandover(_move, _moveT)) { _move = null; _fromMove = null; HandOver(); }
             }
             else if (_moveWeight > 0f)
             {
-                // hold the guard a moment after the combo, then relax to the normal stance (fast if something else takes over)
+                // hold the guard a moment after the combo, then relax to the normal stance (fast if something else takes over;
+                // moving off hands over to locomotion in HandoverFade)
                 _guardHold -= dt;
                 if (interrupted) _moveWeight = Mathf.Max(0f, _moveWeight - dt / 0.08f);
+                else if (_handover || _movingNow || _dashingNow) _moveWeight = Mathf.Max(0f, _moveWeight - dt / HandoverFade);
                 else if (_guardHold <= 0f) _moveWeight = Mathf.Max(0f, _moveWeight - dt / 0.3f);
             }
+            if (_moveWeight <= 0f || _move != null) _handover = false;
         }
 
         /// <summary>
@@ -962,6 +997,9 @@ namespace LightMMORPG.Player
 
             _flightBlend = Mathf.MoveTowards(_flightBlend, flying ? 1f : 0f, dt * 3f);
             _flyingNow = flying; _blockingNow = blocking; _chargingNow = charging;
+            _dashingNow = dashing;
+            _movingNow = planar > 1f && !(_motor != null && (_motor.IsLunging || stunned));   // walking off, not carried by the blow
+            _risingNow = _motor != null && !flying && !_motor.IsGrounded && _motor.Velocity.y > 2f;   // jumped
             _stretch = Mathf.Lerp(_stretch, dashing ? 1f : 0f, 1f - Mathf.Exp(-(dashing ? 30f : 8f) * dt));
             _lunge = Mathf.MoveTowards(_lunge, 0f, dt * 5f);
             _recoil = Vector3.MoveTowards(_recoil, Vector3.zero, dt * 3f);

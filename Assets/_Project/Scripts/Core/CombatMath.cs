@@ -79,12 +79,20 @@ namespace LightMMORPG.Core
         /// <summary>Seconds at the start of a dash (or a rush) in which blows and blasts slip past: a dodge.</summary>
         public const float DashEvadeTime = 0.15f;
 
+        /// <summary>Hit-stop of a light blow: the clips hold a light impact's drawing 2-3 frames (0.07-0.10 s).</summary>
+        public const float HitStopLight = 0.07f;
+        /// <summary>Hit-stop of a big blow (finisher, tapped heavy, beam, guard break): flash + held drawing ~0.17 s in the clips.</summary>
+        public const float HitStopBig = 0.15f;
+        /// <summary>Extra hit-stop of a fully charged heavy / a launching skill: the clips' biggest blows hold 0.33-0.5 s.</summary>
+        public const float HitStopCharge = 0.15f;
+
         /// <summary>
         /// Hit-stop of a blow in seconds: the impact freeze. The server holds the victim (and its knockback) still this long,
-        /// and every client freezes the fighters' poses for as long. Big blows (finishers, heavies, beams, guard breaks) hold
-        /// longer, a charged heavy longest (<paramref name="charge01"/> = its charge).
+        /// and every client freezes the fighters' poses for as long. Crisp on lights (<see cref="HitStopLight"/>), long on big
+        /// blows (finishers, heavies, beams, guard breaks), longest on a charged heavy or a launch (<paramref name="charge01"/>).
+        /// Measured from the reference clips (docs/COMBAT_PLAN.md, "Reference breakdown").
         /// </summary>
-        public static float HitStop(bool big, float charge01) => (big ? 0.11f : 0.06f) + 0.12f * Mathf.Clamp01(charge01);
+        public static float HitStop(bool big, float charge01) => (big ? HitStopBig : HitStopLight) + HitStopCharge * Mathf.Clamp01(charge01);
 
         /// <summary>
         /// Share of the average speed for one tick of an eased dash (an attack's lunge, a rush): <paramref name="remaining"/>

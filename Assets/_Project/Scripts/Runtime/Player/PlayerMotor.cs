@@ -38,6 +38,14 @@ namespace LightMMORPG.Player
             public Vector3 Lunge;
             /// <summary>One-time: <see cref="Lunge"/> is a rush, a dash at the opponent (uses the dash and its cooldown, up to 16 m). See <see cref="QueueRush"/>.</summary>
             public bool Rush;
+            /// <summary>One-time: stamina the attacks started this tick cost (spent down to 0 when short: a tired swing). See <see cref="QueueSpend"/>.</summary>
+            public float Spend;
+            /// <summary>One-time: a blow started this tick; seconds until its recovery is over (0 = none). See <see cref="QueueCommit"/>.</summary>
+            public float Commit;
+            /// <summary>One-time, with <see cref="Commit"/>: seconds until that blow's impact frame.</summary>
+            public float CommitHit;
+            /// <summary>One-time: the blow in progress landed (hit or blocked), so Dash / Block / Jump may cut its recovery.</summary>
+            public bool Connected;
 
             private uint _tick;
             public void Dispose() { }
@@ -65,6 +73,12 @@ namespace LightMMORPG.Player
             public Vector3 MoveVelocity;
             public float FreezeTimer;
             public float EvadeTimer;
+            public float Stamina;
+            public float StaminaIdle;
+            public bool Winded;
+            public float RecoverTimer;
+            public float ImpactTimer;
+            public bool Connected;
 
             private uint _tick;
             public void Dispose() { }
@@ -110,6 +124,39 @@ namespace LightMMORPG.Player
         public float KnockbackDeceleration => _knockbackDeceleration;
         /// <summary>Owner: no moving, jumping or dashing until this time (a sword skill and its post-motion delay).</summary>
         public float OwnerFrozenUntil { get; set; }
+
+        // ---- stamina (overhaul T1): carried in the predicted state, so the owner and the server agree on every gate ----
+        public float Stamina => _stamina.Current;
+        public float MaxStamina => _stamina.Max;
+        /// <summary>Ran dry (until it is back to <see cref="CombatConstants.WindedRecoverAt"/>): no dash / rush / flash step / skills.</summary>
+        public bool Winded => _stamina.Winded;
+        /// <summary>A blow's recovery multiplier: x1.3 while winded.</summary>
+        public float RecoveryScale => _stamina.Winded ? CombatConstants.WindedRecoveryMultiplier : 1f;
+        /// <summary>Owner: when an action was last refused for want of stamina (the HUD bar flashes).</summary>
+        public float StaminaRefusedAt { get; set; } = -10f;
+        /// <summary>In a blow's committed recovery (<see cref="QueueCommit"/>).</summary>
+        public bool InRecovery => _recoverTimer > 0f;
+        /// <summary>
+        /// The recovery can't be cut yet: no Dash / Block / Jump / running until the blow has landed (<see cref="QueueConnected"/>)
+        /// and its impact frame has passed; then any of them cuts the rest (a dash costs <see cref="CombatConstants.StaminaDashCancel"/> more).
+        /// A whiffed blow keeps its full recovery.
+        /// </summary>
+        public bool RecoveryLocked => _recoverTimer > 0f && !(_impactTimer <= 0f && _connected);
+
+        /// <summary>Owner: stamina the attack just started costs; goes out with the next tick's input (spent down to 0 when short).</summary>
+        public void QueueSpend(float amount) { if (amount > 0f) _spendQueued += amount; }
+
+        /// <summary>
+        /// Owner: a blow just started: <paramref name="length"/> seconds of committed recovery (the move's whole length, x1.3 winded),
+        /// its impact frame <paramref name="hit"/> seconds in. See <see cref="RecoveryLocked"/>.
+        /// </summary>
+        public void QueueCommit(float length, float hit) { _commitQueued = Mathf.Max(0f, length); _commitHitQueued = Mathf.Max(0f, hit); }
+
+        /// <summary>Owner: the blow in progress landed (the server's hit feedback): Dash / Block / Jump may cut its recovery after the impact.</summary>
+        public void QueueConnected() => _connectedQueued = true;
+
+        /// <summary>Enough stamina for this and not winded (dash, rush, flash step, skills).</summary>
+        public bool CanAfford(float stamina) => !_stamina.Winded && _stamina.CanSpend(stamina);
 
         /// <summary>
         /// Owner: the next tick dashes this far (metres) — an attack closing the gap to its target, the way anime fighters
@@ -175,8 +222,14 @@ namespace LightMMORPG.Player
         /// <summary>Dodge window left of the dash / rush in progress.</summary>
         private float _evadeTimer;
 
+        private readonly StaminaPool _stamina = new();
+        /// <summary>Committed recovery of the blow in progress, time to its impact frame, and whether it landed.</summary>
+        private float _recoverTimer, _impactTimer;
+        private bool _connected;
+
         // owner input accumulation
-        private bool _jumpQueued, _dashQueued, _flashQueued, _toggleFlightQueued;
+        private bool _jumpQueued, _dashQueued, _flashQueued, _toggleFlightQueued, _connectedQueued;
+        private float _spendQueued, _commitQueued, _commitHitQueued;
         private float _faceAimUntil;
         private ReplicateData _lastTickedReplicateData;
 
@@ -223,8 +276,16 @@ namespace LightMMORPG.Player
             if (!IsOwner || _input == null) return;
             if (_input.Pressed(GameAction.Jump)) _jumpQueued = true;
             // a dash at the opponent replaces the plain dash when PlayerCombat finds one to rush at
-            if (_input.Pressed(GameAction.Dash) && !(OwnerDashOverride != null && OwnerDashOverride())) _dashQueued = true;
-            if (_input.Pressed(GameAction.FlashStep)) _flashQueued = true;
+            if (_input.Pressed(GameAction.Dash) && !(OwnerDashOverride != null && OwnerDashOverride()))
+            {
+                _dashQueued = true;
+                if (DashReady && !CanAfford(CombatConstants.StaminaDash)) StaminaRefusedAt = Time.time;
+            }
+            if (_input.Pressed(GameAction.FlashStep))
+            {
+                _flashQueued = true;
+                if (_flashCooldown <= 0f && !CanAfford(CombatConstants.StaminaFlashStep)) StaminaRefusedAt = Time.time;
+            }
             if (_input.Pressed(GameAction.ToggleFlight)) _toggleFlightQueued = true;
         }
 
@@ -247,6 +308,10 @@ namespace LightMMORPG.Player
                 Dash = _dashQueued,
                 FlashStep = _flashQueued,
                 ToggleFlight = _toggleFlightQueued,
+                Spend = _spendQueued,
+                Commit = _commitQueued,
+                CommitHit = _commitHitQueued,
+                Connected = _connectedQueued,
             };
             if (_input != null)
             {
@@ -272,7 +337,8 @@ namespace LightMMORPG.Player
                 if (rd.Rush) { rd.Rush = false; rd.Lunge = Vector3.zero; }   // a sword skill's own dash still goes
             }
             _lungeQueued = _rushQueued = Vector3.zero;
-            _jumpQueued = _dashQueued = _flashQueued = _toggleFlightQueued = false;
+            _jumpQueued = _dashQueued = _flashQueued = _toggleFlightQueued = _connectedQueued = false;
+            _spendQueued = _commitQueued = _commitHitQueued = 0f;
             return rd;
         }
 
@@ -321,6 +387,12 @@ namespace LightMMORPG.Player
                 MoveVelocity = _moveVelocity,
                 FreezeTimer = _freezeTimer,
                 EvadeTimer = _evadeTimer,
+                Stamina = _stamina.Current,
+                StaminaIdle = _stamina.SinceSpend,
+                Winded = _stamina.Winded,
+                RecoverTimer = _recoverTimer,
+                ImpactTimer = _impactTimer,
+                Connected = _connected,
             };
             PerformReconcile(rd);
         }
@@ -346,8 +418,9 @@ namespace LightMMORPG.Player
                     else
                     {
                         rd = _lastTickedReplicateData;
-                        rd.Jump = rd.Dash = rd.FlashStep = rd.ToggleFlight = rd.Rush = false;
+                        rd.Jump = rd.Dash = rd.FlashStep = rd.ToggleFlight = rd.Rush = rd.Connected = false;
                         rd.Lunge = Vector3.zero;
+                        rd.Spend = rd.Commit = rd.CommitHit = 0f;
                     }
                 }
             }
@@ -374,6 +447,10 @@ namespace LightMMORPG.Player
             if (_dashTimer > 0f) _dashTimer = Mathf.Max(0f, _dashTimer - dt);
             if (_lungeTimer > 0f) _lungeTimer = Mathf.Max(0f, _lungeTimer - dt);
             if (_evadeTimer > 0f) _evadeTimer = Mathf.Max(0f, _evadeTimer - dt);
+            if (_recoverTimer > 0f) _recoverTimer = Mathf.Max(0f, _recoverTimer - dt);
+            if (_impactTimer > 0f) _impactTimer = Mathf.Max(0f, _impactTimer - dt);
+            // what the attacks started this tick cost (PlayerCombat decided; short = a tired swing, spent down to 0)
+            if (rd.Spend > 0f) _stamina.Spend(rd.Spend);
 
             // ---- hit-stop: frozen for the impact, the knockback waits until it is over ----
             if (_freezeTimer > 0f)
@@ -393,15 +470,38 @@ namespace LightMMORPG.Player
                 _dashTimer = 0f;
                 _lungeTimer = 0f;
                 _evadeTimer = 0f;
+                _recoverTimer = _impactTimer = 0f;
             }
+
+            // ---- a blow's recovery: committed until it lands; after the impact of a blow that landed, Dash / Block / Jump cut it ----
+            if (canAct && rd.Commit > 0f)
+            {
+                _recoverTimer = rd.Commit;
+                _impactTimer = Mathf.Min(rd.CommitHit, rd.Commit);
+                _connected = false;
+            }
+            if (rd.Connected) _connected = true;
+            bool recoveryLocked = _recoverTimer > 0f && !(_impactTimer <= 0f && _connected);   // a whiffed blow keeps it all
+            bool cancelling = _recoverTimer > 0f && !recoveryLocked;
+            if (recoveryLocked)
+            {
+                rd.Dash = rd.Jump = rd.Block = rd.Sprint = rd.FlashStep = false;
+                if (rd.Rush) { rd.Rush = false; rd.Lunge = Vector3.zero; }
+            }
+            else if (cancelling && (rd.Block || rd.Jump)) _recoverTimer = 0f;
 
             // ---- attack lunge / rush ----
             if (rd.Lunge.sqrMagnitude > 1e-4f)
             {
+                float rushCost = CombatConstants.StaminaRush + (cancelling ? CombatConstants.StaminaDashCancel : 0f);
                 bool start = rd.Rush
-                    ? _lungeTimer <= 0f && _dashCooldown <= 0f && !(rd.Charge && !rd.Block)
+                    ? _lungeTimer <= 0f && _dashCooldown <= 0f && !(rd.Charge && !rd.Block) && CanAfford(rushCost)
                     : _lungeTimer <= 0f || (_lungeTimer > 0f && _dashTimer > 0f);   // a blow cuts a rush short
-                if (start) StartLunge(rd.Lunge, rd.Rush, dt);
+                if (start)
+                {
+                    StartLunge(rd.Lunge, rd.Rush, dt);
+                    if (rd.Rush) { _stamina.Spend(rushCost); _recoverTimer = 0f; }
+                }
             }
 
             bool grounded = _cc.isGrounded;
@@ -428,9 +528,12 @@ namespace LightMMORPG.Player
 
             Vector3 moveDir = wish.sqrMagnitude > 0.0001f ? wish.normalized : Forward;
 
-            // ---- dash / flash step ----
-            if (rd.Dash && !rd.Rush && !IsCharging && _dashCooldown <= 0f)
+            // ---- dash / flash step (stamina: refused when short or winded; a dash cutting a recovery costs more) ----
+            float dashCost = CombatConstants.StaminaDash + (cancelling ? CombatConstants.StaminaDashCancel : 0f);
+            if (rd.Dash && !rd.Rush && !IsCharging && _dashCooldown <= 0f && CanAfford(dashCost))
             {
+                _stamina.Spend(dashCost);
+                _recoverTimer = 0f;
                 _dashTimer = _config.dashDuration;
                 _dashCooldown = _config.dashCooldown;
                 _dashDirection = moveDir;
@@ -440,8 +543,10 @@ namespace LightMMORPG.Player
             }
 
             Vector3 flashOffset = Vector3.zero;
-            if (rd.FlashStep && !IsCharging && _flashCooldown <= 0f)
+            if (rd.FlashStep && !IsCharging && _flashCooldown <= 0f && CanAfford(CombatConstants.StaminaFlashStep))
             {
+                _stamina.Spend(CombatConstants.StaminaFlashStep);
+                _recoverTimer = 0f;
                 _flashCooldown = _config.flashStepCooldown;
                 flashOffset = moveDir * _config.flashStepDistance;
                 LastFlashStepTime = Time.time;
@@ -495,6 +600,11 @@ namespace LightMMORPG.Player
             if (flashOffset != Vector3.zero) _cc.Move(flashOffset); // swept, so it stops at walls
             _cc.Move(velocity * dt);
             Velocity = _cc.velocity;
+
+            // ---- stamina comes back after a moment without spending: fastest standing still, slower running / flying,
+            //      slowest guarding or charging ----
+            bool still = _moveVelocity.sqrMagnitude < 0.04f && _dashTimer <= 0f && _lungeTimer <= 0f;
+            _stamina.Tick(dt, StaminaPool.RegenMultiplier(still, IsSprinting || _flying, IsBlocking || IsCharging || IsChargingHeavy));
 
             // ---- facing ----
             float targetYaw = _yaw;
@@ -554,6 +664,10 @@ namespace LightMMORPG.Player
             _moveVelocity = rd.MoveVelocity;
             _freezeTimer = rd.FreezeTimer;
             _evadeTimer = rd.EvadeTimer;
+            _stamina.Set(rd.Stamina, rd.StaminaIdle, rd.Winded);
+            _recoverTimer = rd.RecoverTimer;
+            _impactTimer = rd.ImpactTimer;
+            _connected = rd.Connected;
 
             // Disable the CharacterController before moving it, otherwise its physics position lags a tick.
             _cc.enabled = false;
@@ -615,6 +729,18 @@ namespace LightMMORPG.Player
             transform.position = position;
             _cc.enabled = true;
         }
+
+        /// <summary>Server: a fighter with no owner (the training dummy) pays for its attacks here (an owner's go through its input).</summary>
+        [Server]
+        public void ServerSpendStamina(float amount) => _stamina.Spend(amount);
+
+        /// <summary>Server: give stamina back (a perfect dodge); the reconcile tells the owner.</summary>
+        [Server]
+        public void ServerRefundStamina(float amount) => _stamina.Refund(amount);
+
+        /// <summary>Server: full stamina, not winded (respawn, the dummy recovering).</summary>
+        [Server]
+        public void ServerRefillStamina() => _stamina.Refill();
 
         /// <summary>Server: movement speed multiplier (Power Surge +20% = 1.2). 1 = normal.</summary>
         [Server]
