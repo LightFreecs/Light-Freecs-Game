@@ -100,7 +100,8 @@ Later sessions add to `ProjectBuilder` rather than writing a second builder.
 ## Input
 - Built in code (no .inputactions asset needed): `InputAction`s with keyboard/mouse + gamepad bindings.
   PC: WASD move (walk), mouse look, Shift run (hold), Space jump/fly up, Ctrl fly down, F toggle flight, Q dash, E flash step,
-  LMB light, RMB heavy (hold+release), R block (hold), C charge (hold), 1 Energy Blast, 2 Charged Beam (hold+release), 3 Power Surge, Tab lock-on.
+  LMB light, RMB heavy (hold+release), R block (hold), C charge (hold), 1 Energy Blast, 2 Charged Beam (hold+release), 3 Power Surge, Tab lock-on,
+  X sword stance (gamepad Select; in sword stance RMB hold+release = sword skills, see `docs/COMBAT_PLAN.md`).
 - Mobile: runtime-built uGUI overlay (virtual joystick left, drag-to-look right half, action buttons) writes into a static
   `TouchInputState`; the player input reader merges it with Input System values. Shown when `Application.isMobilePlatform`
   or `Touchscreen.current != null`.
@@ -1030,3 +1031,10 @@ Each session: compile clean, commit on `setup/unity-foundation` with the Co-Auth
   - Verified: all 9 keys round-trip through Blender and the C#; all 42 joints match the Locomotion Bench's solver within 0.003 mm; no arm in
     the torso on the new keys, no elbow or knee pops; worst upper-arm roll 76° (the charge hold). Headless compile only: nothing was played
     in Unity, so the transitions, flight and the Toon Head on the bowed / thrown-back head are not seen in game. The face is unchanged.
+
+### 2026-11-25 — Anime fight feel + sword stance (phase 1)
+Gap-closing attack lunges (predicted in `PlayerMotor`, swept hits on the server), 0.3 s input buffer, FOV punch /
+impact frame / speed lines (`VFX/AnimeScreenFx`), sword stance (X) with a placeholder blade + slash trail
+(`VFX/SwordVisual`) and three sword skills (`Combat/SwordSkills.cs`: hold Heavy = pre-motion, release = system dash +
+strikes + post-motion delay). Strikes still replay the fist moves; phase 2 = sword moves keyed in Blender. Details and
+next steps: `docs/COMBAT_PLAN.md`. Compile-checked only; the owner tests in game.

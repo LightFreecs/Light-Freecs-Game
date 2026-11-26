@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using FishNet.Object;
+using FishNet.Object.Synchronizing;
 using LightMMORPG.Cameras;
 using LightMMORPG.Characters;
 using LightMMORPG.Config;
@@ -69,6 +70,24 @@ namespace LightMMORPG.Combat
         // ---- visuals ----
         private BeamChargeVisual _chargeVisual;
 
+        // ---- feel: input buffer, melee assist (gap-closing lunges), sword stance + sword skills ----
+        private const float BufferTime = 0.3f, LightLunge = 2.6f, HeavyLunge = 3.6f, SwordDamageMul = 1.1f;
+        private float _lightBufferedAt = -10f, _heavyBufferedAt = -10f;
+        private float _busyUntilLocal, _heavyCdDurLocal, _windupSeenAt, _playStart;
+        private bool _swordLocal;
+        private int _lastPreTier, _playTier = -1, _playNext;
+        private SwordVisual _swordVis;
+        private readonly SyncVar<bool> _sword = new();
+        private struct SkillHit { public double At; public int Index; }
+        private readonly List<SkillHit> _skillHits = new();
+        private int _skillTier;
+        private Vector3 _skillAim, _skillFrom, _skillLunge, _heavyFrom, _heavySweep;
+        private double _skillReadyServer, _serverBusyUntil;
+
+        private SwordVisual SwordVis => _swordVis != null ? _swordVis : (_swordVis = SwordVisual.For(this));
+        /// <summary>Sword stance (synced): light swings reach further, Heavy becomes sword skills.</summary>
+        public bool SwordDrawn => _sword.Value;
+
         public bool IsChargingBeam => _beamCharging;
         public float BeamCharge01 => _beamCharging && _config.chargedBeam != null && _config.chargedBeam.maxChargeTime > 0f
             ? Mathf.Clamp01((Time.time - _beamChargeStart) / _config.chargedBeam.maxChargeTime) : 0f;
@@ -93,6 +112,12 @@ namespace LightMMORPG.Combat
             _blastCd = new Cooldown(Def(AttackKind.Blast)?.cooldown ?? 0.35f);
             _beamCd = new Cooldown(Def(AttackKind.Beam)?.cooldown ?? 4f);
             _surgeCd = new Cooldown(Def(AttackKind.Surge)?.cooldown ?? 20f);
+            _heavyCdDurLocal = _config.heavyCooldown;
+            _sword.OnChange += (prev, next, asServer) =>
+            {
+                if (asServer && !IsClientStarted) return;   // a dedicated server draws nothing
+                SwordVis.SetDrawn(next);
+            };
         }
 
         public override void OnStartClient()
@@ -129,7 +154,7 @@ namespace LightMMORPG.Combat
             float ready, dur;
             switch (k)
             {
-                case AttackKind.Heavy: ready = _heavyReadyLocal; dur = _config.heavyCooldown; break;
+                case AttackKind.Heavy: ready = _heavyReadyLocal; dur = _heavyCdDurLocal; break;
                 case AttackKind.Blast: ready = _blastReadyLocal; dur = _blastCd.Duration; break;
                 case AttackKind.Beam: ready = _beamReadyLocal; dur = _beamCd.Duration; break;
                 case AttackKind.Surge: ready = _surgeReadyLocal; dur = _surgeCd.Duration; break;
@@ -163,34 +188,48 @@ namespace LightMMORPG.Combat
 
         private void Update()
         {
+            UpdateSwordVisuals();
             if (!IsOwner || _input == null || !_input.InputEnabled) return;
             bool canAct = !_stats.IsDown.Value && !_motor.IsStunned;
             float now = Time.time;
+            if (_input.Pressed(GameAction.Sword) && !_heavyCharging)
+            {
+                _swordLocal = !_swordLocal;
+                SwordVis.SetDrawn(_swordLocal);
+                CmdSetSword(_swordLocal);
+            }
+            // buffered: a press a little before the next swing is allowed still lands, so strings flow
+            if (_input.Pressed(GameAction.Light)) _lightBufferedAt = now;
+            if (_input.Pressed(GameAction.Heavy)) _heavyBufferedAt = now;
 
             if (_beamCharging && !canAct) CancelBeam();
             // hit, knocked out, guarding, powering up or a menu opening calls the wind-up off (no swing)
             if (_heavyCharging && (!canAct || PlayerInputReader.MenuOpen || _input.Held(GameAction.Block) || _input.Held(GameAction.Charge)))
                 CancelHeavy();
 
-            if (!canAct) return;
+            if (!canAct || now < _busyUntilLocal) return;   // a sword skill and its post-motion delay hold everything
 
-            if (!_heavyCharging && _input.Pressed(GameAction.Light) && now >= _nextLightLocal)
+            if (!_heavyCharging && now - _lightBufferedAt <= BufferTime && now >= _nextLightLocal)
             {
+                _lightBufferedAt = -10f;
                 _nextLightLocal = now + CombatMath.LightAttackInterval;
                 if (now - _localComboTime > _config.comboWindow) _localComboIndex = 0;
                 int idx = _localComboIndex;
                 _localComboIndex = (idx + 1) % Mathf.Max(1, _config.lightComboDamage.Length);
                 _localComboTime = now;
-                _motor.FaceAimFor(0.6f);
+                Vector3 aim = MeleeAim(LightLunge, 0.35f, out Vector3 lunge, out bool assisted);
+                if (!assisted) _motor.FaceAimFor(0.6f);
+                _motor.QueueLunge(lunge);
                 if (_anim != null) _anim.PlayAttack(AttackKind.Light, idx);
-                CmdLight(Aim());
+                CmdLight(aim, lunge);
             }
-            else if (!_heavyCharging && !_beamCharging && _input.Pressed(GameAction.Heavy) && now >= _heavyReadyLocal
+            else if (!_heavyCharging && !_beamCharging && now - _heavyBufferedAt <= BufferTime && now >= _heavyReadyLocal
                      && !_input.Held(GameAction.Block) && !_input.Held(GameAction.Charge))
             {
                 // hold to wind up: the fist is pulled back and the charge builds until the button is let go
                 _heavyCharging = true;
                 _heavyChargeStart = now;
+                _heavyBufferedAt = -10f;
                 _motor.FaceAimFor(0.3f);
                 if (_anim != null) _anim.PlayHeavyWindUp();
                 CmdHeavyCharge(true);
@@ -203,11 +242,17 @@ namespace LightMMORPG.Combat
                     // let go: swing. The charge (seconds held, capped) sets damage, knockback and hitstun on the server.
                     float charge = Mathf.Min(now - _heavyChargeStart, _config.heavyMaxChargeTime);
                     _heavyCharging = false;
-                    _heavyReadyLocal = now + _config.heavyCooldown;
-                    _nextLightLocal = Mathf.Max(_nextLightLocal, now + 0.3f);   // a jab can't cut the punch off before it lands
-                    _motor.FaceAimFor(0.8f);
-                    if (_anim != null) _anim.PlayHeavySwing(CombatMath.Charge01(charge, _config.heavyMaxChargeTime));
-                    CmdHeavyRelease(Aim(), charge);
+                    if (!(_swordLocal && TryReleaseSwordSkill(now, charge)))
+                    {
+                        _heavyReadyLocal = now + _config.heavyCooldown;
+                        _heavyCdDurLocal = _config.heavyCooldown;
+                        _nextLightLocal = Mathf.Max(_nextLightLocal, now + 0.3f);   // a jab can't cut the punch off before it lands
+                        Vector3 aim = MeleeAim(HeavyLunge, 0.8f, out Vector3 lunge, out bool assisted);
+                        if (!assisted) _motor.FaceAimFor(0.8f);
+                        _motor.QueueLunge(lunge);
+                        if (_anim != null) _anim.PlayHeavySwing(CombatMath.Charge01(charge, _config.heavyMaxChargeTime));
+                        CmdHeavyRelease(aim, charge, lunge);
+                    }
                 }
             }
             _motor.OwnerHeavyCharging = _heavyCharging;
@@ -283,6 +328,130 @@ namespace LightMMORPG.Combat
             else if (_chargeVisual != null) _chargeVisual.End();
         }
 
+        // ---------------- melee assist + sword skills (owner / all clients) ----------------
+
+        /// <summary>
+        /// Owner: melee assist. Aims at the lock-on target, else the nearest standing fighter in front within reach, and
+        /// gives the dash that carries this fighter into striking range of it — anime fighters cross the gap with every blow.
+        /// With no one in reach: a short step along the camera aim. <paramref name="assisted"/> = a target was found.
+        /// </summary>
+        private Vector3 MeleeAim(float maxLunge, float idleStep, out Vector3 lunge, out bool assisted)
+        {
+            Vector3 aim = Aim();
+            Vector3 me = LocalChest();
+            PlayerStats target = AssistTarget(me, aim, (maxLunge + 2.5f) * DesignScale);
+            assisted = target != null;
+            if (assisted)
+            {
+                Vector3 to = target.transform.position + Vector3.up * 1.3f - me;
+                if (!_motor.IsFlying) to.y = 0f;
+                float dist = to.magnitude;
+                if (dist > 1e-3f)
+                {
+                    float contact = (_swordLocal ? 1.9f : 1.15f) * DesignScale;
+                    lunge = to / dist * Mathf.Clamp(dist - contact, 0.12f, maxLunge * DesignScale);
+                    return to / dist;
+                }
+            }
+            Vector3 step = _motor.IsFlying ? aim : new Vector3(aim.x, 0f, aim.z).normalized;
+            lunge = step * idleStep * DesignScale;
+            return aim;
+        }
+
+        private PlayerStats AssistTarget(Vector3 me, Vector3 aim, float range)
+        {
+            var cam = ThirdPersonCamera.Instance;
+            if (cam != null && cam.CurrentTarget != null)
+            {
+                var locked = cam.CurrentTarget.GetComponent<PlayerStats>();
+                if (locked != null && !locked.IsDown.Value && (locked.transform.position + Vector3.up * 1.3f - me).magnitude <= range * 1.5f)
+                    return locked;
+            }
+            Vector3 flatAim = new Vector3(aim.x, 0f, aim.z).normalized;
+            PlayerStats best = null;
+            float bestScore = float.MaxValue;
+            foreach (var s in PlayerStats.All)
+            {
+                if (s == null || s == _stats || s.IsDown.Value) continue;
+                Vector3 to = s.transform.position + Vector3.up * 1.3f - me;
+                float d = to.magnitude;
+                if (d > range) continue;
+                Vector3 flat = new Vector3(to.x, 0f, to.z);
+                float ang = flat.sqrMagnitude > 1e-4f ? Vector3.Angle(flatAim, flat) : 0f;
+                if (ang > 65f) continue;
+                float score = d * (1f + ang / 45f);
+                if (score < bestScore) { bestScore = score; best = s; }
+            }
+            return best;
+        }
+
+        /// <summary>Owner, sword stance: the held pre-motion fires the skill it readied. False = not enough energy (plain heavy).</summary>
+        private bool TryReleaseSwordSkill(float now, float charge)
+        {
+            int tier = SwordSkills.TierFor(charge);
+            while (tier > 0 && _stats.Energy.Value < SwordSkills.All[tier].Energy) tier--;
+            var sk = SwordSkills.All[tier];
+            if (_stats.Energy.Value < sk.Energy) return false;
+            Vector3 aim = MeleeAim(sk.MaxLunge, sk.BaseLunge, out Vector3 lunge, out bool assisted);
+            if (!assisted) _motor.FaceAimFor(sk.Duration);
+            _motor.QueueLunge(lunge);
+            float busy = sk.Duration + sk.PostDelay;
+            _busyUntilLocal = now + busy;
+            _motor.OwnerFrozenUntil = now + busy;   // the system moves you, then the post-motion delay holds you
+            _heavyReadyLocal = now + sk.Cooldown;
+            _heavyCdDurLocal = sk.Cooldown;
+            _nextLightLocal = Mathf.Max(_nextLightLocal, now + busy);
+            _localComboIndex = 0;
+            PlaySkill(tier);
+            CmdSwordSkill(aim, charge, lunge, (byte)tier);
+            return true;
+        }
+
+        /// <summary>All clients: start showing a sword skill (glow, strikes on schedule; the owner gets the callout).</summary>
+        private void PlaySkill(int tier)
+        {
+            var sk = SwordSkills.All[tier];
+            _playTier = tier;
+            _playStart = Time.time;
+            _playNext = 0;
+            if (_anim != null && sk.Moves[0] >= 0) _anim.CancelHeavy();   // the pre-motion flows into the first strike
+            SwordVis.SetGlow(sk.Glow, 3f, sk.Duration + sk.PostDelay * 0.5f);
+            if (!IsOwner) return;
+            AnimeScreenFx.Callout(sk.Name, sk.Glow);
+            AnimeScreenFx.SpeedBurst(0.8f, sk.Duration);
+            ThirdPersonCamera.Punch(6f, 0.25f);
+        }
+
+        /// <summary>All clients: the skill's strikes on schedule, and the readied skill's glow while the pre-motion is held.</summary>
+        private void UpdateSwordVisuals()
+        {
+            if (_playTier >= 0)
+            {
+                var sk = SwordSkills.All[_playTier];
+                float t = Time.time - _playStart;
+                while (_playNext < sk.Starts.Length && t >= sk.Starts[_playNext])
+                {
+                    int move = sk.Moves[_playNext++];
+                    if (_anim == null) continue;
+                    if (move >= 0) _anim.PlayAttack(AttackKind.Light, move);
+                    else _anim.PlayHeavySwing(1f);
+                }
+                if (_playNext >= sk.Starts.Length) _playTier = -1;
+            }
+            if (_swordVis == null || !_swordVis.Drawn) return;
+            if (_anim == null || !_anim.IsWindingUpHeavy || _playTier >= 0) { _lastPreTier = 0; return; }
+            float held = Time.time - (IsOwner ? _heavyChargeStart : _windupSeenAt);
+            int tier = SwordSkills.TierFor(held);
+            var ready = SwordSkills.All[tier];
+            _swordVis.SetGlow(ready.Glow, 0.6f + 1.4f * Mathf.Clamp01(held / SwordSkills.All[SwordSkills.All.Length - 1].MinCharge));
+            if (tier > _lastPreTier)
+            {
+                _swordVis.SetGlow(ready.Glow, 3f, 0.08f);   // flare: the next skill is ready
+                if (IsOwner) AnimeScreenFx.SpeedBurst(0.3f, 0.2f);
+            }
+            _lastPreTier = tier;
+        }
+
         // ---------------- server RPCs ----------------
 
         private double Now => Time.timeAsDouble;
@@ -294,9 +463,15 @@ namespace LightMMORPG.Combat
             return d.normalized;
         }
 
-        [ServerRpc] private void CmdLight(Vector3 aim) => ServerLight(aim);
+        [ServerRpc] private void CmdLight(Vector3 aim, Vector3 lunge) => ServerLight(aim, lunge);
         [ServerRpc] private void CmdHeavyCharge(bool on) => ServerHeavyCharge(on);
-        [ServerRpc] private void CmdHeavyRelease(Vector3 aim, float claimedCharge) => ServerHeavyRelease(aim, claimedCharge);
+        [ServerRpc] private void CmdHeavyRelease(Vector3 aim, float claimedCharge, Vector3 lunge) => ServerHeavyRelease(aim, claimedCharge, lunge);
+        [ServerRpc] private void CmdSwordSkill(Vector3 aim, float claimedCharge, Vector3 lunge, byte tier) => ServerSwordSkill(aim, claimedCharge, lunge, tier);
+        [ServerRpc] private void CmdSetSword(bool on) => _sword.Value = on;
+
+        /// <summary>A client-claimed attack dash, capped for the move (and NaN-safe).</summary>
+        private Vector3 ClampLunge(Vector3 l, float max) =>
+            float.IsNaN(l.x) || float.IsNaN(l.y) || float.IsNaN(l.z) ? Vector3.zero : Vector3.ClampMagnitude(l, max * DesignScale + 0.5f);
         [ServerRpc] private void CmdBlast(Vector3 aim) => ServerBlast(aim);
         [ServerRpc] private void CmdBeamCharge(bool on) => ServerBeamCharge(on);
         [ServerRpc] private void CmdBeamFire(Vector3 aim, float claimedCharge) => ServerBeamFire(aim, claimedCharge);
@@ -304,9 +479,9 @@ namespace LightMMORPG.Combat
 
         /// <summary>Server: the next light combo hit towards aim. False when it was refused (down, stunned, too soon).</summary>
         [Server]
-        public bool ServerLight(Vector3 aim)
+        public bool ServerLight(Vector3 aim, Vector3 lunge = default)
         {
-            if (!_stats.ServerCanAct() || Now < _nextLightServer) return false;
+            if (!_stats.ServerCanAct() || Now < _nextLightServer || Now < _serverBusyUntil) return false;
             _nextLightServer = Now + CombatMath.LightAttackInterval * 0.8; // small slack for jitter
             aim = SafeDir(aim, _motor.Forward);
             ComboHit hit = _combo.RegisterHit(Now);
@@ -315,7 +490,8 @@ namespace LightMMORPG.Combat
                 ? CombatMath.Knockback(aim, CombatMath.FinisherKnockbackSpeed, CombatMath.FinisherLift)
                 : CombatMath.Knockback(aim, CombatMath.LightKnockbackSpeed, 0f);
             float stun = hit.Knockback ? _config.heavyHitstun : _config.lightHitstun;
-            MeleeHits(aim, hit.Damage, stun, kb, kind, StrikePoint(aim, hit.Index));
+            float damage = hit.Damage * (_sword.Value ? SwordDamageMul : 1f);
+            MeleeHits(aim, damage, stun, kb, kind, StrikePoint(aim, hit.Index), 0f, ClampLunge(lunge, LightLunge));
             RpcSwing((byte)AttackKind.Light, (byte)hit.Index);
             return true;
         }
@@ -327,7 +503,7 @@ namespace LightMMORPG.Combat
         [Server]
         public void ServerHeavyCharge(bool on)
         {
-            if (on && !_stats.ServerCanAct()) on = false;
+            if (on && (!_stats.ServerCanAct() || Now < _serverBusyUntil)) on = false;
             if (!on && !_serverHeavyCharging) return;
             _serverHeavyCharging = on;
             _serverHeavyStart = Now;
@@ -344,7 +520,7 @@ namespace LightMMORPG.Combat
         /// client sees the impact at contact. False when refused (not wound up, can't act, cooldown).
         /// </summary>
         [Server]
-        public bool ServerHeavyRelease(Vector3 aim, float claimedCharge)
+        public bool ServerHeavyRelease(Vector3 aim, float claimedCharge, Vector3 lunge = default)
         {
             bool wasCharging = _serverHeavyCharging;
             _serverHeavyCharging = false;
@@ -355,6 +531,8 @@ namespace LightMMORPG.Combat
             }
             _combo.Reset();
             _heavyAim = SafeDir(aim, _motor.Forward);
+            _heavyFrom = ServerChest;
+            _heavySweep = ClampLunge(lunge, HeavyLunge);
             _heavyChargeTime = CombatMath.ValidateCharge(claimedCharge, (float)(Now - _serverHeavyStart), _config.heavyMaxChargeTime);
             var swing = Moveset.Heavy != null ? Moveset.Heavy.Swing : null;
             _heavyHitAt = Now + (swing != null ? swing.Hit : 0f);
@@ -374,7 +552,80 @@ namespace LightMMORPG.Combat
             float stun = Mathf.Lerp(_config.heavyHitstun, _config.heavyMaxHitstun, charge01);
             var swing = Moveset.Heavy != null ? Moveset.Heavy.Swing : null;
             Vector3 strike = swing != null ? StrikePoint(_heavyAim, swing) : ToWorld(_heavyAim, new Vector3(0.02f, 1.32f, 1.30f));
-            MeleeHits(_heavyAim, damage, stun, CombatMath.HeavyKnockback(_heavyAim, charge01), HitKind.Heavy, strike, charge01);
+            MeleeHits(_heavyAim, damage, stun, CombatMath.HeavyKnockback(_heavyAim, charge01), HitKind.Heavy, strike, charge01, _heavySweep, _heavyFrom);
+        }
+
+        private AttackMove SkillMove(SwordSkill sk, int i) => sk.Moves[i] >= 0 ? Moveset.Move(sk.Moves[i]) : Moveset.Heavy?.Swing;
+
+        /// <summary>
+        /// Server: a sword skill fired from the held pre-motion (sword stance). The tier is the client's pick capped by the
+        /// pre-motion the server measured; each strike resolves when its blade lands; no attacks until the post-motion delay
+        /// is over. False when refused (not winding up, sheathed, can't act, cooldown, energy).
+        /// </summary>
+        [Server]
+        public bool ServerSwordSkill(Vector3 aim, float claimedCharge, Vector3 lunge, int tier)
+        {
+            bool wasCharging = _serverHeavyCharging;
+            _serverHeavyCharging = false;
+            float charge = CombatMath.ValidateCharge(claimedCharge, (float)(Now - _serverHeavyStart), _config.heavyMaxChargeTime);
+            tier = Mathf.Clamp(Mathf.Min(tier, SwordSkills.TierFor(charge + 0.1f)), 0, SwordSkills.All.Length - 1);
+            var sk = SwordSkills.All[tier];
+            if (!wasCharging || !_sword.Value || !_stats.ServerCanAct() || Now < _skillReadyServer || Now < _serverBusyUntil
+                || !_stats.ServerHasEnergy(sk.Energy))
+            {
+                if (wasCharging) RpcHeavyCharge(false);
+                return false;
+            }
+            _stats.ServerTrySpendEnergy(sk.Energy);
+            _combo.Reset();
+            _skillTier = tier;
+            _skillAim = SafeDir(aim, _motor.Forward);
+            _skillFrom = ServerChest;
+            _skillLunge = ClampLunge(lunge, sk.MaxLunge);
+            _skillReadyServer = Now + sk.Cooldown - 0.15;
+            _serverBusyUntil = Now + sk.Duration + sk.PostDelay * 0.8f;
+            _skillHits.Clear();
+            for (int i = 0; i < sk.Starts.Length; i++)
+            {
+                AttackMove m = SkillMove(sk, i);
+                _skillHits.Add(new SkillHit { At = Now + sk.Starts[i] + (m != null ? m.Hit : 0.1f), Index = i });
+            }
+            RpcSwordSkill((byte)tier);
+            return true;
+        }
+
+        /// <summary>Server: strike <paramref name="i"/> of the running sword skill lands now.</summary>
+        private void ServerSkillHit(int i)
+        {
+            if (!_stats.ServerCanAct()) { _skillHits.Clear(); return; }   // struck out of the skill: the rest is lost
+            var sk = SwordSkills.All[_skillTier];
+            Vector3 kb;
+            HitKind kind;
+            float stun, impact = 0f;
+            if (i < sk.Starts.Length - 1)
+            {
+                kb = CombatMath.Knockback(_skillAim, CombatMath.LightKnockbackSpeed, 0f);
+                kind = HitKind.Light;
+                stun = _config.lightHitstun + 0.2f;   // held in the string until the last strike
+            }
+            else if (sk.FinalLaunch > 0f)
+            {
+                impact = sk.FinalLaunch;
+                kb = CombatMath.HeavyKnockback(_skillAim, impact);
+                kind = HitKind.Heavy;
+                stun = Mathf.Lerp(_config.heavyHitstun, _config.heavyMaxHitstun, impact);
+            }
+            else
+            {
+                kb = CombatMath.Knockback(_skillAim, CombatMath.FinisherKnockbackSpeed, CombatMath.FinisherLift);
+                kind = HitKind.Finisher;
+                stun = _config.heavyHitstun;
+            }
+            AttackMove m = SkillMove(sk, i);
+            Vector3 strike = m != null ? StrikePoint(_skillAim, m) : ServerChest + _skillAim;
+            // the first strike sweeps the whole dash from where the skill started; the rest land where the fighter is now
+            if (i == 0) MeleeHits(_skillAim, sk.Damage[i], stun, kb, kind, strike, impact, _skillLunge, _skillFrom);
+            else MeleeHits(_skillAim, sk.Damage[i], stun, kb, kind, strike, impact, _skillLunge * 0.25f);
         }
 
         /// <summary>Design height scale of this fighter (2.3 m = 1), from the capsule (set from the hero's height everywhere).</summary>
@@ -407,10 +658,19 @@ namespace LightMMORPG.Combat
             return ToWorld(aim, _strikePose.RootRotation * limb + _strikePose.RootPos);
         }
 
-        private void MeleeHits(Vector3 aim, float damage, float stun, Vector3 knockback, HitKind kind, Vector3 strike, float impact = 0f)
+        /// <summary>
+        /// Resolve a melee blow on everyone in the strike sphere, swept along <paramref name="sweep"/> (the attack's dash, so a
+        /// lunging blow lands whether or not the server has moved the attacker yet) from <paramref name="from"/> (default:
+        /// the chest now). The sword reaches further.
+        /// </summary>
+        private void MeleeHits(Vector3 aim, float damage, float stun, Vector3 knockback, HitKind kind, Vector3 strike, float impact = 0f,
+                               Vector3 sweep = default, Vector3? from = null)
         {
-            Vector3 center = CombatMath.MeleeHitCenter(ServerChest, aim, _config.meleeHitForwardOffset, _motor.IsFlying);
-            int n = Physics.OverlapSphereNonAlloc(center, _config.meleeHitRadius, _overlap, ~0, QueryTriggerInteraction.Ignore);
+            bool sword = _sword.Value;
+            float reach = _config.meleeHitForwardOffset + (sword ? 0.7f * DesignScale : 0f);
+            float radius = _config.meleeHitRadius + (sword ? 0.25f : 0f);
+            Vector3 center = CombatMath.MeleeHitCenter(from ?? ServerChest, aim, reach, _motor.IsFlying);
+            int n = Physics.OverlapCapsuleNonAlloc(center, center + sweep, radius, _overlap, ~0, QueryTriggerInteraction.Ignore);
             _hitSet.Clear();
             for (int i = 0; i < n; i++)
             {
@@ -509,6 +769,12 @@ namespace LightMMORPG.Combat
         private void ServerTick()
         {
             if (_heavyPending && Now >= _heavyHitAt) ServerHeavyHit();
+            while (_skillHits.Count > 0 && Now >= _skillHits[0].At)
+            {
+                int strikeIndex = _skillHits[0].Index;
+                _skillHits.RemoveAt(0);
+                ServerSkillHit(strikeIndex);
+            }
             if (_projectiles.Count == 0) return;
             float dt = (float)TimeManager.TickDelta;
             for (int i = _projectiles.Count - 1; i >= 0; i--)
@@ -555,7 +821,11 @@ namespace LightMMORPG.Combat
         private void RpcHeavyCharge(bool on)
         {
             if (IsOwner || _anim == null) return;
-            if (on) _anim.PlayHeavyWindUp();
+            if (on)
+            {
+                _anim.PlayHeavyWindUp();
+                _windupSeenAt = Time.time;
+            }
             else _anim.CancelHeavy();
         }
 
@@ -584,6 +854,14 @@ namespace LightMMORPG.Combat
             SetChargeVisual(false);
             if (_anim != null) _anim.PlayAttack(AttackKind.Beam, 0);
             CombatFx.SpawnBeamVisual(origin, dir, length, charge01);
+        }
+
+        /// <summary>Everyone else: this fighter fired sword skill <paramref name="tier"/>.</summary>
+        [ObserversRpc(ExcludeOwner = true)]
+        private void RpcSwordSkill(byte tier)
+        {
+            if (IsOwner || tier >= SwordSkills.All.Length) return;
+            PlaySkill(tier);
         }
     }
 }

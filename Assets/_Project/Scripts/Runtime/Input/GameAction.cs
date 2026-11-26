@@ -17,10 +17,11 @@ namespace LightMMORPG.Input
         Beam,          // 2 (hold + release) / RB
         Surge,         // 3 / D-pad right
         LockOn,        // Tab / R3
+        Sword,         // X / Select: draw or sheathe the sword (sword stance: Heavy becomes sword skills)
     }
 
     public static class GameActions
     {
-        public const int Count = (int)GameAction.LockOn + 1;
+        public const int Count = (int)GameAction.Sword + 1;
     }
 }

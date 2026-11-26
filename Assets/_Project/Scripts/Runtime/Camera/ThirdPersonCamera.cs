@@ -169,6 +169,29 @@ namespace LightMMORPG.Cameras
             }
             transform.SetPositionAndRotation(origin + back * _currentDistance + shake, rot);
             SetMarker(CurrentTarget);
+
+            // field of view: widens with speed (dash, lunge, being sent flying) and punches in on big impacts
+            if (_cam == null && TryGetComponent(out _cam)) _baseFov = _cam.fieldOfView;
+            if (_cam != null)
+            {
+                float fast = _player.IsDashing || _player.IsLunging ? 1f : Mathf.InverseLerp(10f, 26f, _player.Velocity.magnitude);
+                _speedFov = Mathf.Lerp(_speedFov, fast * 8f, 1f - Mathf.Exp(-8f * dt));
+                float p = Mathf.Clamp01((_punchUntil - Time.time) / _punchDuration);
+                _cam.fieldOfView = _baseFov + _speedFov + _punchAmp * p * p;
+            }
+        }
+
+        private Camera _cam;
+        private float _baseFov, _speedFov;
+        private static float _punchAmp, _punchUntil, _punchDuration = 0.1f;
+
+        /// <summary>Field-of-view kick in degrees (negative = punch in on an impact), easing back over the duration.</summary>
+        public static void Punch(float fovDelta, float duration)
+        {
+            if (Time.time < _punchUntil && Mathf.Abs(_punchAmp) > Mathf.Abs(fovDelta)) return;
+            _punchAmp = fovDelta;
+            _punchDuration = Mathf.Max(0.01f, duration);
+            _punchUntil = Time.time + duration;
         }
 
         private float CollisionDistance(Vector3 origin, Vector3 dir, float maxDist)

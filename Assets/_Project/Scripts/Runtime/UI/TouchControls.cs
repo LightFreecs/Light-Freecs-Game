@@ -51,6 +51,7 @@ namespace LightMMORPG.UI
             Button(GameAction.Jump, "JUMP", br, new Vector2(-150f, 290f), 110f, new Color(0.5f, 0.85f, 1f), null);
             Button(GameAction.Dash, "DASH", br, new Vector2(-440f, 60f), 90f, new Color(0.6f, 0.9f, 0.7f), null);
             Button(GameAction.FlashStep, "FLASH", br, new Vector2(-440f, 170f), 90f, new Color(0.6f, 0.9f, 0.7f), null);
+            Button(GameAction.Sword, "SWORD", br, new Vector2(-440f, 280f), 90f, new Color(0.7f, 0.85f, 1f), null);
 
             // powers column above
             Button(GameAction.Blast, "BLAST", br, new Vector2(-60f, 440f), 96f, new Color(0.3f, 0.75f, 1f), AttackKind.Blast);

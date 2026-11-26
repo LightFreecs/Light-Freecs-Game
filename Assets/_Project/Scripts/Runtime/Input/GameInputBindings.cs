@@ -57,6 +57,7 @@ namespace LightMMORPG.Input
             Button(GameAction.Beam, "<Keyboard>/2", "<Gamepad>/rightShoulder");
             Button(GameAction.Surge, "<Keyboard>/3", "<Gamepad>/dpad/right");
             Button(GameAction.LockOn, "<Keyboard>/tab", "<Gamepad>/rightStickPress");
+            Button(GameAction.Sword, "<Keyboard>/x", "<Gamepad>/select");
             // Extra keyboard aliases.
             _buttons[(int)GameAction.Sprint].AddBinding("<Keyboard>/rightShift");
             _buttons[(int)GameAction.FlyDown].AddBinding("<Keyboard>/rightCtrl");

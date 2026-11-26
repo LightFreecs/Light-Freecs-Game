@@ -49,6 +49,17 @@ namespace LightMMORPG.VFX
             bool localAttacker = attacker != null && attacker.IsOwner;
             if (localVictim) ThirdPersonCamera.Shake(big ? 0.35f + 0.35f * charged : 0.16f, big ? 0.3f + 0.25f * charged : 0.15f);
             else if (localAttacker) ThirdPersonCamera.Shake(big ? 0.18f + 0.22f * charged : 0.07f, 0.12f + 0.12f * charged);
+            // anime impact: the camera punches in, a white impact frame, speed lines burst out from the blow
+            if ((localVictim || localAttacker) && !blocked)
+            {
+                if (big)
+                {
+                    ThirdPersonCamera.Punch(-(4f + 6f * charged), 0.22f + 0.15f * charged);
+                    AnimeScreenFx.ImpactFrame(0.22f + 0.28f * charged);
+                    AnimeScreenFx.SpeedBurst(0.55f + 0.45f * charged, 0.3f + 0.2f * charged);
+                }
+                else ThirdPersonCamera.Punch(-1.2f, 0.1f);
+            }
 
             var cfg = GameConfig.Load();
             bool melee = kind == HitKind.Light || kind == HitKind.Finisher || kind == HitKind.Heavy;

@@ -28,6 +28,8 @@ namespace LightMMORPG.Player
             public bool Heavy;
             // One-time inputs (accumulated in Update between ticks).
             public bool Jump, Dash, FlashStep, ToggleFlight;
+            /// <summary>One-time: an attack's dash into striking range (metres; horizontal unless flying). See <see cref="QueueLunge"/>.</summary>
+            public Vector3 Lunge;
 
             private uint _tick;
             public void Dispose() { }
@@ -49,6 +51,8 @@ namespace LightMMORPG.Player
             public float StunTimer;
             public float SpeedMultiplier;
             public float StatSpeed;
+            public float LungeTimer;
+            public Vector3 LungeVelocity;
 
             private uint _tick;
             public void Dispose() { }
@@ -79,6 +83,20 @@ namespace LightMMORPG.Player
         /// <summary>Running (Run / Shift held while moving); otherwise the fighter walks.</summary>
         public bool IsSprinting { get; private set; }
         public bool IsDashing => _dashTimer > 0f;
+        /// <summary>Carried by an attack's dash into striking range (<see cref="QueueLunge"/>).</summary>
+        public bool IsLunging => _lungeTimer > 0f;
+        /// <summary>Owner: no moving, jumping or dashing until this time (a sword skill and its post-motion delay).</summary>
+        public float OwnerFrozenUntil { get; set; }
+
+        /// <summary>
+        /// Owner: the next tick dashes this far (metres) — an attack closing the gap to its target, the way anime fighters
+        /// cross the distance with every blow. Fast (~34 m/s), faces the dash, ignored while stunned or already lunging.
+        /// </summary>
+        public void QueueLunge(Vector3 displacement) => _lungeQueued = displacement;
+
+        private const float MaxLunge = 10f, LungeSpeed = 34f;
+        private float _lungeTimer;
+        private Vector3 _lungeVelocity, _lungeQueued;
         public bool IsStunned => _stunTimer > 0f;
         public bool IsGrounded => _cc != null && _cc.isGrounded;
         public float StunRemaining => _stunTimer;
@@ -189,6 +207,13 @@ namespace LightMMORPG.Player
                 rd.Charge = _input.Held(GameAction.Charge);
             }
             rd.Heavy = OwnerHeavyCharging;
+            rd.Lunge = _lungeQueued;
+            if (Time.time < OwnerFrozenUntil)
+            {
+                rd.Move = Vector2.zero;
+                rd.Sprint = rd.Jump = rd.Dash = rd.FlashStep = false;
+            }
+            _lungeQueued = Vector3.zero;
             _jumpQueued = _dashQueued = _flashQueued = _toggleFlightQueued = false;
             return rd;
         }
@@ -209,6 +234,8 @@ namespace LightMMORPG.Player
                 StunTimer = _stunTimer,
                 SpeedMultiplier = _speedMultiplier,
                 StatSpeed = _statSpeed,
+                LungeTimer = _lungeTimer,
+                LungeVelocity = _lungeVelocity,
             };
             PerformReconcile(rd);
         }
@@ -235,6 +262,7 @@ namespace LightMMORPG.Player
                     {
                         rd = _lastTickedReplicateData;
                         rd.Jump = rd.Dash = rd.FlashStep = rd.ToggleFlight = false;
+                        rd.Lunge = Vector3.zero;
                     }
                 }
             }
@@ -256,6 +284,7 @@ namespace LightMMORPG.Player
             if (_dashCooldown > 0f) _dashCooldown = Mathf.Max(0f, _dashCooldown - dt);
             if (_flashCooldown > 0f) _flashCooldown = Mathf.Max(0f, _flashCooldown - dt);
             if (_dashTimer > 0f) _dashTimer = Mathf.Max(0f, _dashTimer - dt);
+            if (_lungeTimer > 0f) _lungeTimer = Mathf.Max(0f, _lungeTimer - dt);
 
             bool canAct = _stunTimer <= 0f;
             if (!canAct)
@@ -263,7 +292,20 @@ namespace LightMMORPG.Player
                 rd.Move = Vector2.zero;
                 rd.Jump = rd.Dash = rd.FlashStep = rd.ToggleFlight = false;
                 rd.Sprint = rd.FlyUp = rd.FlyDown = rd.Block = rd.Charge = rd.Heavy = false;
+                rd.Lunge = Vector3.zero;
                 _dashTimer = 0f;
+                _lungeTimer = 0f;
+            }
+
+            // ---- attack lunge: a whole number of ticks so the distance comes out exact ----
+            if (rd.Lunge.sqrMagnitude > 1e-4f && _lungeTimer <= 0f)
+            {
+                Vector3 l = Vector3.ClampMagnitude(_flying ? rd.Lunge : new Vector3(rd.Lunge.x, 0f, rd.Lunge.z), MaxLunge);
+                float ticks = Mathf.Max(1f, Mathf.Round(Mathf.Clamp(l.magnitude / LungeSpeed, 0.06f, 0.24f) / dt));
+                _lungeTimer = ticks * dt;
+                _lungeVelocity = l / _lungeTimer;
+                _dashTimer = 0f;
+                if (l.x * l.x + l.z * l.z > 1e-4f) _yaw = Mathf.Atan2(l.x, l.z) * Mathf.Rad2Deg;
             }
 
             bool grounded = _cc.isGrounded;
@@ -322,7 +364,8 @@ namespace LightMMORPG.Player
             }
 
             // ---- compose ----
-            Vector3 horizontal = _dashTimer > 0f ? _dashDirection * (_config.dashSpeed * SpeedScale) : wish * speed;
+            Vector3 horizontal = _lungeTimer > 0f ? _lungeVelocity
+                : _dashTimer > 0f ? _dashDirection * (_config.dashSpeed * SpeedScale) : wish * speed;
             Vector3 velocity = horizontal + Vector3.up * _verticalVelocity + _knockback;
             _knockback = Vector3.MoveTowards(_knockback, Vector3.zero, _knockbackDeceleration * dt);
 
@@ -332,7 +375,9 @@ namespace LightMMORPG.Player
 
             // ---- facing ----
             float targetYaw = _yaw;
-            if (rd.FaceAim) targetYaw = rd.CameraYaw;
+            if (_lungeTimer > 0f && _lungeVelocity.x * _lungeVelocity.x + _lungeVelocity.z * _lungeVelocity.z > 1e-4f)
+                targetYaw = Mathf.Atan2(_lungeVelocity.x, _lungeVelocity.z) * Mathf.Rad2Deg;
+            else if (rd.FaceAim) targetYaw = rd.CameraYaw;
             else if (_dashTimer > 0f) targetYaw = Mathf.Atan2(_dashDirection.x, _dashDirection.z) * Mathf.Rad2Deg;
             else if (wish.sqrMagnitude > 0.01f) targetYaw = Mathf.Atan2(wish.x, wish.z) * Mathf.Rad2Deg;
             _yaw = Mathf.MoveTowardsAngle(_yaw, targetYaw, _turnSpeed * dt);
@@ -353,6 +398,8 @@ namespace LightMMORPG.Player
             _stunTimer = rd.StunTimer;
             _speedMultiplier = rd.SpeedMultiplier <= 0f ? 1f : rd.SpeedMultiplier;
             _statSpeed = rd.StatSpeed <= 0f ? 1f : rd.StatSpeed;
+            _lungeTimer = rd.LungeTimer;
+            _lungeVelocity = rd.LungeVelocity;
 
             // Disable the CharacterController before moving it, otherwise its physics position lags a tick.
             _cc.enabled = false;
@@ -374,6 +421,7 @@ namespace LightMMORPG.Player
             _knockback = velocity;
             _stunTimer = Mathf.Max(_stunTimer, stunSeconds);
             _dashTimer = 0f;
+            _lungeTimer = 0f;
         }
 
         /// <summary>
